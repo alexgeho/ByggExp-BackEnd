@@ -18,7 +18,9 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           port: 2020
           script: |
+            source /home/s154755/nodevenv/domains/api.byggexp.se/22/bin/activate
             cd /home/s154755/domains/api.byggexp.se
             git pull origin main
-            npm install
+            npm install --omit=dev
             npm run build
+            touch tmp/restart.txt
