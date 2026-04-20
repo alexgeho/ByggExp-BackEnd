@@ -27,6 +27,9 @@ export class User {
   @Prop({ required: true })
   name: string;
 
+  @Prop({ default: '' })
+  profession: string;
+
   @Prop({ type: Object, default: { ru: 'Русский' } })
   language: Record<string, any>;
 

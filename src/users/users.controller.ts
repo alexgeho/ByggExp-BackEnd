@@ -67,6 +67,20 @@ export class UsersController {
     return this.usersService.findAllByCompany(companyId);
   }
 
+  @Get('my-company')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  findAllByMyCompany(@Request() req): Promise<User[]> {
+    if (req.user.role === UserRole.SuperAdmin && !req.user.companyId) {
+      return this.usersService.findAll();
+    }
+
+    if (!req.user.companyId) {
+      throw new Error('User is not associated with any company');
+    }
+
+    return this.usersService.findAllByCompany(req.user.companyId);
+  }
+
   @Get('project/:projectId')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   findAllByProject(@Param('projectId') projectId: string): Promise<User[]> {
@@ -77,16 +91,6 @@ export class UsersController {
   @Roles(UserRole.SuperAdmin)
   findAllByRole(@Param('role') role: UserRole): Promise<User[]> {
     return this.usersService.findAllByRole(role);
-  }
-
-  @Get(':id')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  findOne(@Param('id') id: string, @Request() req): Promise<User> {
-    // Пользователь может смотреть только свой профиль или профили в своей компании/проекте
-    if (req.user.role === UserRole.Worker && req.user.userId !== id) {
-      throw new Error('Access denied');
-    }
-    return this.usersService.findOne(id);
   }
 
   @Get('by-email')
@@ -113,9 +117,20 @@ export class UsersController {
       id: (user as any)._id.toString(),
       email: user.email,
       name: user.name,
+      profession: user.profession || '',
       role: user.role,
       companyId: user.companyId,
     }));
+  }
+
+  @Get(':id')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  findOne(@Param('id') id: string, @Request() req): Promise<User> {
+    // Пользователь может смотреть только свой профиль или профили в своей компании/проекте
+    if (req.user.role === UserRole.Worker && req.user.userId !== id) {
+      throw new Error('Access denied');
+    }
+    return this.usersService.findOne(id);
   }
 
   @Put(':id')

@@ -32,17 +32,18 @@ export class UsersService {
 
   async findByIds(ids: string[]): Promise<User[]> {
     return this.userModel.find({ _id: { $in: ids } })
-      .select('email name role companyId projectIds')
+      .select('email name profession role companyId projectIds')
       .exec();
   }
 
-  async findUserById(id: string): Promise<{ id: string; email: string; name: string; role: string } | null> {
-    const user = await this.userModel.findById(id).select('email name role').exec();
+  async findUserById(id: string): Promise<{ id: string; email: string; name: string; profession: string; role: string } | null> {
+    const user = await this.userModel.findById(id).select('email name profession role').exec();
     if (!user) return null;
     return {
       id: user._id.toString(),
       email: user.email,
       name: user.name,
+      profession: user.profession || '',
       role: user.role,
     };
   }

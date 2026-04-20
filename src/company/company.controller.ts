@@ -45,7 +45,7 @@ export class CompanyController {
   }
 
   @Get('my')
-  @Roles(UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
   findOneByUser(@Request() req): Promise<Company> {
     if (!req.user.companyId) {
       throw new Error('User is not associated with any company');
