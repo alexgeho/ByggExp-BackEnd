@@ -5,9 +5,29 @@ import {
   IsOptional,
   IsArray,
   IsDateString,
-  ValidateIf,
 } from 'class-validator';
 import { Transform, Expose } from 'class-transformer';
+
+const parseArrayField = (value: unknown) => {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return [value];
+    }
+  }
+
+  return value;
+};
 
 export class CreateProjectDto {
   @Expose()
@@ -34,6 +54,7 @@ export class CreateProjectDto {
   @IsNotEmpty()
   projectManagerId: string;
 
+  @Transform(({ value }) => parseArrayField(value))
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
@@ -63,16 +84,18 @@ export class CreateProjectDto {
   @IsOptional()
   endDate?: Date;
 
+  @Transform(({ value }) => parseArrayField(value))
   @IsArray()
-  @IsString({ each: true })
   @IsOptional()
-  documents?: string[];
+  documents?: Array<string | { name: string; url: string; mimeType?: string }>;
 
+  @Transform(({ value }) => parseArrayField(value))
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
   tasks?: string[];
 
+  @Transform(({ value }) => parseArrayField(value))
   @IsArray()
   @IsString({ each: true })
   @IsOptional()

@@ -7,6 +7,9 @@ node_modules/
 # Build output
 dist/
 
+# Uploaded files
+uploads/
+
 # Logs
 *.log
 npm-debug.log*

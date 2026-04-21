@@ -9,6 +9,8 @@ import {
   UseGuards,
   Request,
   NotFoundException,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { Project } from './schemas/project.schema';
@@ -19,6 +21,27 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { UserRole } from '../users/schemas/user.schema';
 import { ObjectIdPipe } from 'src/common/pipes/object-id.pipe';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+
+const documentsStorage = diskStorage({
+  destination: './uploads/project-documents',
+  filename: (_req, file, callback) => {
+    const safeBaseName = file.originalname
+      .replace(extname(file.originalname), '')
+      .replace(/[^a-zA-Z0-9-_]/g, '_')
+      .slice(0, 80) || 'document';
+
+    callback(null, `${Date.now()}-${safeBaseName}${extname(file.originalname)}`);
+  },
+});
+
+type UploadedDocumentFile = {
+  originalname: string;
+  filename: string;
+  mimetype: string;
+};
 
 @Controller('projects')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -27,13 +50,26 @@ export class ProjectsController {
 
   @Post()
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  create(@Body() createProjectDto: CreateProjectDto, @Request() req): Promise<Project> {
+  @UseInterceptors(FilesInterceptor('documents', 10, { storage: documentsStorage }))
+  create(
+    @Body() createProjectDto: CreateProjectDto,
+    @UploadedFiles() files: UploadedDocumentFile[],
+    @Request() req,
+  ): Promise<Project> {
     if (req.user.role === UserRole.CompanyAdmin && !createProjectDto.companyId) {
       createProjectDto.companyId = req.user.companyId;
     }
 
     if (!createProjectDto.projectManagerId && req.user.role === UserRole.CompanyAdmin) {
       createProjectDto.projectManagerId = req.user.userId;
+    }
+
+    if (files?.length) {
+      createProjectDto.documents = files.map((file) => ({
+        name: file.originalname,
+        url: `/uploads/project-documents/${file.filename}`,
+        mimeType: file.mimetype,
+      }));
     }
 
     return this.projectsService.create(createProjectDto);

@@ -109,7 +109,7 @@ export class ProjectsService {
       await this.usersService.addUserToProject(workerId, projectId);
     }
 
-    return this.findOne(projectId);
+    return this.findOneWithPopulated(projectId);
   }
 
   async removeWorker(projectId: string, workerId: string): Promise<Project> {
@@ -119,7 +119,7 @@ export class ProjectsService {
 
     await this.usersService.removeUserFromProject(workerId, projectId);
 
-    return this.findOne(projectId);
+    return this.findOneWithPopulated(projectId);
   }
 
   async addProjectAdmin(projectId: string, userId: string): Promise<Project> {
@@ -133,7 +133,7 @@ export class ProjectsService {
 
     await this.usersService.addUserToProject(userId, projectId);
 
-    return this.findOne(projectId);
+    return this.findOneWithPopulated(projectId);
   }
 
   async update(id: string, updateProjectDto: Partial<CreateProjectDto>): Promise<Project> {

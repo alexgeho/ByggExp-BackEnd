@@ -1,7 +1,13 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Schema as MongooseSchema } from 'mongoose';
 
 export type ProjectDocument = Project & Document;
+
+export class ProjectDocumentFile {
+  name: string;
+  url: string;
+  mimeType?: string;
+}
 
 @Schema({ timestamps: true })
 export class Project {
@@ -35,8 +41,8 @@ export class Project {
   @Prop({ type: Date })
   endDate: Date;
 
-  @Prop({ type: [String], default: [] })
-  documents: string[];
+  @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
+  documents: Array<string | ProjectDocumentFile>;
 
   @Prop({ type: [String], ref: 'Task', default: [] })
   tasks: string[];

@@ -2,13 +2,22 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AllExceptionsFilter } from './filtres/exception.filter';
+import { existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import express from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const uploadsDir = join(process.cwd(), 'uploads', 'project-documents');
+
+  if (!existsSync(uploadsDir)) {
+    mkdirSync(uploadsDir, { recursive: true });
+  }
 
   const logger = new Logger('Bootstrap');
   app.useLogger(logger);
   app.useGlobalFilters(new AllExceptionsFilter());
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   app.use((req, res, next) => {
     logger.log(`${req.method} ${req.url}`);
