@@ -1,9 +1,15 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Schema as MongooseSchema } from 'mongoose';
 
 export type TaskDocument = Task & Document;
 
-@Schema()
+export class TaskDocumentFile {
+  name: string;
+  url: string;
+  mimeType?: string;
+}
+
+@Schema({ timestamps: true })
 export class Task {
   @Prop({ required: true, ref: 'Project' }) // Ссылка на проект
   projectId: string;
@@ -20,8 +26,8 @@ export class Task {
   @Prop({ type: [String] }) // Уведомления
   notifications: string[];
 
-  @Prop({ type: [String] }) // Документы задачи
-  documents: string[];
+  @Prop({ type: [MongooseSchema.Types.Mixed], default: [] }) // Документы задачи
+  documents: Array<string | TaskDocumentFile>;
 
   @Prop({ type: Date, required: true })
   startDate: Date;

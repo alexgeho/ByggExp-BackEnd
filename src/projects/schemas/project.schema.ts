@@ -7,6 +7,8 @@ export class ProjectDocumentFile {
   name: string;
   url: string;
   mimeType?: string;
+  size?: number;
+  uploadedAt?: Date;
 }
 
 @Schema({ timestamps: true })

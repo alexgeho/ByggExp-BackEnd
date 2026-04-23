@@ -41,6 +41,7 @@ type UploadedDocumentFile = {
   originalname: string;
   filename: string;
   mimetype: string;
+  size: number;
 };
 
 @Controller('projects')
@@ -69,6 +70,8 @@ export class ProjectsController {
         name: file.originalname,
         url: `/uploads/project-documents/${file.filename}`,
         mimeType: file.mimetype,
+        size: file.size,
+        uploadedAt: new Date(),
       }));
     }
 

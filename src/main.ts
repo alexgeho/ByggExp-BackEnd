@@ -9,9 +9,14 @@ import express from 'express';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const uploadsDir = join(process.cwd(), 'uploads', 'project-documents');
+  const taskUploadsDir = join(process.cwd(), 'uploads', 'task-documents');
 
   if (!existsSync(uploadsDir)) {
     mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  if (!existsSync(taskUploadsDir)) {
+    mkdirSync(taskUploadsDir, { recursive: true });
   }
 
   const logger = new Logger('Bootstrap');
