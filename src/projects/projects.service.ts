@@ -83,7 +83,7 @@ export class ProjectsService {
       .populate('companyId', 'name email')
       .populate('projectAdmins', 'name email role')
       .populate('workers', 'name email role')
-      .populate('tasks', 'taskTitle taskDescription dueDate')
+      .populate('tasks', 'taskTitle taskDescription startDate dueDate documents')
       .exec();
     if (!project) {
       throw new NotFoundException(`Project with ID "${id}" not found`);
