@@ -111,4 +111,10 @@ export class ShiftsController {
   list(@Request() req, @Query() query: ListShiftsDto) {
     return this.shiftsService.list(req.user, query);
   }
+
+  @Get(':id')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  findOne(@Request() req, @Param('id') id: string) {
+    return this.shiftsService.findOneAccessible(req.user, id);
+  }
 }

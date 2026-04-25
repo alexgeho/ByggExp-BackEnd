@@ -16,4 +16,8 @@ export class ListShiftsDto {
   @IsOptional()
   @Matches(/^[a-f\\d]{24}$/i, { message: 'projectId must be a valid ObjectId' })
   projectId?: string;
+
+  @IsOptional()
+  @Matches(/^[a-f\\d]{24}$/i, { message: 'workerId must be a valid ObjectId' })
+  workerId?: string;
 }

@@ -233,11 +233,7 @@ export class ShiftsService {
   async list(user: AuthenticatedUser, query: ListShiftsDto) {
     await this.finalizeExpiredOpenShifts(user.userId);
 
-    const filter: Record<string, unknown> = { workerId: user.userId };
-
-    if (query.projectId) {
-      filter.projectId = query.projectId;
-    }
+    const filter = await this.buildAccessibleShiftFilter(user, query);
 
     if (query.month) {
       filter.shiftDate = new RegExp(`^${query.month}`);
@@ -259,8 +255,27 @@ export class ShiftsService {
       .exec();
 
     return {
+      items: shifts.map((shift) => this.serializeShift(shift)),
       days: this.groupShiftsByDay(shifts, 'desc'),
     };
+  }
+
+  async findOneAccessible(user: AuthenticatedUser, shiftId: string) {
+    await this.finalizeExpiredOpenShifts(user.userId);
+
+    const filter = await this.buildAccessibleShiftFilter(user, {});
+    const shift = await this.shiftModel
+      .findOne({
+        _id: shiftId,
+        ...filter,
+      })
+      .exec();
+
+    if (!shift) {
+      throw new NotFoundException(`Shift with ID "${shiftId}" not found`);
+    }
+
+    return this.serializeShift(shift);
   }
 
   private async findOwnedShift(userId: string, shiftId: string) {
@@ -310,6 +325,84 @@ export class ShiftsService {
     }
 
     return project;
+  }
+
+  private async buildAccessibleShiftFilter(user: AuthenticatedUser, query: ListShiftsDto) {
+    const filter: Record<string, unknown> = {};
+
+    if (user.role === UserRole.SuperAdmin) {
+      if (query.workerId) {
+        filter.workerId = query.workerId;
+      }
+
+      if (query.projectId) {
+        filter.projectId = query.projectId;
+      }
+
+      return filter;
+    }
+
+    if (user.role === UserRole.CompanyAdmin) {
+      const projectFilter: Record<string, unknown> = {
+        companyId: user.companyId,
+      };
+
+      if (query.projectId) {
+        projectFilter._id = query.projectId;
+      }
+
+      const projects = await this.projectModel.find(projectFilter).select('_id').lean().exec();
+      const projectIds = projects.map((project) => project._id.toString());
+
+      if (!projectIds.length) {
+        return { projectId: { $in: [] } };
+      }
+
+      filter.projectId = { $in: projectIds };
+
+      if (query.workerId) {
+        filter.workerId = query.workerId;
+      }
+
+      return filter;
+    }
+
+    if (user.role === UserRole.ProjectAdmin) {
+      const projectFilter: Record<string, unknown> = {
+        $or: [
+          { ownerId: user.userId },
+          { projectManagerId: user.userId },
+          { projectAdmins: user.userId },
+        ],
+      };
+
+      if (query.projectId) {
+        projectFilter._id = query.projectId;
+      }
+
+      const projects = await this.projectModel.find(projectFilter).select('_id').lean().exec();
+      const projectIds = projects.map((project) => project._id.toString());
+
+      if (!projectIds.length) {
+        return { projectId: { $in: [] } };
+      }
+
+      filter.projectId = { $in: projectIds };
+
+      if (query.workerId) {
+        filter.workerId = query.workerId;
+      }
+
+      return filter;
+    }
+
+    filter.workerId = user.userId;
+
+    if (query.projectId) {
+      filter.projectId = query.projectId;
+    }
+
+    return filter;
   }
 
   private async finalizeExpiredOpenShifts(userId: string) {
