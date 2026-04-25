@@ -10,6 +10,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const uploadsDir = join(process.cwd(), 'uploads', 'project-documents');
   const taskUploadsDir = join(process.cwd(), 'uploads', 'task-documents');
+  const shiftUploadsDir = join(process.cwd(), 'uploads', 'shift-photos');
 
   if (!existsSync(uploadsDir)) {
     mkdirSync(uploadsDir, { recursive: true });
@@ -17,6 +18,10 @@ async function bootstrap() {
 
   if (!existsSync(taskUploadsDir)) {
     mkdirSync(taskUploadsDir, { recursive: true });
+  }
+
+  if (!existsSync(shiftUploadsDir)) {
+    mkdirSync(shiftUploadsDir, { recursive: true });
   }
 
   const logger = new Logger('Bootstrap');

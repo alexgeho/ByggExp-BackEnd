@@ -10,6 +10,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { ChatsModule } from './chats/chats.module';
 import { MessagesModule } from './messages/messages.module';
 import { AuthModule } from './auth/auth.module';
+import { ShiftsModule } from './shifts/shifts.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AuthModule } from './auth/auth.module';
     ChatsModule,
     MessagesModule,
     AuthModule,
+    ShiftsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
