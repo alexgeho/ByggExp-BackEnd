@@ -2,7 +2,7 @@
   "info": {
     "name": "ByggExp API",
     "_postman_id": "d758c120-9959-4fc3-9d32-fcd58769adbc",
-    "description": "Postman collection for the ByggExp backend. All requests point to https://api.byggexp.se by default.",
+    "description": "Postman 1 collection for the ByggExp backend. All requests point to https://api.byggexp.se by default.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
