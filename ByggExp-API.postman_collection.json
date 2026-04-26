@@ -1,0 +1,1478 @@
+{
+  "info": {
+    "name": "ByggExp API",
+    "_postman_id": "d758c120-9959-4fc3-9d32-fcd58769adbc",
+    "description": "Postman collection for the ByggExp backend. All requests point to https://api.byggexp.se by default.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.byggexp.se"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "companyId",
+      "value": "507f1f77bcf86cd799439011"
+    },
+    {
+      "key": "userId",
+      "value": "507f1f77bcf86cd799439012"
+    },
+    {
+      "key": "projectId",
+      "value": "507f1f77bcf86cd799439013"
+    },
+    {
+      "key": "taskId",
+      "value": "507f1f77bcf86cd799439014"
+    },
+    {
+      "key": "workerId",
+      "value": "507f1f77bcf86cd799439015"
+    },
+    {
+      "key": "shiftId",
+      "value": "507f1f77bcf86cd799439016"
+    },
+    {
+      "key": "role",
+      "value": "worker"
+    },
+    {
+      "key": "email",
+      "value": "admin@byggexp.se"
+    },
+    {
+      "key": "password",
+      "value": "password123"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /auth/register",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"worker@byggexp.se\",\n  \"password\": \"password123\",\n  \"name\": \"Test Worker\",\n  \"profession\": \"Carpenter\",\n  \"phoneAreaCode\": 46,\n  \"phoneNumber\": 701234567,\n  \"role\": \"worker\",\n  \"companyId\": \"{{companyId}}\",\n  \"projectIds\": [\n    \"{{projectId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /auth/register-superadmin",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@byggexp.se\",\n  \"password\": \"password123\",\n  \"name\": \"Super Admin\",\n  \"profession\": \"Administrator\",\n  \"phoneAreaCode\": 46,\n  \"phoneNumber\": 701234568,\n  \"role\": \"superadmin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register-superadmin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register-superadmin"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /auth/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json;",
+                  "try {",
+                  "  json = pm.response.json();",
+                  "} catch (error) {",
+                  "  json = null;",
+                  "}",
+                  "",
+                  "if (json?.access_token) {",
+                  "  pm.collectionVariables.set('accessToken', json.access_token);",
+                  "}",
+                  "",
+                  "if (json?.refresh_token) {",
+                  "  pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /auth/refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json;",
+                  "try {",
+                  "  json = pm.response.json();",
+                  "} catch (error) {",
+                  "  json = null;",
+                  "}",
+                  "",
+                  "if (json?.access_token) {",
+                  "  pm.collectionVariables.set('accessToken', json.access_token);",
+                  "}",
+                  "",
+                  "if (json?.refresh_token) {",
+                  "  pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Company",
+      "item": [
+        {
+          "name": "POST /company/register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ByggExp AB\",\n  \"address\": \"Stockholm\",\n  \"email\": \"company@byggexp.se\",\n  \"adminName\": \"Company Admin\",\n  \"adminEmail\": \"company-admin@byggexp.se\",\n  \"adminPassword\": \"password123\",\n  \"adminPhoneAreaCode\": \"+46\",\n  \"adminPhoneNumber\": \"701234569\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/company/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "company",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /company",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ByggExp AB\",\n  \"address\": \"Stockholm\",\n  \"email\": \"company@byggexp.se\",\n  \"companyAdmins\": [\n    \"{{userId}}\"\n  ],\n  \"projects\": [\n    \"{{projectId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/company",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "company"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /company",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/company",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "company"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /company/my",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/company/my",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "company",
+                "my"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /company/info/:id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/company/info/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "company",
+                "info",
+                "{{companyId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /company/by-ids",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [\n    \"{{companyId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/company/by-ids",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "company",
+                "by-ids"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /company/:id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/company/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "company",
+                "{{companyId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /company/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ByggExp Updated AB\",\n  \"address\": \"Gothenburg\",\n  \"email\": \"updated-company@byggexp.se\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/company/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "company",
+                "{{companyId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /company/:id",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/company/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "company",
+                "{{companyId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "POST /users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new-user@byggexp.se\",\n  \"password\": \"password123\",\n  \"name\": \"New User\",\n  \"profession\": \"Painter\",\n  \"phoneAreaCode\": 46,\n  \"phoneNumber\": 701234570,\n  \"role\": \"worker\",\n  \"companyId\": \"{{companyId}}\",\n  \"projectIds\": [\n    \"{{projectId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /users/company/:companyId",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/company/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "company",
+                "{{companyId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /users/my-company",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/my-company",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "my-company"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /users/project/:projectId",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/project/{{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "project",
+                "{{projectId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /users/role/:role",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/role/{{role}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "role",
+                "{{role}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /users/by-email",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/by-email?email={{email}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "by-email"
+              ],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "{{email}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /users/info/:id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/info/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "info",
+                "{{userId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /users/by-ids",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [\n    \"{{userId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/by-ids",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "by-ids"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /users/:id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /users/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated User\",\n  \"profession\": \"Electrician\",\n  \"phoneAreaCode\": 46,\n  \"phoneNumber\": 701234571,\n  \"projectIds\": [\n    \"{{projectId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /users/:id",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "POST /projects",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "companyId",
+                  "value": "{{companyId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "ownerId",
+                  "value": "{{userId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "projectManagerId",
+                  "value": "{{userId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "projectAdmins",
+                  "value": "[\"{{userId}}\"]",
+                  "type": "text"
+                },
+                {
+                  "key": "name",
+                  "value": "Demo Project",
+                  "type": "text"
+                },
+                {
+                  "key": "status",
+                  "value": "planning",
+                  "type": "text"
+                },
+                {
+                  "key": "location",
+                  "value": "Stockholm",
+                  "type": "text"
+                },
+                {
+                  "key": "contractNumber",
+                  "value": "CN-2026-001",
+                  "type": "text"
+                },
+                {
+                  "key": "beginningDate",
+                  "value": "2026-04-01",
+                  "type": "text"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-12-31",
+                  "type": "text"
+                },
+                {
+                  "key": "workers",
+                  "value": "[\"{{workerId}}\"]",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Project created from Postman collection.",
+                  "type": "text"
+                },
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /projects",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /projects/my",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/projects/my",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "my"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /projects/info/:id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/projects/info/{{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "info",
+                "{{projectId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /projects/by-ids",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [\n    \"{{projectId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/projects/by-ids",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "by-ids"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /projects/company/:companyId",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/projects/company/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "company",
+                "{{companyId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /projects/populated",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/projects/populated",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "populated"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /projects/:id/populated",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/populated",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "populated"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /projects/:id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /projects/:id/workers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workerIds\": [\n    \"{{workerId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/workers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "workers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /projects/:id/workers/:workerId",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/workers/{{workerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "workers",
+                "{{workerId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /projects/:id/admins/:userId",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/admins/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "admins",
+                "{{userId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /projects/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Demo Project Updated\",\n  \"status\": \"in_progress\",\n  \"location\": \"Malmo\",\n  \"contractNumber\": \"CN-2026-002\",\n  \"beginningDate\": \"2026-04-01\",\n  \"endDate\": \"2026-12-31\",\n  \"description\": \"Updated from Postman collection.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /projects/:id",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "GET /tasks",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /tasks",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "projectId",
+                  "value": "{{projectId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "taskTitle",
+                  "value": "Install drywall",
+                  "type": "text"
+                },
+                {
+                  "key": "taskDescription",
+                  "value": "Install drywall on level 2.",
+                  "type": "text"
+                },
+                {
+                  "key": "notes",
+                  "value": "Bring extra materials.",
+                  "type": "text"
+                },
+                {
+                  "key": "notifications",
+                  "value": "[\"worker@byggexp.se\"]",
+                  "type": "text"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-04-10",
+                  "type": "text"
+                },
+                {
+                  "key": "dueDate",
+                  "value": "2026-04-20",
+                  "type": "text"
+                },
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /tasks/project/:projectId",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/tasks/project/{{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "project",
+                "{{projectId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /tasks/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"taskTitle\": \"Install drywall - updated\",\n  \"taskDescription\": \"Updated task description.\",\n  \"notes\": \"Updated notes.\",\n  \"notifications\": [\n    \"worker@byggexp.se\"\n  ],\n  \"startDate\": \"2026-04-10\",\n  \"dueDate\": \"2026-04-22\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /tasks/:id",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shifts",
+      "item": [
+        {
+          "name": "POST /shifts/start",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{projectId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/shifts/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shifts",
+                "start"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /shifts/:id/pause",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/shifts/{{shiftId}}/pause",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shifts",
+                "{{shiftId}}",
+                "pause"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /shifts/:id/resume",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/shifts/{{shiftId}}/resume",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shifts",
+                "{{shiftId}}",
+                "resume"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /shifts/:id/complete",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/shifts/{{shiftId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shifts",
+                "{{shiftId}}",
+                "complete"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /shifts/:id/photos",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/shifts/{{shiftId}}/photos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shifts",
+                "{{shiftId}}",
+                "photos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /shifts/current",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/shifts/current?projectId={{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shifts",
+                "current"
+              ],
+              "query": [
+                {
+                  "key": "projectId",
+                  "value": "{{projectId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /shifts/months",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/shifts/months",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shifts",
+                "months"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /shifts/history",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/shifts/history?month=2026-04&from=2026-04-01&to=2026-04-30&projectId={{projectId}}&workerId={{workerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shifts",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "month",
+                  "value": "2026-04"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-04-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-04-30"
+                },
+                {
+                  "key": "projectId",
+                  "value": "{{projectId}}"
+                },
+                {
+                  "key": "workerId",
+                  "value": "{{workerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /shifts/list",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/shifts/list?month=2026-04&from=2026-04-01&to=2026-04-30&projectId={{projectId}}&workerId={{workerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shifts",
+                "list"
+              ],
+              "query": [
+                {
+                  "key": "month",
+                  "value": "2026-04"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-04-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-04-30"
+                },
+                {
+                  "key": "projectId",
+                  "value": "{{projectId}}"
+                },
+                {
+                  "key": "workerId",
+                  "value": "{{workerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /shifts/:id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/shifts/{{shiftId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shifts",
+                "{{shiftId}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
