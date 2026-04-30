@@ -11,6 +11,8 @@ import { ChatsModule } from './chats/chats.module';
 import { MessagesModule } from './messages/messages.module';
 import { AuthModule } from './auth/auth.module';
 import { ShiftsModule } from './shifts/shifts.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { TaskRemindersModule } from './task-reminders/task-reminders.module';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { ShiftsModule } from './shifts/shifts.module';
     MessagesModule,
     AuthModule,
     ShiftsModule,
+    NotificationsModule,
+    TaskRemindersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

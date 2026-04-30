@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Task, TaskDocument } from './schemas/task.schema';
@@ -6,15 +6,33 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { UserRole } from '../users/schemas/user.schema';
+import { NotificationsService } from '../notifications/notifications.service';
+
+type ProjectNotificationSource = {
+  _id: { toString(): string };
+  name: string;
+  ownerId: string;
+  projectManagerId: string;
+  projectAdmins?: string[];
+  workers?: string[];
+};
+
+type TaskNotificationSource = {
+  _id: { toString(): string };
+  taskTitle: string;
+};
 
 @Injectable()
 export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+
   constructor(
     @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
-  async create(createTaskDto: CreateTaskDto): Promise<Task> {
+  async create(createTaskDto: CreateTaskDto, actorUserId?: string): Promise<Task> {
     const project = await this.projectModel.findById(createTaskDto.projectId).exec();
 
     if (!project) {
@@ -26,6 +44,10 @@ export class TasksService {
     await this.projectModel.findByIdAndUpdate(createTaskDto.projectId, {
       $push: { tasks: createdTask._id.toString() },
     });
+
+    const notificationProject = this.toProjectNotificationSource(project as unknown as ProjectDocument);
+    const notificationTask = this.toTaskNotificationSource(createdTask as unknown as TaskDocument);
+    await this.sendTaskCreatedNotification(notificationTask, notificationProject, actorUserId);
 
     return createdTask;
   }
@@ -68,7 +90,7 @@ export class TasksService {
       .exec();
   }
 
-  async update(id: string, updateTaskDto: UpdateTaskDto): Promise<Task> {
+  async update(id: string, updateTaskDto: UpdateTaskDto, actorUserId?: string): Promise<Task> {
     const existingTask = await this.taskModel.findById(id).exec();
 
     if (!existingTask) {
@@ -76,9 +98,13 @@ export class TasksService {
     }
 
     const nextProjectId = updateTaskDto.projectId || existingTask.projectId;
+    const dueDateChanged = this.hasDueDateChanged(existingTask.dueDate, updateTaskDto.dueDate);
+    let targetProject = nextProjectId === existingTask.projectId
+      ? await this.projectModel.findById(existingTask.projectId).exec()
+      : null;
 
     if (nextProjectId !== existingTask.projectId) {
-      const targetProject = await this.projectModel.findById(nextProjectId).exec();
+      targetProject = await this.projectModel.findById(nextProjectId).exec();
 
       if (!targetProject) {
         throw new NotFoundException(`Project with ID "${nextProjectId}" not found`);
@@ -96,6 +122,14 @@ export class TasksService {
     Object.assign(existingTask, updateTaskDto, { projectId: nextProjectId });
     await existingTask.save();
 
+    if (dueDateChanged && targetProject) {
+      const notificationProject = this.toProjectNotificationSource(
+        targetProject as unknown as ProjectDocument,
+      );
+      const notificationTask = this.toTaskNotificationSource(existingTask as unknown as TaskDocument);
+      await this.sendTaskDeadlineUpdatedNotification(notificationTask, notificationProject, actorUserId);
+    }
+
     return existingTask;
   }
 
@@ -112,5 +146,95 @@ export class TasksService {
     });
 
     return task;
+  }
+
+  private hasDueDateChanged(currentDueDate: Date, nextDueDate?: Date | string) {
+    if (nextDueDate === undefined || nextDueDate === null) {
+      return false;
+    }
+
+    const currentTime = currentDueDate ? new Date(currentDueDate).getTime() : null;
+    const nextTime = new Date(nextDueDate).getTime();
+
+    return currentTime !== nextTime;
+  }
+
+  private getProjectNotificationRecipients(project: ProjectNotificationSource, actorUserId?: string) {
+    return [...new Set([
+      project.ownerId,
+      project.projectManagerId,
+      ...(project.projectAdmins || []),
+      ...(project.workers || []),
+    ].filter((userId) => userId && userId !== actorUserId))];
+  }
+
+  private toProjectNotificationSource(project: ProjectDocument): ProjectNotificationSource {
+    return {
+      _id: project._id,
+      name: project.name,
+      ownerId: project.ownerId,
+      projectManagerId: project.projectManagerId,
+      projectAdmins: project.projectAdmins || [],
+      workers: project.workers || [],
+    };
+  }
+
+  private toTaskNotificationSource(task: TaskDocument): TaskNotificationSource {
+    return {
+      _id: task._id,
+      taskTitle: task.taskTitle,
+    };
+  }
+
+  private async sendTaskCreatedNotification(
+    task: TaskNotificationSource,
+    project: ProjectNotificationSource,
+    actorUserId?: string,
+  ) {
+    const recipients = this.getProjectNotificationRecipients(project, actorUserId);
+    if (!recipients.length) {
+      return;
+    }
+
+    try {
+      await this.notificationsService.sendToUsers(recipients, {
+        title: `New task in ${project.name}`,
+        body: task.taskTitle,
+        data: {
+          type: 'task_created',
+          screen: 'Project',
+          projectId: project._id.toString(),
+          entityId: task._id.toString(),
+        },
+      });
+    } catch (error) {
+      this.logger.error('Failed to send task created notification', error);
+    }
+  }
+
+  private async sendTaskDeadlineUpdatedNotification(
+    task: TaskNotificationSource,
+    project: ProjectNotificationSource,
+    actorUserId?: string,
+  ) {
+    const recipients = this.getProjectNotificationRecipients(project, actorUserId);
+    if (!recipients.length) {
+      return;
+    }
+
+    try {
+      await this.notificationsService.sendToUsers(recipients, {
+        title: `Task deadline updated in ${project.name}`,
+        body: `${task.taskTitle} has a new due date.`,
+        data: {
+          type: 'task_due_updated',
+          screen: 'Project',
+          projectId: project._id.toString(),
+          entityId: task._id.toString(),
+        },
+      });
+    } catch (error) {
+      this.logger.error('Failed to send task deadline notification', error);
+    }
   }
 }

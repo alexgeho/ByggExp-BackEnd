@@ -55,6 +55,7 @@ export class TasksController {
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   @UseInterceptors(FilesInterceptor('documents', 10, { storage: taskDocumentsStorage }))
   create(
+    @Request() req,
     @Body() createTaskDto: CreateTaskDto,
     @UploadedFiles() files: UploadedDocumentFile[],
   ) {
@@ -66,7 +67,7 @@ export class TasksController {
       }));
     }
 
-    return this.tasksService.create(createTaskDto);
+    return this.tasksService.create(createTaskDto, req.user.userId);
   }
 
   @Get('project/:projectId')
@@ -77,8 +78,8 @@ export class TasksController {
 
   @Put(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  update(@Param('id') id: string, @Body() updateTaskDto: UpdateTaskDto) {
-    return this.tasksService.update(id, updateTaskDto);
+  update(@Request() req, @Param('id') id: string, @Body() updateTaskDto: UpdateTaskDto) {
+    return this.tasksService.update(id, updateTaskDto, req.user.userId);
   }
 
   @Delete(':id')

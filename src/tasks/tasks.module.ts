@@ -4,6 +4,7 @@ import { Task, TaskSchema } from './schemas/task.schema';
 import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 import { Project, ProjectSchema } from '../projects/schemas/project.schema';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { Project, ProjectSchema } from '../projects/schemas/project.schema';
       { name: Task.name, schema: TaskSchema },
       { name: Project.name, schema: ProjectSchema },
     ]),
+    NotificationsModule,
   ],
   controllers: [TasksController],
   providers: [TasksService],
