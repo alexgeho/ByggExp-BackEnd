@@ -3,7 +3,7 @@ import { Document } from 'mongoose';
 
 export type MessageDocument = Message & Document;
 
-@Schema()
+@Schema({ timestamps: true })
 export class Message {
   @Prop({ required: true, ref: 'Chat' }) // Ссылка на чат
   chatId: string;
@@ -19,3 +19,6 @@ export class Message {
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);
+
+MessageSchema.index({ chatId: 1, timestamp: 1 });
+MessageSchema.index({ userId: 1, timestamp: -1 });

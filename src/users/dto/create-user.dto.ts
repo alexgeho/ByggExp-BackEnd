@@ -7,6 +7,7 @@ import {
   IsArray,
   IsNumber,
   IsNotEmpty,
+  IsObject,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { UserRole } from '../schemas/user.schema';
@@ -55,4 +56,13 @@ export class CreateUserDto {
   @IsString({ each: true })
   @IsOptional()
   projectIds?: string[];
+
+  @IsObject()
+  @IsOptional()
+  language?: Record<string, any>;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  additionalDocuments?: string[];
 }
