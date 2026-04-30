@@ -48,7 +48,8 @@ async function bootstrap() {
       'https://bygghub.nu',    
       'https://www.bygghub.nu',
       'https://tot-bygghub-admin-site.vercel.app',
-      'http://localhost:8081'
+      'http://localhost:8081',
+      'https://admin.byggexp.se'
     ],
     credentials: true,
   });
