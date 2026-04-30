@@ -1,26 +1,104 @@
-name: Deploy
+name: Deploy to VPS
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-byggexp-api
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.2'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build NestJS
+        run: npm run build
+
+      - name: Pack release
+        run: |
+          tar --exclude='./.git' \
+              --exclude='./.github' \
+              --exclude='./node_modules' \
+              --exclude='./test' \
+              -czf /tmp/release.tar.gz .
+          mv /tmp/release.tar.gz ./release.tar.gz
+          ls -lh release.tar.gz
+
+      - name: Upload to VPS
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: 2020
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: release.tar.gz
+          target: /tmp/
+
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            source /home/s154755/nodevenv/domains/api.byggexp.se/22/bin/activate
-            cd /home/s154755/domains/api.byggexp.se
-            git pull origin main
-            npm install --omit=dev
-            npm run build
-            touch tmp/restart.txt
+            set -euo pipefail
+            RELEASE=$(date -u +%Y%m%d-%H%M%S)
+            BASE=/opt/byggexp-api
+            DIR=$BASE/releases/$RELEASE
+            echo "==> New release: $DIR"
+
+            mkdir -p "$DIR"
+            tar -xzf /tmp/release.tar.gz -C "$DIR"
+            rm -f /tmp/release.tar.gz
+
+            # link shared resources (env + uploads)
+            ln -sf "$BASE/shared/.env" "$DIR/.env"
+            rm -rf "$DIR/uploads"
+            ln -s "$BASE/shared/uploads" "$DIR/uploads"
+
+            cd "$DIR"
+            echo "==> Installing production deps"
+            npm ci --omit=dev --no-audit --no-fund
+
+            # atomic switch
+            ln -sfn "$DIR" "$BASE/current"
+            echo "==> Linked $BASE/current -> $DIR"
+
+            cd "$BASE/current"
+            echo "==> (Re)starting PM2"
+            pm2 delete byggexp-api >/dev/null 2>&1 || true
+            pm2 start ecosystem.config.js
+            pm2 save
+
+            echo "==> Health check"
+            sleep 5
+            for i in 1 2 3 4 5 6; do
+              if curl -fsS -m 5 http://127.0.0.1:3001/ > /dev/null 2>&1; then
+                echo "OK on attempt $i"
+                break
+              fi
+              if [ $i -eq 6 ]; then
+                echo "Health check failed!" >&2
+                pm2 logs byggexp-api --lines 50 --nostream
+                exit 1
+              fi
+              sleep 5
+            done
+
+            echo "==> Cleaning old releases (keep 5)"
+            ls -1dt $BASE/releases/*/ 2>/dev/null | tail -n +6 | xargs -r rm -rf
+
+            echo "==> Deploy successful: $RELEASE"
