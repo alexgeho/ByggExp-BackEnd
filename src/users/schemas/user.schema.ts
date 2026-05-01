@@ -30,6 +30,9 @@ export class User {
   @Prop({ default: '' })
   profession: string;
 
+  @Prop({ default: '' })
+  avatarUrl: string;
+
   @Prop({ type: Object, default: { ru: 'Русский' } })
   language: Record<string, any>;
 

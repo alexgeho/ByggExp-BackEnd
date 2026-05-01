@@ -55,7 +55,7 @@ export class ChatsService {
 
     const participant = await this.userModel
       .findById(participantId)
-      .select('_id name email profession')
+      .select('_id name email profession avatarUrl')
       .lean()
       .exec();
 
@@ -214,7 +214,7 @@ export class ChatsService {
     const [users, projects] = await Promise.all([
       directParticipantIds.length
         ? this.userModel.find({ _id: { $in: [...new Set(directParticipantIds)] } })
-          .select('_id name email profession')
+          .select('_id name email profession avatarUrl')
           .lean()
           .exec()
         : Promise.resolve([]),
@@ -255,6 +255,7 @@ export class ChatsService {
                 name: participant.name,
                 email: participant.email,
                 profession: participant.profession || '',
+                avatarUrl: participant.avatarUrl || '',
               }
             : null,
           project: null,

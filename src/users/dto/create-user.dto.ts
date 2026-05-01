@@ -30,6 +30,10 @@ export class CreateUserDto {
   @IsOptional()
   profession?: string;
 
+  @IsString()
+  @IsOptional()
+  avatarUrl?: string;
+
   @Transform(({ value }) =>
     typeof value === 'string' ? parseInt(value.replace(/\D/g, ''), 10) : value
   )

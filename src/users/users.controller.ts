@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -10,6 +11,9 @@ import {
   UseGuards,
   Request,
   NotFoundException,
+  UploadedFile,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -17,6 +21,42 @@ import { User, UserRole } from './schemas/user.schema';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { AuthGuard } from '@nestjs/passport';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+
+const userAvatarStorage = diskStorage({
+  destination: './uploads/user-avatars',
+  filename: (_req, file, callback) => {
+    const safeBaseName = file.originalname
+      .replace(extname(file.originalname), '')
+      .replace(/[^a-zA-Z0-9-_]/g, '_')
+      .slice(0, 80) || 'avatar';
+
+    callback(null, `${Date.now()}-${safeBaseName}${extname(file.originalname)}`);
+  },
+});
+
+const userDocumentsStorage = diskStorage({
+  destination: './uploads/user-documents',
+  filename: (_req, file, callback) => {
+    const safeBaseName = file.originalname
+      .replace(extname(file.originalname), '')
+      .replace(/[^a-zA-Z0-9-_]/g, '_')
+      .slice(0, 80) || 'document';
+
+    callback(null, `${Date.now()}-${safeBaseName}${extname(file.originalname)}`);
+  },
+});
+
+type UploadedAvatarFile = {
+  filename: string;
+};
+
+type UploadedDocumentFile = {
+  filename: string;
+};
 
 @Controller('users')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -145,6 +185,45 @@ export class UsersController {
       throw new Error('Access denied');
     }
     return this.usersService.update(id, updateUserDto);
+  }
+
+  @Post(':id/avatar')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  @UseInterceptors(FileInterceptor('avatar', { storage: userAvatarStorage }))
+  uploadAvatar(
+    @Param('id') id: string,
+    @UploadedFile() file: UploadedAvatarFile,
+    @Request() req,
+  ): Promise<User> {
+    if (req.user.role !== UserRole.SuperAdmin && req.user.userId !== id) {
+      throw new Error('Access denied');
+    }
+
+    return this.usersService.update(id, {
+      avatarUrl: file ? `/uploads/user-avatars/${file.filename}` : '',
+    });
+  }
+
+  @Post(':id/documents')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  @UseInterceptors(FilesInterceptor('documents', 4, { storage: userDocumentsStorage }))
+  uploadAdditionalDocuments(
+    @Param('id') id: string,
+    @UploadedFiles() files: UploadedDocumentFile[],
+    @Request() req,
+  ): Promise<User> {
+    if (req.user.role !== UserRole.SuperAdmin && req.user.userId !== id) {
+      throw new Error('Access denied');
+    }
+
+    if (!files?.length) {
+      throw new BadRequestException('No documents uploaded');
+    }
+
+    return this.usersService.appendAdditionalDocuments(
+      id,
+      files.map((file) => `/uploads/user-documents/${file.filename}`),
+    );
   }
 
   @Delete(':id')

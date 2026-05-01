@@ -78,11 +78,11 @@ export class ProjectsService {
   async findOneWithPopulated(id: string): Promise<Project> {
     const project = await this.projectModel
       .findById(id)
-      .populate('ownerId', 'name email role')
-      .populate('projectManagerId', 'name email role')
+      .populate('ownerId', 'name email role avatarUrl')
+      .populate('projectManagerId', 'name email role avatarUrl')
       .populate('companyId', 'name email')
-      .populate('projectAdmins', 'name email role')
-      .populate('workers', 'name email role')
+      .populate('projectAdmins', 'name email role avatarUrl')
+      .populate('workers', 'name email role profession avatarUrl')
       .populate('tasks', 'taskTitle taskDescription startDate dueDate documents')
       .exec();
     if (!project) {
@@ -159,11 +159,11 @@ export class ProjectsService {
       .find()
       .populate({
         path: 'ownerId',
-        select: 'name email role',
+        select: 'name email role avatarUrl',
       })
       .populate({
         path: 'projectManagerId',
-        select: 'name email role',
+        select: 'name email role avatarUrl',
       })
       .populate({
         path: 'companyId',
@@ -171,11 +171,11 @@ export class ProjectsService {
       })
       .populate({
         path: 'projectAdmins',
-        select: 'name email role',
+        select: 'name email role avatarUrl',
       })
       .populate({
         path: 'workers',
-        select: 'name email role',
+        select: 'name email role profession avatarUrl',
       })
       .lean();
   }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
@@ -36,8 +36,10 @@ export class UsersService {
       .exec();
   }
 
-  async findUserById(id: string): Promise<{ id: string; email: string; name: string; profession: string; role: string } | null> {
-    const user = await this.userModel.findById(id).select('email name profession role').exec();
+  async findUserById(
+    id: string,
+  ): Promise<{ id: string; email: string; name: string; profession: string; role: string; avatarUrl: string } | null> {
+    const user = await this.userModel.findById(id).select('email name profession role avatarUrl').exec();
     if (!user) return null;
     return {
       id: user._id.toString(),
@@ -45,6 +47,7 @@ export class UsersService {
       name: user.name,
       profession: user.profession || '',
       role: user.role,
+      avatarUrl: user.avatarUrl || '',
     };
   }
 
@@ -121,6 +124,27 @@ export class UsersService {
     }
 
     user.companyId = companyId;
+    await user.save();
+
+    return user;
+  }
+
+  async appendAdditionalDocuments(id: string, documentUrls: string[]): Promise<User> {
+    const user = await this.userModel.findById(id).exec();
+
+    if (!user) {
+      throw new NotFoundException(`User with ID "${id}" not found`);
+    }
+
+    const existingDocuments = Array.isArray(user.additionalDocuments)
+      ? user.additionalDocuments
+      : [];
+
+    if (existingDocuments.length + documentUrls.length > 4) {
+      throw new BadRequestException('You can upload up to 4 additional documents.');
+    }
+
+    user.additionalDocuments = [...existingDocuments, ...documentUrls];
     await user.save();
 
     return user;
