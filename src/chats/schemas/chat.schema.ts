@@ -25,10 +25,10 @@ export class Chat {
   @Prop({ type: String, ref: 'Project', default: null })
   projectId?: string | null;
 
-  @Prop({ type: String, default: null })
+  @Prop({ type: String })
   directKey?: string | null;
 
-  @Prop({ type: String, default: null })
+  @Prop({ type: String })
   groupKey?: string | null;
 
   @Prop({ type: String, default: '' })
