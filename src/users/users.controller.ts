@@ -19,6 +19,7 @@ import {
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { User, UserRole } from './schemas/user.schema';
+import { UserActivityLogLevel } from './schemas/user-activity-log.schema';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { AuthGuard } from '@nestjs/passport';
@@ -173,6 +174,68 @@ export class UsersController {
     }
 
     return detailedUser;
+  }
+
+  @Post('activity-log')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  async createActivityLog(
+    @Request() req,
+    @Body()
+    body: {
+      category: string;
+      type: string;
+      level?: UserActivityLogLevel;
+      message: string;
+      source?: string;
+      details?: Record<string, any>;
+    },
+  ) {
+    if (!body?.category || !body?.type || !body?.message) {
+      throw new BadRequestException('category, type and message are required');
+    }
+
+    await this.usersService.logActivity(req.user.userId, {
+      category: body.category,
+      type: body.type,
+      level: body.level,
+      message: body.message,
+      source: body.source,
+      details: body.details,
+    });
+
+    return { created: true };
+  }
+
+  @Get(':id/activity-logs')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  async findUserActivityLogs(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('category') category?: string,
+    @Query('level') level?: string,
+  ) {
+    const user = await this.usersService.findOne(id);
+
+    if (req.user.role === UserRole.Worker && req.user.userId !== id) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    if (req.user.role === UserRole.CompanyAdmin && req.user.companyId !== user.companyId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    if (req.user.role === UserRole.ProjectAdmin && req.user.userId !== id) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return this.usersService.findActivityLogsByUserId(id, {
+      page: Number(page),
+      pageSize: Number(pageSize),
+      category,
+      level,
+    });
   }
 
   @Post('by-ids')

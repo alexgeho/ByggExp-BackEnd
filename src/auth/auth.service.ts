@@ -1,13 +1,16 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { UserRole } from '../users/schemas/user.schema';
+import { UserActivityLogLevel } from '../users/schemas/user-activity-log.schema';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -73,6 +76,21 @@ export class AuthService {
 
     if (!user || !isMatch) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    try {
+      await this.usersService.logActivity(user._id.toString(), {
+        category: 'auth',
+        type: 'login_succeeded',
+        level: UserActivityLogLevel.Info,
+        message: 'User logged in successfully.',
+        source: 'backend',
+        details: {
+          method: 'password',
+        },
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to store login activity for user ${user._id.toString()}`);
     }
 
     return this.generateTokens(user);

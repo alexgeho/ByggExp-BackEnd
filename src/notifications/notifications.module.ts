@@ -3,9 +3,11 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { DeviceToken, DeviceTokenSchema } from './schemas/device-token.schema';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
+    UsersModule,
     MongooseModule.forFeature([
       { name: DeviceToken.name, schema: DeviceTokenSchema },
     ]),

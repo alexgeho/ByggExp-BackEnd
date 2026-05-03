@@ -6,6 +6,7 @@ import { UsersService } from './users.service';
 import { Company, CompanySchema } from '../company/schemas/company.schema';
 import { Project, ProjectSchema } from '../projects/schemas/project.schema';
 import { DeviceToken, DeviceTokenSchema } from '../notifications/schemas/device-token.schema';
+import { UserActivityLog, UserActivityLogSchema } from './schemas/user-activity-log.schema';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { DeviceToken, DeviceTokenSchema } from '../notifications/schemas/device-
       { name: Company.name, schema: CompanySchema },
       { name: Project.name, schema: ProjectSchema },
       { name: DeviceToken.name, schema: DeviceTokenSchema },
+      { name: UserActivityLog.name, schema: UserActivityLogSchema },
     ]),
   ],
   controllers: [UsersController],

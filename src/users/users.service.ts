@@ -7,8 +7,30 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { Company, CompanyDocument } from '../company/schemas/company.schema';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { DeviceToken, DeviceTokenDocument } from '../notifications/schemas/device-token.schema';
+import {
+  UserActivityLog,
+  UserActivityLogDocument,
+  UserActivityLogLevel,
+} from './schemas/user-activity-log.schema';
 
 type UserDetailProjectRole = 'owner' | 'projectManager' | 'projectAdmin' | 'worker';
+
+type UserActivityLogListResponse = {
+  items: Array<{
+    id: string;
+    category: string;
+    type: string;
+    level: string;
+    message: string;
+    source: string | null;
+    details: Record<string, any>;
+    createdAt: Date | null;
+    updatedAt: Date | null;
+  }>;
+  total: number;
+  page: number;
+  pageSize: number;
+};
 
 type UserDetailResponse = {
   id: string;
@@ -44,10 +66,22 @@ type UserDetailResponse = {
     createdAt: Date | null;
     updatedAt: Date | null;
   }>;
+  activityLogs: Array<{
+    id: string;
+    category: string;
+    type: string;
+    level: string;
+    message: string;
+    source: string | null;
+    details: Record<string, any>;
+    createdAt: Date | null;
+    updatedAt: Date | null;
+  }>;
   counts: {
     projectCount: number;
     activePushTokenCount: number;
     additionalDocumentCount: number;
+    activityLogCount: number;
   };
   createdAt: Date | null;
   updatedAt: Date | null;
@@ -60,6 +94,8 @@ export class UsersService {
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
     @InjectModel(DeviceToken.name) private deviceTokenModel: Model<DeviceTokenDocument>,
+    @InjectModel(UserActivityLog.name)
+    private userActivityLogModel: Model<UserActivityLogDocument>,
   ) {}
 
   async hashPassword(password: string): Promise<string> {
@@ -113,7 +149,7 @@ export class UsersService {
     const companyId = user.companyId || null;
     const projectIds = Array.isArray(user.projectIds) ? user.projectIds : [];
 
-    const [company, projects, activePushTokens] = await Promise.all([
+    const [company, projects, activePushTokens, activityLogs, activityLogCount] = await Promise.all([
       companyId
         ? this.companyModel.findById(companyId).select('name email address').lean().exec()
         : null,
@@ -130,6 +166,13 @@ export class UsersService {
         .sort({ lastSeenAt: -1, updatedAt: -1 })
         .lean()
         .exec(),
+      this.userActivityLogModel
+        .find({ userId: id })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean()
+        .exec(),
+      this.userActivityLogModel.countDocuments({ userId: id }).exec(),
     ]);
 
     const normalizeId = (value: unknown) => (value ? String(value) : '');
@@ -190,13 +233,98 @@ export class UsersService {
         createdAt: (token as { createdAt?: Date }).createdAt || null,
         updatedAt: (token as { updatedAt?: Date }).updatedAt || null,
       })),
+      activityLogs: activityLogs.map((log) => ({
+        id: normalizeId(log._id),
+        category: log.category,
+        type: log.type,
+        level: log.level,
+        message: log.message,
+        source: log.source || null,
+        details: log.details || {},
+        createdAt: (log as { createdAt?: Date }).createdAt || null,
+        updatedAt: (log as { updatedAt?: Date }).updatedAt || null,
+      })),
       counts: {
         projectCount: detailedProjects.length,
         activePushTokenCount: activePushTokens.length,
         additionalDocumentCount: Array.isArray(user.additionalDocuments) ? user.additionalDocuments.length : 0,
+        activityLogCount,
       },
       createdAt: (user as { createdAt?: Date }).createdAt || null,
       updatedAt: (user as { updatedAt?: Date }).updatedAt || null,
+    };
+  }
+
+  async logActivity(
+    userId: string,
+    entry: {
+      category: string;
+      type: string;
+      level?: UserActivityLogLevel;
+      message: string;
+      source?: string;
+      details?: Record<string, any>;
+    },
+  ) {
+    return this.userActivityLogModel.create({
+      userId,
+      category: entry.category,
+      type: entry.type,
+      level: entry.level ?? UserActivityLogLevel.Info,
+      message: entry.message,
+      source: entry.source,
+      details: entry.details ?? {},
+    });
+  }
+
+  async findActivityLogsByUserId(
+    userId: string,
+    options: {
+      page?: number;
+      pageSize?: number;
+      category?: string;
+      level?: string;
+    } = {},
+  ): Promise<UserActivityLogListResponse> {
+    const page = Math.max(1, Number(options.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(options.pageSize) || 20));
+
+    const filter: Record<string, any> = { userId };
+    if (options.category) {
+      filter.category = options.category;
+    }
+    if (options.level) {
+      filter.level = options.level;
+    }
+
+    const [items, total] = await Promise.all([
+      this.userActivityLogModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * pageSize)
+        .limit(pageSize)
+        .lean()
+        .exec(),
+      this.userActivityLogModel.countDocuments(filter).exec(),
+    ]);
+
+    const normalizeId = (value: unknown) => (value ? String(value) : '');
+
+    return {
+      items: items.map((log) => ({
+        id: normalizeId(log._id),
+        category: log.category,
+        type: log.type,
+        level: log.level,
+        message: log.message,
+        source: log.source || null,
+        details: log.details || {},
+        createdAt: (log as { createdAt?: Date }).createdAt || null,
+        updatedAt: (log as { updatedAt?: Date }).updatedAt || null,
+      })),
+      total,
+      page,
+      pageSize,
     };
   }
 
