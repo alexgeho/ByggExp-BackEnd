@@ -4,10 +4,63 @@ import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument, UserRole } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
+import { Company, CompanyDocument } from '../company/schemas/company.schema';
+import { Project, ProjectDocument } from '../projects/schemas/project.schema';
+import { DeviceToken, DeviceTokenDocument } from '../notifications/schemas/device-token.schema';
+
+type UserDetailProjectRole = 'owner' | 'projectManager' | 'projectAdmin' | 'worker';
+
+type UserDetailResponse = {
+  id: string;
+  email: string;
+  name: string;
+  profession: string;
+  role: string;
+  avatarUrl: string;
+  phoneAreaCode: number;
+  phoneNumber: number;
+  language: Record<string, any>;
+  additionalDocuments: string[];
+  company: {
+    id: string;
+    name: string;
+    email: string;
+    address: string;
+  } | null;
+  projects: Array<{
+    id: string;
+    name: string;
+    status: string;
+    location: string;
+    roles: UserDetailProjectRole[];
+  }>;
+  activePushTokens: Array<{
+    id: string;
+    installationId: string;
+    expoPushToken: string;
+    platform: string;
+    appVersion: string | null;
+    lastSeenAt: Date | null;
+    createdAt: Date | null;
+    updatedAt: Date | null;
+  }>;
+  counts: {
+    projectCount: number;
+    activePushTokenCount: number;
+    additionalDocumentCount: number;
+  };
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
+    @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    @InjectModel(DeviceToken.name) private deviceTokenModel: Model<DeviceTokenDocument>,
+  ) {}
 
   async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, 10);
@@ -48,6 +101,102 @@ export class UsersService {
       profession: user.profession || '',
       role: user.role,
       avatarUrl: user.avatarUrl || '',
+    };
+  }
+
+  async findDetailedUserById(id: string): Promise<UserDetailResponse | null> {
+    const user = await this.userModel.findById(id).lean().exec();
+    if (!user) {
+      return null;
+    }
+
+    const companyId = user.companyId || null;
+    const projectIds = Array.isArray(user.projectIds) ? user.projectIds : [];
+
+    const [company, projects, activePushTokens] = await Promise.all([
+      companyId
+        ? this.companyModel.findById(companyId).select('name email address').lean().exec()
+        : null,
+      projectIds.length
+        ? this.projectModel
+            .find({ _id: { $in: projectIds } })
+            .select('name status location ownerId projectManagerId projectAdmins workers')
+            .sort({ name: 1 })
+            .lean()
+            .exec()
+        : [],
+      this.deviceTokenModel
+        .find({ userId: id, enabled: true })
+        .sort({ lastSeenAt: -1, updatedAt: -1 })
+        .lean()
+        .exec(),
+    ]);
+
+    const normalizeId = (value: unknown) => (value ? String(value) : '');
+
+    const detailedProjects = projects.map((project) => {
+      const roles: UserDetailProjectRole[] = [];
+      const userId = normalizeId(user._id);
+
+      if (normalizeId(project.ownerId) === userId) {
+        roles.push('owner');
+      }
+      if (normalizeId(project.projectManagerId) === userId) {
+        roles.push('projectManager');
+      }
+      if (Array.isArray(project.projectAdmins) && project.projectAdmins.some((entry) => normalizeId(entry) === userId)) {
+        roles.push('projectAdmin');
+      }
+      if (Array.isArray(project.workers) && project.workers.some((entry) => normalizeId(entry) === userId)) {
+        roles.push('worker');
+      }
+
+      return {
+        id: normalizeId(project._id),
+        name: project.name,
+        status: project.status,
+        location: project.location || '',
+        roles,
+      };
+    });
+
+    return {
+      id: normalizeId(user._id),
+      email: user.email,
+      name: user.name,
+      profession: user.profession || '',
+      role: user.role,
+      avatarUrl: user.avatarUrl || '',
+      phoneAreaCode: user.phoneAreaCode,
+      phoneNumber: user.phoneNumber,
+      language: user.language || {},
+      additionalDocuments: Array.isArray(user.additionalDocuments) ? user.additionalDocuments : [],
+      company: company
+        ? {
+            id: normalizeId(company._id),
+            name: company.name,
+            email: company.email,
+            address: company.address,
+          }
+        : null,
+      projects: detailedProjects,
+      activePushTokens: activePushTokens.map((token) => ({
+        id: normalizeId(token._id),
+        installationId: token.installationId,
+        expoPushToken: token.expoPushToken,
+        platform: token.platform,
+        appVersion: token.appVersion || null,
+        lastSeenAt: token.lastSeenAt || null,
+        createdAt: (token as { createdAt?: Date }).createdAt || null,
+        updatedAt: (token as { updatedAt?: Date }).updatedAt || null,
+      })),
+      counts: {
+        projectCount: detailedProjects.length,
+        activePushTokenCount: activePushTokens.length,
+        additionalDocumentCount: Array.isArray(user.additionalDocuments) ? user.additionalDocuments.length : 0,
+      },
+      createdAt: (user as { createdAt?: Date }).createdAt || null,
+      updatedAt: (user as { updatedAt?: Date }).updatedAt || null,
     };
   }
 

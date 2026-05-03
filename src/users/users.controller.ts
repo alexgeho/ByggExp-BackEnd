@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Controller,
+  ForbiddenException,
   Get,
   Post,
   Put,
@@ -147,6 +148,31 @@ export class UsersController {
       throw new NotFoundException(`User with ID "${id}" not found`);
     }
     return user;
+  }
+
+  @Get(':id/detail')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  async findDetailedUser(@Param('id') id: string, @Request() req) {
+    const user = await this.usersService.findOne(id);
+
+    if (req.user.role === UserRole.Worker && req.user.userId !== id) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    if (req.user.role === UserRole.CompanyAdmin && req.user.companyId !== user.companyId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    if (req.user.role === UserRole.ProjectAdmin && req.user.userId !== id) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const detailedUser = await this.usersService.findDetailedUserById(id);
+    if (!detailedUser) {
+      throw new NotFoundException(`User with ID "${id}" not found`);
+    }
+
+    return detailedUser;
   }
 
   @Post('by-ids')
