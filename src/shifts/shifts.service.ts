@@ -7,7 +7,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
-import { UserRole } from '../users/schemas/user.schema';
+import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
 import { ListShiftsDto } from './dto/list-shifts.dto';
 import { StartShiftDto } from './dto/start-shift.dto';
 import {
@@ -29,6 +29,7 @@ export class ShiftsService {
   constructor(
     @InjectModel(Shift.name) private readonly shiftModel: Model<ShiftDocument>,
     @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
   ) {}
 
   async start(user: AuthenticatedUser, dto: StartShiftDto) {
@@ -191,8 +192,9 @@ export class ShiftsService {
     return shift ? this.serializeShift(shift) : null;
   }
 
-  async getMonths(user: AuthenticatedUser) {
-    const shiftDates = await this.shiftModel.distinct('shiftDate', { workerId: user.userId }).exec();
+  async getMonths(user: AuthenticatedUser, query: Pick<ListShiftsDto, 'projectId' | 'workerId'> = {}) {
+    const filter = await this.buildAccessibleShiftFilter(user, query);
+    const shiftDates = await this.shiftModel.distinct('shiftDate', filter).exec();
 
     return Array.from(
       new Set(
@@ -206,7 +208,7 @@ export class ShiftsService {
   async getHistory(user: AuthenticatedUser, query: ListShiftsDto) {
     await this.finalizeExpiredOpenShifts(user.userId);
 
-    const availableMonths = await this.getMonths(user);
+    const availableMonths = await this.getMonths(user, query);
     const fallbackMonth = availableMonths[0] || this.getMonthKey(new Date());
     const month = query.month || fallbackMonth;
 
@@ -221,12 +223,14 @@ export class ShiftsService {
 
     const previousMonth = this.getPreviousMonthKey(month);
 
+    const serializedShifts = await this.serializeShifts(monthShifts);
+
     return {
       month,
       availableMonths,
       monthTotalDurationMs: this.sumShiftDurations(monthShifts),
       previousMonthTotalDurationMs: await this.sumMonthDurations(user.userId, previousMonth),
-      days: this.groupShiftsByDay(monthShifts, 'asc'),
+      days: this.groupSerializedShiftsByDay(serializedShifts, 'asc'),
     };
   }
 
@@ -254,9 +258,11 @@ export class ShiftsService {
       .sort({ shiftDate: -1, startedAt: 1 })
       .exec();
 
+    const serializedShifts = await this.serializeShifts(shifts);
+
     return {
-      items: shifts.map((shift) => this.serializeShift(shift)),
-      days: this.groupShiftsByDay(shifts, 'desc'),
+      items: serializedShifts,
+      days: this.groupSerializedShiftsByDay(serializedShifts, 'desc'),
     };
   }
 
@@ -459,33 +465,52 @@ export class ShiftsService {
     return segments.reduce((total, segment) => total + (segment.durationMs || 0), 0);
   }
 
-  private groupShiftsByDay(shifts: ShiftDocument[], order: 'asc' | 'desc') {
+  private groupSerializedShiftsByDay(
+    shifts: Array<ReturnType<ShiftsService['serializeShift']> & { workerName?: string | null }>,
+    order: 'asc' | 'desc',
+  ) {
     const grouped = new Map<
       string,
       {
         date: string;
         totalDurationMs: number;
-        shifts: ReturnType<ShiftsService['serializeShift']>[];
+        shifts: Array<ReturnType<ShiftsService['serializeShift']> & { workerName?: string | null }>;
       }
     >();
 
     for (const shift of shifts) {
       const key = shift.shiftDate;
-      const serializedShift = this.serializeShift(shift);
       const current = grouped.get(key) || {
         date: key,
         totalDurationMs: 0,
         shifts: [],
       };
 
-      current.totalDurationMs += serializedShift.durationMs;
-      current.shifts.push(serializedShift);
+      current.totalDurationMs += shift.durationMs;
+      current.shifts.push(shift);
       grouped.set(key, current);
     }
 
     return Array.from(grouped.values()).sort((left, right) =>
       order === 'asc' ? left.date.localeCompare(right.date) : right.date.localeCompare(left.date),
     );
+  }
+
+  private async serializeShifts(shifts: ShiftDocument[]) {
+    const serializedShifts = shifts.map((shift) => this.serializeShift(shift));
+
+    if (!serializedShifts.length) {
+      return serializedShifts;
+    }
+
+    const workerIds = Array.from(new Set(serializedShifts.map((shift) => shift.workerId).filter(Boolean)));
+    const users = await this.userModel.find({ _id: { $in: workerIds } }).select('_id name').lean().exec();
+    const workerNamesById = new Map(users.map((user) => [user._id.toString(), user.name]));
+
+    return serializedShifts.map((shift) => ({
+      ...shift,
+      workerName: workerNamesById.get(shift.workerId) || null,
+    }));
   }
 
   private serializeShift(shift: ShiftDocument) {

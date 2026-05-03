@@ -96,8 +96,8 @@ export class ShiftsController {
 
   @Get('months')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  getMonths(@Request() req) {
-    return this.shiftsService.getMonths(req.user);
+  getMonths(@Request() req, @Query() query: ListShiftsDto) {
+    return this.shiftsService.getMonths(req.user, query);
   }
 
   @Get('history')
