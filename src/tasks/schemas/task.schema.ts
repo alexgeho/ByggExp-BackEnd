@@ -26,6 +26,9 @@ export class Task {
   @Prop({ type: [String] }) // Уведомления
   notifications: string[];
 
+  @Prop({ type: MongooseSchema.Types.Mixed })
+  notificationSettings: Record<string, unknown>;
+
   @Prop({ type: [MongooseSchema.Types.Mixed], default: [] }) // Документы задачи
   documents: Array<string | TaskDocumentFile>;
 

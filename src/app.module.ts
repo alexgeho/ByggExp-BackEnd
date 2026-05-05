@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { UsersModule } from './users/users.module';
 import { CompanyModule } from './company/company.module';
 import { ProjectsModule } from './projects/projects.module';
@@ -17,6 +18,7 @@ import { TaskRemindersModule } from './task-reminders/task-reminders.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     MongooseModule.forRoot(
       process.env.MONGODB_URI ?? 'mongodb://localhost:27017/project_management',
     ),

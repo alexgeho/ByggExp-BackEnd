@@ -4,10 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import PDFDocument from 'pdfkit';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
+import { ExportShiftsDto } from './dto/export-shifts.dto';
 import { ListShiftsDto } from './dto/list-shifts.dto';
 import { StartShiftDto } from './dto/start-shift.dto';
 import {
@@ -22,6 +25,46 @@ type AuthenticatedUser = {
   userId: string;
   role: UserRole;
   companyId?: string | null;
+};
+
+type SerializedShiftRecord = {
+  id: string;
+  workerId: string;
+  projectId: string;
+  projectName: string;
+  location: string;
+  shiftDate: string;
+  startedAt: Date;
+  endedAt?: Date | null;
+  lastResumedAt?: Date | null;
+  status: ShiftStatus;
+  durationMs: number;
+  storedDurationMs: number;
+  workerName?: string | null;
+  photos: Array<{
+    name: string;
+    url: string;
+    mimeType?: string;
+    size?: number;
+    uploadedAt?: Date;
+  }>;
+  segments: Array<{
+    startedAt: Date;
+    endedAt?: Date | null;
+    durationMs: number;
+  }>;
+};
+
+type ShiftDayRecord = {
+  date: string;
+  totalDurationMs: number;
+  shifts: SerializedShiftRecord[];
+};
+
+type ShiftExportResult = {
+  buffer: Buffer;
+  fileName: string;
+  mimeType: string;
 };
 
 @Injectable()
@@ -236,33 +279,38 @@ export class ShiftsService {
 
   async list(user: AuthenticatedUser, query: ListShiftsDto) {
     await this.finalizeExpiredOpenShifts(user.userId);
-
-    const filter = await this.buildAccessibleShiftFilter(user, query);
-
-    if (query.month) {
-      filter.shiftDate = new RegExp(`^${query.month}`);
-    } else if (query.from || query.to) {
-      filter.shiftDate = {};
-
-      if (query.from) {
-        (filter.shiftDate as Record<string, string>).$gte = query.from;
-      }
-
-      if (query.to) {
-        (filter.shiftDate as Record<string, string>).$lte = query.to;
-      }
-    }
-
-    const shifts = await this.shiftModel
-      .find(filter)
-      .sort({ shiftDate: -1, startedAt: 1 })
-      .exec();
+    const shifts = await this.findAccessibleShifts(user, query, 'desc');
 
     const serializedShifts = await this.serializeShifts(shifts);
 
     return {
       items: serializedShifts,
       days: this.groupSerializedShiftsByDay(serializedShifts, 'desc'),
+    };
+  }
+
+  async export(user: AuthenticatedUser, query: ExportShiftsDto): Promise<ShiftExportResult> {
+    await this.finalizeExpiredOpenShifts(user.userId);
+
+    const format = query.format || 'pdf';
+    const shifts = await this.findAccessibleShifts(user, query, 'asc');
+    const serializedShifts = await this.serializeShifts(shifts);
+    const days = this.groupSerializedShiftsByDay(serializedShifts, 'asc');
+    const totalDurationMs = serializedShifts.reduce((total, shift) => total + shift.durationMs, 0);
+    const fileBaseName = this.buildExportFileBaseName(query, days);
+
+    if (format === 'excel') {
+      return {
+        buffer: await this.buildExcelReport(serializedShifts, days, query, totalDurationMs),
+        fileName: `${fileBaseName}.xlsx`,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+    }
+
+    return {
+      buffer: await this.buildPdfReport(serializedShifts, days, query, totalDurationMs),
+      fileName: `${fileBaseName}.pdf`,
+      mimeType: 'application/pdf',
     };
   }
 
@@ -331,6 +379,44 @@ export class ShiftsService {
     }
 
     return project;
+  }
+
+  private async findAccessibleShifts(
+    user: AuthenticatedUser,
+    query: Pick<ListShiftsDto, 'month' | 'from' | 'to' | 'projectId' | 'workerId'>,
+    order: 'asc' | 'desc',
+  ) {
+    const filter = await this.buildAccessibleShiftFilter(user, query);
+    this.applyShiftDateFilter(filter, query);
+
+    return this.shiftModel
+      .find(filter)
+      .sort({ shiftDate: order === 'asc' ? 1 : -1, startedAt: 1 })
+      .exec();
+  }
+
+  private applyShiftDateFilter(
+    filter: Record<string, unknown>,
+    query: Pick<ListShiftsDto, 'month' | 'from' | 'to'>,
+  ) {
+    if (query.month) {
+      filter.shiftDate = new RegExp(`^${query.month}`);
+      return;
+    }
+
+    if (!query.from && !query.to) {
+      return;
+    }
+
+    filter.shiftDate = {};
+
+    if (query.from) {
+      (filter.shiftDate as Record<string, string>).$gte = query.from;
+    }
+
+    if (query.to) {
+      (filter.shiftDate as Record<string, string>).$lte = query.to;
+    }
   }
 
   private async buildAccessibleShiftFilter(user: AuthenticatedUser, query: ListShiftsDto) {
@@ -466,17 +552,10 @@ export class ShiftsService {
   }
 
   private groupSerializedShiftsByDay(
-    shifts: Array<ReturnType<ShiftsService['serializeShift']> & { workerName?: string | null }>,
+    shifts: SerializedShiftRecord[],
     order: 'asc' | 'desc',
-  ) {
-    const grouped = new Map<
-      string,
-      {
-        date: string;
-        totalDurationMs: number;
-        shifts: Array<ReturnType<ShiftsService['serializeShift']> & { workerName?: string | null }>;
-      }
-    >();
+  ): ShiftDayRecord[] {
+    const grouped = new Map<string, ShiftDayRecord>();
 
     for (const shift of shifts) {
       const key = shift.shiftDate;
@@ -511,6 +590,145 @@ export class ShiftsService {
       ...shift,
       workerName: workerNamesById.get(shift.workerId) || null,
     }));
+  }
+
+  private async buildExcelReport(
+    shifts: SerializedShiftRecord[],
+    days: ShiftDayRecord[],
+    query: ExportShiftsDto,
+    totalDurationMs: number,
+  ) {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Shift report');
+
+    worksheet.columns = [
+      { header: 'Date', key: 'date', width: 14 },
+      { header: 'Worker', key: 'worker', width: 24 },
+      { header: 'Project', key: 'project', width: 28 },
+      { header: 'Location', key: 'location', width: 24 },
+      { header: 'Start', key: 'start', width: 22 },
+      { header: 'End', key: 'end', width: 22 },
+      { header: 'Duration', key: 'duration', width: 14 },
+      { header: 'Status', key: 'status', width: 14 },
+      { header: 'Photos', key: 'photos', width: 10 },
+    ];
+
+    worksheet.addRow(['Shift report']);
+    worksheet.mergeCells('A1:I1');
+    worksheet.getCell('A1').font = { size: 16, bold: true };
+
+    worksheet.addRow(['Generated at', this.formatDateTimeValue(new Date())]);
+    worksheet.addRow(['Period', this.getReportPeriodLabel(query, days)]);
+    worksheet.addRow(['Total shifts', shifts.length]);
+    worksheet.addRow(['Total duration', this.formatDurationLabel(totalDurationMs)]);
+    worksheet.addRow([]);
+
+    const headerRow = worksheet.addRow({
+      date: 'Date',
+      worker: 'Worker',
+      project: 'Project',
+      location: 'Location',
+      start: 'Start',
+      end: 'End',
+      duration: 'Duration',
+      status: 'Status',
+      photos: 'Photos',
+    });
+
+    headerRow.font = { bold: true };
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFEAF4FF' },
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD8E6F3' } },
+        left: { style: 'thin', color: { argb: 'FFD8E6F3' } },
+        bottom: { style: 'thin', color: { argb: 'FFD8E6F3' } },
+        right: { style: 'thin', color: { argb: 'FFD8E6F3' } },
+      };
+    });
+
+    for (const day of days) {
+      const dayRow = worksheet.addRow({
+        date: day.date,
+        duration: this.formatDurationLabel(day.totalDurationMs),
+      });
+      dayRow.font = { bold: true };
+
+      for (const shift of day.shifts) {
+        worksheet.addRow({
+          date: shift.shiftDate,
+          worker: shift.workerName || shift.workerId,
+          project: shift.projectName || shift.projectId,
+          location: shift.location || '-',
+          start: this.formatDateTimeValue(shift.startedAt),
+          end: this.formatDateTimeValue(shift.endedAt),
+          duration: this.formatDurationLabel(shift.durationMs),
+          status: shift.status,
+          photos: shift.photos?.length || 0,
+        });
+      }
+    }
+
+    return Buffer.from(await workbook.xlsx.writeBuffer());
+  }
+
+  private buildPdfReport(
+    shifts: SerializedShiftRecord[],
+    days: ShiftDayRecord[],
+    query: ExportShiftsDto,
+    totalDurationMs: number,
+  ) {
+    return new Promise<Buffer>((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      const chunks: Buffer[] = [];
+
+      const ensureSpace = (height = 24) => {
+        if (doc.y + height > doc.page.height - 40) {
+          doc.addPage();
+        }
+      };
+
+      doc.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      doc.fontSize(18).text('Shift report');
+      doc.moveDown(0.5);
+      doc.fontSize(11).text(`Generated at: ${this.formatDateTimeValue(new Date())}`);
+      doc.text(`Period: ${this.getReportPeriodLabel(query, days)}`);
+      doc.text(`Total shifts: ${shifts.length}`);
+      doc.text(`Total duration: ${this.formatDurationLabel(totalDurationMs)}`);
+
+      if (!days.length) {
+        doc.moveDown(1);
+        doc.fontSize(11).text('No shifts found for the selected filters.');
+        doc.end();
+        return;
+      }
+
+      for (const day of days) {
+        ensureSpace(40);
+        doc.moveDown(0.8);
+        doc.fontSize(13).text(`${day.date} | ${this.formatDurationLabel(day.totalDurationMs)}`);
+
+        for (const shift of day.shifts) {
+          ensureSpace(54);
+          doc.moveDown(0.35);
+          doc
+            .fontSize(10)
+            .text(
+              `${shift.workerName || shift.workerId} | ${shift.projectName || shift.projectId} | ${this.formatDurationLabel(shift.durationMs)}`,
+            );
+          doc.text(`Time: ${this.formatTimeValue(shift.startedAt)} - ${this.formatTimeValue(shift.endedAt)}`);
+          doc.text(`Location: ${shift.location || '-'} | Status: ${shift.status} | Photos: ${shift.photos?.length || 0}`);
+        }
+      }
+
+      doc.end();
+    });
   }
 
   private serializeShift(shift: ShiftDocument) {
@@ -580,5 +798,88 @@ export class ShiftsService {
     const [year, month, day] = shiftDate.split('-').map(Number);
 
     return new Date(year, month - 1, day, 23, 59, 59, 999);
+  }
+
+  private getReportPeriodLabel(query: Pick<ListShiftsDto, 'month' | 'from' | 'to'>, days: ShiftDayRecord[]) {
+    if (query.month) {
+      return query.month;
+    }
+
+    if (query.from || query.to) {
+      return `${query.from || '...'} - ${query.to || '...'}`;
+    }
+
+    if (!days.length) {
+      return 'All time';
+    }
+
+    return `${days[0].date} - ${days[days.length - 1].date}`;
+  }
+
+  private formatDurationLabel(durationMs: number) {
+    const totalMinutes = Math.round(Math.max(0, durationMs) / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  }
+
+  private formatDateTimeValue(value?: Date | string | null) {
+    if (!value) {
+      return '-';
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return '-';
+    }
+
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  private formatTimeValue(value?: Date | string | null) {
+    if (!value) {
+      return '-';
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return '-';
+    }
+
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  private buildExportFileBaseName(
+    query: Pick<ListShiftsDto, 'month' | 'from' | 'to'>,
+    days: ShiftDayRecord[],
+  ) {
+    const rawRange =
+      query.month || query.from || query.to
+        ? `${query.month || query.from || 'from'}-${query.to || query.month || 'to'}`
+        : days.length
+          ? `${days[0].date}-${days[days.length - 1].date}`
+          : 'all-time';
+
+    return `shift-report-${this.sanitizeFilePart(rawRange)}`;
+  }
+
+  private sanitizeFilePart(value: string) {
+    return value
+      .replace(/[^a-zA-Z0-9-_]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase();
   }
 }

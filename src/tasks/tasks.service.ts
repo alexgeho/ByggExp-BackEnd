@@ -7,6 +7,7 @@ import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { UserRole } from '../users/schemas/user.schema';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TaskRemindersService } from '../task-reminders/task-reminders.service';
 
 type ProjectNotificationSource = {
   _id: { toString(): string };
@@ -30,6 +31,7 @@ export class TasksService {
     @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
     private readonly notificationsService: NotificationsService,
+    private readonly taskRemindersService: TaskRemindersService,
   ) {}
 
   async create(createTaskDto: CreateTaskDto, actorUserId?: string): Promise<Task> {
@@ -47,7 +49,26 @@ export class TasksService {
 
     const notificationProject = this.toProjectNotificationSource(project as unknown as ProjectDocument);
     const notificationTask = this.toTaskNotificationSource(createdTask as unknown as TaskDocument);
+    const projectMemberIds = this.getProjectMemberIds(project as unknown as ProjectDocument);
     await this.sendTaskCreatedNotification(notificationTask, notificationProject, actorUserId);
+    await this.taskRemindersService.sendAssignmentNotification({
+      actorUserId,
+      notificationSettings: createTaskDto.notificationSettings,
+      projectMemberIds,
+      projectId: createTaskDto.projectId,
+      projectName: project.name,
+      taskId: createdTask._id.toString(),
+      taskTitle: createdTask.taskTitle,
+    });
+    await this.taskRemindersService.syncTaskReminders({
+      notificationSettings: createTaskDto.notificationSettings,
+      projectMemberIds,
+      projectId: createTaskDto.projectId,
+      projectName: project.name,
+      taskDueDate: createdTask.dueDate,
+      taskId: createdTask._id.toString(),
+      taskTitle: createdTask.taskTitle,
+    });
 
     return createdTask;
   }
@@ -130,6 +151,21 @@ export class TasksService {
       await this.sendTaskDeadlineUpdatedNotification(notificationTask, notificationProject, actorUserId);
     }
 
+    if (targetProject) {
+      const projectMemberIds = this.getProjectMemberIds(targetProject as unknown as ProjectDocument);
+      await this.taskRemindersService.syncTaskReminders({
+        notificationSettings: existingTask.notificationSettings,
+        projectMemberIds,
+        projectId: nextProjectId,
+        projectName: targetProject.name,
+        taskDueDate: existingTask.dueDate,
+        taskId: existingTask._id.toString(),
+        taskTitle: existingTask.taskTitle,
+      });
+    } else {
+      await this.taskRemindersService.cancelTaskReminders(existingTask._id.toString());
+    }
+
     return existingTask;
   }
 
@@ -144,6 +180,7 @@ export class TasksService {
     await this.projectModel.findByIdAndUpdate(task.projectId, {
       $pull: { tasks: task._id.toString() },
     });
+    await this.taskRemindersService.cancelTaskReminders(task._id.toString());
 
     return task;
   }
@@ -166,6 +203,15 @@ export class TasksService {
       ...(project.projectAdmins || []),
       ...(project.workers || []),
     ].filter((userId) => userId && userId !== actorUserId))];
+  }
+
+  private getProjectMemberIds(project: ProjectDocument) {
+    return [...new Set([
+      project.ownerId,
+      project.projectManagerId,
+      ...(project.projectAdmins || []),
+      ...(project.workers || []),
+    ].filter(Boolean).map((value) => value.toString()))];
   }
 
   private toProjectNotificationSource(project: ProjectDocument): ProjectNotificationSource {

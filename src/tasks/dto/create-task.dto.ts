@@ -31,6 +31,22 @@ const parseArrayField = (value: unknown) => {
   return value;
 };
 
+const parseJsonField = (value: unknown) => {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+
+  return value;
+};
+
 export class CreateTaskDto {
   @IsString()
   @IsNotEmpty()
@@ -53,6 +69,10 @@ export class CreateTaskDto {
   @IsString({ each: true })
   @IsOptional()
   notifications?: string[];
+
+  @Transform(({ value }) => parseJsonField(value))
+  @IsOptional()
+  notificationSettings?: Record<string, unknown>;
 
   @Transform(({ value }) => parseArrayField(value))
   @IsArray()

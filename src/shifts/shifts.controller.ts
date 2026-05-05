@@ -5,11 +5,14 @@ import {
   Param,
   Post,
   Query,
+  Res,
   Request,
+  StreamableFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response as ExpressResponse } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -17,6 +20,7 @@ import { extname } from 'path';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../users/schemas/user.schema';
+import { ExportShiftsDto } from './dto/export-shifts.dto';
 import { ListShiftsDto } from './dto/list-shifts.dto';
 import { StartShiftDto } from './dto/start-shift.dto';
 import { ShiftsService } from './shifts.service';
@@ -110,6 +114,20 @@ export class ShiftsController {
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
   list(@Request() req, @Query() query: ListShiftsDto) {
     return this.shiftsService.list(req.user, query);
+  }
+
+  @Get('export')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  async export(
+    @Request() req,
+    @Query() query: ExportShiftsDto,
+    @Res({ passthrough: true }) res: ExpressResponse,
+  ) {
+    const report = await this.shiftsService.export(req.user, query);
+    res.setHeader('Content-Type', report.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${report.fileName}"`);
+
+    return new StreamableFile(report.buffer);
   }
 
   @Get(':id')
