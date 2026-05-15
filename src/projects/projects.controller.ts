@@ -75,7 +75,7 @@ export class ProjectsController {
       }));
     }
 
-    return this.projectsService.create(createProjectDto);
+    return this.projectsService.create(createProjectDto, req.user);
   }
 
   @Get()

@@ -35,9 +35,9 @@ export class CreateProjectDto {
     const result = value || obj?.clientCompanyId;
     return result;
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  companyId: string;
+  companyId?: string;
 
   @Expose()
   @IsOptional()
@@ -45,14 +45,14 @@ export class CreateProjectDto {
   clientCompanyId?: string;
 
   @Expose()
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  ownerId: string;
+  ownerId?: string;
 
   @Expose()
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  projectManagerId: string;
+  projectManagerId?: string;
 
   @Transform(({ value }) => parseArrayField(value))
   @IsArray()

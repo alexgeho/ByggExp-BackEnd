@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Project, ProjectDocument } from './schemas/project.schema';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UsersService } from '../users/users.service';
 import { CompanyService } from '../company/company.service';
-import { UserRole } from '../users/schemas/user.schema';
+import { User, UserRole } from '../users/schemas/user.schema';
 
 @Injectable()
 export class ProjectsService {
@@ -15,15 +15,123 @@ export class ProjectsService {
     private companyService: CompanyService,
   ) {}
 
-  async create(createProjectDto: CreateProjectDto): Promise<Project> {
-    const createdProject = new this.projectModel(createProjectDto);
+  private getEntityId(value: unknown): string {
+    if (!value) {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    const entity = value as { _id?: unknown; id?: unknown };
+    return String(entity._id ?? entity.id ?? '');
+  }
+
+  private pickUserIdByRole(users: User[], roles: UserRole[]): string {
+    for (const role of roles) {
+      const match = users.find((user) => user.role === role);
+      const matchId = this.getEntityId(match);
+      if (matchId) {
+        return matchId;
+      }
+    }
+
+    return '';
+  }
+
+  private async resolveCreatePayload(
+    createProjectDto: CreateProjectDto,
+    currentUser?: { userId?: string; role?: UserRole; companyId?: string | null },
+  ): Promise<CreateProjectDto> {
+    let companyId =
+      createProjectDto.companyId ||
+      createProjectDto.clientCompanyId ||
+      currentUser?.companyId ||
+      '';
+
+    if (!companyId) {
+      const companies = await this.companyService.findAll();
+      companyId = this.getEntityId(companies[0]);
+    }
+
+    if (!companyId) {
+      throw new BadRequestException('No company available for project creation');
+    }
+
+    const company = await this.companyService.findOne(companyId);
+    let candidateUsers = await this.usersService.findAllByCompany(companyId);
+
+    if (!candidateUsers.length) {
+      candidateUsers = await this.usersService.findAll();
+    }
+
+    const currentUserId = currentUser?.userId || '';
+    const currentCompanyUserId = candidateUsers.find(
+      (user) => this.getEntityId(user) === currentUserId,
+    )
+      ? currentUserId
+      : '';
+
+    const primaryCompanyAdminId =
+      (Array.isArray(company.companyAdmins)
+        ? company.companyAdmins.find(Boolean)
+        : '') ||
+      this.pickUserIdByRole(candidateUsers, [UserRole.CompanyAdmin]);
+
+    const fallbackOwnerId =
+      primaryCompanyAdminId ||
+      currentCompanyUserId ||
+      this.pickUserIdByRole(candidateUsers, [UserRole.ProjectAdmin]) ||
+      this.getEntityId(candidateUsers[0]);
+
+    const fallbackProjectManagerId =
+      this.pickUserIdByRole(candidateUsers, [UserRole.ProjectAdmin]) ||
+      primaryCompanyAdminId ||
+      currentCompanyUserId ||
+      fallbackOwnerId ||
+      this.getEntityId(candidateUsers[0]);
+
+    const ownerId = createProjectDto.ownerId || fallbackOwnerId;
+    const projectManagerId =
+      createProjectDto.projectManagerId || fallbackProjectManagerId;
+
+    if (!ownerId || !projectManagerId) {
+      throw new BadRequestException(
+        'No suitable users available to assign project ownership',
+      );
+    }
+
+    return {
+      ...createProjectDto,
+      companyId,
+      ownerId,
+      projectManagerId,
+    };
+  }
+
+  async create(
+    createProjectDto: CreateProjectDto,
+    currentUser?: { userId?: string; role?: UserRole; companyId?: string | null },
+  ): Promise<Project> {
+    const resolvedProjectDto = await this.resolveCreatePayload(
+      createProjectDto,
+      currentUser,
+    );
+    const createdProject = new this.projectModel(resolvedProjectDto);
     const project = await createdProject.save();
 
-    await this.companyService.addProject(createProjectDto.companyId, project._id.toString());
-    await this.usersService.addUserToProject(createProjectDto.projectManagerId, project._id.toString());
+    await this.companyService.addProject(
+      resolvedProjectDto.companyId!,
+      project._id.toString(),
+    );
+    await this.usersService.addUserToProject(
+      resolvedProjectDto.projectManagerId!,
+      project._id.toString(),
+    );
 
-    if (createProjectDto.projectAdmins) {
-      for (const adminId of createProjectDto.projectAdmins) {
+    if (resolvedProjectDto.projectAdmins) {
+      for (const adminId of resolvedProjectDto.projectAdmins) {
         await this.usersService.addUserToProject(adminId, project._id.toString());
       }
     }
