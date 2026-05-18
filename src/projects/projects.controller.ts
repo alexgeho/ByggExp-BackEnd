@@ -115,6 +115,8 @@ export class ProjectsController {
       status: project.status,
       companyId: project.companyId,
       location: project.location,
+      locationLatitude: project.locationLatitude,
+      locationLongitude: project.locationLongitude,
     }));
   }
 

@@ -34,6 +34,12 @@ export class Project {
   @Prop()
   location: string;
 
+  @Prop({ type: Number })
+  locationLatitude?: number;
+
+  @Prop({ type: Number })
+  locationLongitude?: number;
+
   @Prop()
   contractNumber: string;
 

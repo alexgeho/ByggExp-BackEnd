@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsArray,
   IsDateString,
+  IsNumber,
 } from 'class-validator';
 import { Transform, Expose } from 'class-transformer';
 
@@ -27,6 +28,15 @@ const parseArrayField = (value: unknown) => {
   }
 
   return value;
+};
+
+const parseOptionalNumberField = (value: unknown) => {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  const parsedValue = Number(value);
+  return Number.isNaN(parsedValue) ? value : parsedValue;
 };
 
 export class CreateProjectDto {
@@ -71,6 +81,16 @@ export class CreateProjectDto {
   @IsString()
   @IsOptional()
   location?: string;
+
+  @Transform(({ value }) => parseOptionalNumberField(value))
+  @IsNumber()
+  @IsOptional()
+  locationLatitude?: number;
+
+  @Transform(({ value }) => parseOptionalNumberField(value))
+  @IsNumber()
+  @IsOptional()
+  locationLongitude?: number;
 
   @IsString()
   @IsOptional()

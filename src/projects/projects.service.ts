@@ -160,18 +160,36 @@ export class ProjectsService {
 
   async findByIds(ids: string[]): Promise<Project[]> {
     return this.projectModel.find({ _id: { $in: ids } })
-      .select('companyId ownerId projectManagerId name status location')
+      .select(
+        'companyId ownerId projectManagerId name status location locationLatitude locationLongitude',
+      )
       .exec();
   }
 
-  async findProjectById(id: string): Promise<{ id: string; name: string; status: string; companyId: string } | null> {
-    const project = await this.projectModel.findById(id).select('name status companyId').exec();
+  async findProjectById(
+    id: string,
+  ): Promise<{
+    id: string;
+    name: string;
+    status: string;
+    companyId: string;
+    location: string;
+    locationLatitude?: number;
+    locationLongitude?: number;
+  } | null> {
+    const project = await this.projectModel
+      .findById(id)
+      .select('name status companyId location locationLatitude locationLongitude')
+      .exec();
     if (!project) return null;
     return {
       id: project._id.toString(),
       name: project.name,
       status: project.status,
       companyId: project.companyId,
+      location: project.location || '',
+      locationLatitude: project.locationLatitude,
+      locationLongitude: project.locationLongitude,
     };
   }
 
