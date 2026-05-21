@@ -96,6 +96,29 @@ export class NotificationsService {
     });
   }
 
+  async sendShiftOutsideProjectAreaNotification(
+    userId: string,
+    options: {
+      shiftId: string;
+      projectId?: string;
+      projectName?: string;
+    },
+  ) {
+    return this.sendToUsers([userId], {
+      title: 'You are outside the project area',
+      body: options.projectName
+        ? `Your shift for ${options.projectName} was ended because you left the project area.`
+        : 'Your shift was ended because you left the project area.',
+      data: {
+        type: 'shift_outside_project_area',
+        screen: 'Shifts',
+        entityId: options.shiftId,
+        projectId: options.projectId,
+        shiftId: options.shiftId,
+      },
+    });
+  }
+
   async sendToUsers(userIds: string[], payload: PushPayload) {
     const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
     if (!uniqueUserIds.length) {

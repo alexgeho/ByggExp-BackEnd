@@ -68,6 +68,15 @@ export class Shift {
   @Prop({ type: Number, default: 0 })
   durationMs: number;
 
+  @Prop({ default: '' })
+  completionReason?: string;
+
+  @Prop({ default: '' })
+  completionSource?: string;
+
+  @Prop({ type: Date, default: null })
+  completionNotifiedAt?: Date | null;
+
   @Prop({
     type: [
       {

@@ -7,9 +7,13 @@ import {
 import ExcelJS from 'exceljs';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { NotificationsService } from '../notifications/notifications.service';
 import PDFDocument from 'pdfkit';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
+import { UsersService } from '../users/users.service';
+import { UserActivityLogLevel } from '../users/schemas/user-activity-log.schema';
 import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
+import { CompleteShiftDto } from './dto/complete-shift.dto';
 import { ExportShiftsDto } from './dto/export-shifts.dto';
 import { ListShiftsDto } from './dto/list-shifts.dto';
 import { StartShiftDto } from './dto/start-shift.dto';
@@ -40,6 +44,9 @@ type SerializedShiftRecord = {
   status: ShiftStatus;
   durationMs: number;
   storedDurationMs: number;
+  completionReason?: string | null;
+  completionSource?: string | null;
+  completionNotifiedAt?: Date | null;
   workerName?: string | null;
   photos: Array<{
     name: string;
@@ -73,6 +80,8 @@ export class ShiftsService {
     @InjectModel(Shift.name) private readonly shiftModel: Model<ShiftDocument>,
     @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    private readonly notificationsService: NotificationsService,
+    private readonly usersService: UsersService,
   ) {}
 
   async start(user: AuthenticatedUser, dto: StartShiftDto) {
@@ -122,6 +131,14 @@ export class ShiftsService {
       photos: [],
     }).save();
 
+    await this.usersService.setWorkingStatus(user.userId, {
+      projectId: dto.projectId,
+      projectName: project.name,
+      shiftId: createdShift._id.toString(),
+      reason: 'shift_started',
+      updatedAt: now,
+    });
+
     return this.serializeShift(createdShift);
   }
 
@@ -141,6 +158,11 @@ export class ShiftsService {
     shift.endedAt = now;
     shift.status = ShiftStatus.Paused;
     await shift.save();
+
+    await this.usersService.setOffDutyStatus(user.userId, {
+      reason: 'shift_paused',
+      updatedAt: now,
+    });
 
     return this.serializeShift(shift);
   }
@@ -181,19 +203,29 @@ export class ShiftsService {
     });
     await shift.save();
 
+    await this.usersService.setWorkingStatus(user.userId, {
+      projectId: shift.projectId,
+      projectName: shift.projectNameSnapshot,
+      shiftId: shiftId,
+      reason: 'shift_resumed',
+      updatedAt: now,
+    });
+
     return this.serializeShift(shift);
   }
 
-  async complete(user: AuthenticatedUser, shiftId: string) {
+  async complete(user: AuthenticatedUser, shiftId: string, dto: CompleteShiftDto = {}) {
     await this.finalizeExpiredOpenShifts(user.userId);
 
     const shift = await this.findOwnedShift(user.userId, shiftId);
+    const now = new Date();
+    const completionReason = dto.reason?.trim() || 'manual';
+    const completionSource = dto.source?.trim() || 'api';
+    const shouldNotifyUser = Boolean(dto.notifyUser) && completionReason === 'outside_project_area';
 
     if (shift.status === ShiftStatus.Completed) {
       return this.serializeShift(shift);
     }
-
-    const now = new Date();
 
     if (shift.status === ShiftStatus.Active) {
       this.closeOpenSegment(shift, now);
@@ -203,7 +235,62 @@ export class ShiftsService {
 
     shift.endedAt = now;
     shift.status = ShiftStatus.Completed;
+    shift.completionReason = completionReason;
+    shift.completionSource = completionSource;
+    shift.completionNotifiedAt = null;
     await shift.save();
+
+    if (completionReason === 'outside_project_area') {
+      let notificationResult: {
+        attempted: number;
+        sent: number;
+        disabledTokens: number;
+      } | null = null;
+
+      if (shouldNotifyUser) {
+        notificationResult = await this.notificationsService.sendShiftOutsideProjectAreaNotification(
+          user.userId,
+          {
+            shiftId,
+            projectId: shift.projectId,
+            projectName: shift.projectNameSnapshot,
+          },
+        );
+
+        shift.completionNotifiedAt = new Date();
+        await shift.save();
+      }
+
+      await this.usersService.setOutsideProjectAreaStatus(user.userId, {
+        projectId: shift.projectId,
+        projectName: shift.projectNameSnapshot,
+        shiftId,
+        reason: shouldNotifyUser
+          ? 'outside_project_area_notified'
+          : 'outside_project_area',
+        updatedAt: now,
+      });
+
+      await this.usersService.logActivity(user.userId, {
+        category: 'attendance',
+        type: 'shift_auto_completed_outside_project_area',
+        level: UserActivityLogLevel.Warning,
+        message: 'Shift was ended automatically because the user left the project area.',
+        source: completionSource,
+        details: {
+          shiftId,
+          projectId: shift.projectId,
+          projectName: shift.projectNameSnapshot,
+          notifyUser: shouldNotifyUser,
+          notificationResult,
+        },
+      });
+    } else {
+      await this.usersService.setOffDutyStatus(user.userId, {
+        reason: completionReason === 'manual' ? 'shift_completed' : completionReason,
+        updatedAt: now,
+      });
+    }
 
     return this.serializeShift(shift);
   }
@@ -518,7 +605,14 @@ export class ShiftsService {
 
       shift.endedAt = shift.endedAt || shift.segments[shift.segments.length - 1]?.endedAt || shiftDayEnd;
       shift.status = ShiftStatus.Completed;
+      shift.completionReason = shift.completionReason || 'expired_day_end';
+      shift.completionSource = shift.completionSource || 'system';
       await shift.save();
+
+      await this.usersService.setOffDutyStatus(userId, {
+        reason: 'expired_day_end',
+        updatedAt: shiftDayEnd,
+      });
     }
   }
 
@@ -748,6 +842,9 @@ export class ShiftsService {
       status: shift.status,
       durationMs: effectiveDurationMs,
       storedDurationMs: shift.durationMs,
+      completionReason: shift.completionReason || null,
+      completionSource: shift.completionSource || null,
+      completionNotifiedAt: shift.completionNotifiedAt || null,
       photos: (shift.photos || []).map((photo) => ({
         name: photo.name,
         url: photo.url,

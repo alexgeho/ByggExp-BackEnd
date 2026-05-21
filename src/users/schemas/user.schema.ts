@@ -10,6 +10,12 @@ export enum UserRole {
   Worker = 'worker',
 }
 
+export enum UserWorkStatus {
+  OffDuty = 'off_duty',
+  Working = 'working',
+  OutsideProjectArea = 'outside_project_area',
+}
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true, unique: true })
@@ -47,6 +53,24 @@ export class User {
 
   @Prop({ type: [String], ref: 'Project', default: [] })
   projectIds: string[];
+
+  @Prop({ required: true, enum: UserWorkStatus, default: UserWorkStatus.OffDuty, index: true })
+  workStatus: UserWorkStatus;
+
+  @Prop({ type: String, ref: 'Project', default: null })
+  workStatusProjectId?: string | null;
+
+  @Prop({ default: '' })
+  workStatusProjectName?: string;
+
+  @Prop({ type: String, ref: 'Shift', default: null })
+  workStatusShiftId?: string | null;
+
+  @Prop({ default: '' })
+  workStatusReason?: string;
+
+  @Prop({ type: Date, default: null })
+  workStatusUpdatedAt?: Date | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

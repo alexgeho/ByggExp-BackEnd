@@ -20,6 +20,7 @@ import { extname } from 'path';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../users/schemas/user.schema';
+import { CompleteShiftDto } from './dto/complete-shift.dto';
 import { ExportShiftsDto } from './dto/export-shifts.dto';
 import { ListShiftsDto } from './dto/list-shifts.dto';
 import { StartShiftDto } from './dto/start-shift.dto';
@@ -69,8 +70,8 @@ export class ShiftsController {
 
   @Post(':id/complete')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  complete(@Request() req, @Param('id') id: string) {
-    return this.shiftsService.complete(req.user, id);
+  complete(@Request() req, @Param('id') id: string, @Body() dto: CompleteShiftDto) {
+    return this.shiftsService.complete(req.user, id, dto);
   }
 
   @Post(':id/photos')

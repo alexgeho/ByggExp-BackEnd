@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
-import { User, UserDocument, UserRole } from './schemas/user.schema';
+import { User, UserDocument, UserRole, UserWorkStatus } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { Company, CompanyDocument } from '../company/schemas/company.schema';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
@@ -43,6 +43,14 @@ type UserDetailResponse = {
   phoneNumber: number;
   language: Record<string, any>;
   additionalDocuments: string[];
+  workPresence: {
+    status: UserWorkStatus;
+    projectId: string | null;
+    projectName: string | null;
+    shiftId: string | null;
+    reason: string | null;
+    updatedAt: Date | null;
+  };
   company: {
     id: string;
     name: string;
@@ -214,6 +222,14 @@ export class UsersService {
       phoneNumber: user.phoneNumber,
       language: user.language || {},
       additionalDocuments: Array.isArray(user.additionalDocuments) ? user.additionalDocuments : [],
+      workPresence: {
+        status: user.workStatus || UserWorkStatus.OffDuty,
+        projectId: user.workStatusProjectId || null,
+        projectName: user.workStatusProjectName || null,
+        shiftId: user.workStatusShiftId || null,
+        reason: user.workStatusReason || null,
+        updatedAt: user.workStatusUpdatedAt || null,
+      },
       company: company
         ? {
             id: normalizeId(company._id),
@@ -404,6 +420,84 @@ export class UsersService {
     await user.save();
 
     return user;
+  }
+
+  async updateWorkStatus(
+    userId: string,
+    status: UserWorkStatus,
+    options: {
+      projectId?: string | null;
+      projectName?: string | null;
+      shiftId?: string | null;
+      reason?: string | null;
+      updatedAt?: Date;
+    } = {},
+  ): Promise<User> {
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        {
+          workStatus: status,
+          workStatusProjectId: options.projectId ?? null,
+          workStatusProjectName: options.projectName ?? '',
+          workStatusShiftId: options.shiftId ?? null,
+          workStatusReason: options.reason ?? '',
+          workStatusUpdatedAt: options.updatedAt ?? new Date(),
+        },
+        { new: true },
+      )
+      .exec();
+
+    if (!updatedUser) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+
+    return updatedUser;
+  }
+
+  async setWorkingStatus(
+    userId: string,
+    options: {
+      projectId?: string | null;
+      projectName?: string | null;
+      shiftId?: string | null;
+      reason?: string | null;
+      updatedAt?: Date;
+    } = {},
+  ) {
+    return this.updateWorkStatus(userId, UserWorkStatus.Working, {
+      ...options,
+      reason: options.reason ?? 'active_shift',
+    });
+  }
+
+  async setOffDutyStatus(
+    userId: string,
+    options: {
+      reason?: string | null;
+      updatedAt?: Date;
+    } = {},
+  ) {
+    return this.updateWorkStatus(userId, UserWorkStatus.OffDuty, {
+      reason: options.reason ?? 'shift_not_active',
+      updatedAt: options.updatedAt,
+    });
+  }
+
+  async setOutsideProjectAreaStatus(
+    userId: string,
+    options: {
+      projectId?: string | null;
+      projectName?: string | null;
+      shiftId?: string | null;
+      reason?: string | null;
+      updatedAt?: Date;
+    } = {},
+  ) {
+    return this.updateWorkStatus(userId, UserWorkStatus.OutsideProjectArea, {
+      ...options,
+      reason: options.reason ?? 'outside_project_area',
+    });
   }
 
   async appendAdditionalDocuments(id: string, documentUrls: string[]): Promise<User> {
