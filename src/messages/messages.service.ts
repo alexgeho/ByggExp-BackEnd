@@ -46,12 +46,34 @@ export class MessagesService {
       timestamp: new Date(),
     });
 
-    await this.chatModel.findByIdAndUpdate(chat._id, {
-      $set: {
-        lastMessageText: text,
-        lastMessageAt: createdMessage.timestamp,
-      },
-    }).exec();
+    const chatDocument = await this.chatModel.findById(chat._id).exec();
+
+    if (!chatDocument) {
+      throw new NotFoundException(`Chat with ID "${chatId}" not found`);
+    }
+
+    const nextReadStates = Array.isArray(chatDocument.readStates)
+      ? [...chatDocument.readStates]
+      : [];
+    const readStateIndex = nextReadStates.findIndex((entry) => entry.memberId === user.userId);
+
+    if (readStateIndex >= 0) {
+      nextReadStates[readStateIndex] = {
+        ...nextReadStates[readStateIndex],
+        memberId: user.userId,
+        lastReadAt: createdMessage.timestamp,
+      };
+    } else {
+      nextReadStates.push({
+        memberId: user.userId,
+        lastReadAt: createdMessage.timestamp,
+      });
+    }
+
+    chatDocument.lastMessageText = text;
+    chatDocument.lastMessageAt = createdMessage.timestamp;
+    chatDocument.readStates = nextReadStates;
+    await chatDocument.save();
 
     const [formattedMessage] = await this.formatMessages([createdMessage.toObject()]);
     return formattedMessage;

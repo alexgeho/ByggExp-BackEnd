@@ -5,6 +5,7 @@ import { ChatsController } from './chats.controller';
 import { ChatsService } from './chats.service';
 import { User, UserSchema } from '../users/schemas/user.schema';
 import { Project, ProjectSchema } from '../projects/schemas/project.schema';
+import { Message, MessageSchema } from '../messages/schemas/message.schema';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { Project, ProjectSchema } from '../projects/schemas/project.schema';
       { name: Chat.name, schema: ChatSchema },
       { name: User.name, schema: UserSchema },
       { name: Project.name, schema: ProjectSchema },
+      { name: Message.name, schema: MessageSchema },
     ]),
   ],
   controllers: [ChatsController],

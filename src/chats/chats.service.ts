@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { Message, MessageDocument } from '../messages/schemas/message.schema';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
 import { CreateDirectChatDto } from './dto/create-direct-chat.dto';
@@ -24,6 +25,7 @@ export class ChatsService {
     @InjectModel(Chat.name) private readonly chatModel: Model<ChatDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
+    @InjectModel(Message.name) private readonly messageModel: Model<MessageDocument>,
   ) {}
 
   async findAccessible(user: AuthenticatedUser) {
@@ -76,6 +78,7 @@ export class ChatsService {
         ownerId: user.userId,
         type: ChatType.Direct,
         members,
+        readStates: this.buildReadStates(members),
         title: '',
         directKey,
         lastMessageText: '',
@@ -114,9 +117,12 @@ export class ChatsService {
       const membersChanged = nextMembers.length !== (existingChat.members || []).length;
       const titleChanged = existingChat.title !== title;
       const projectChanged = existingChat.projectId !== project._id.toString();
+      const nextReadStates = this.mergeReadStates(existingChat.readStates, nextMembers);
+      const readStatesChanged = JSON.stringify(nextReadStates) !== JSON.stringify(existingChat.readStates || []);
 
-      if (membersChanged || titleChanged || projectChanged) {
+      if (membersChanged || titleChanged || projectChanged || readStatesChanged) {
         existingChat.members = nextMembers;
+        existingChat.readStates = nextReadStates;
         existingChat.title = title;
         existingChat.projectId = project._id.toString();
         await existingChat.save();
@@ -133,6 +139,7 @@ export class ChatsService {
       ownerId: user.userId,
       type: ChatType.Group,
       members,
+      readStates: this.buildReadStates(members),
       title,
       projectId: project._id.toString(),
       groupKey,
@@ -149,6 +156,31 @@ export class ChatsService {
 
   async assertChatMembership(chatId: string, user: AuthenticatedUser) {
     return this.findAccessibleChat(chatId, user);
+  }
+
+  async markAsRead(chatId: string, user: AuthenticatedUser) {
+    const chat = await this.chatModel.findById(chatId).exec();
+
+    if (!chat) {
+      throw new NotFoundException(`Chat with ID "${chatId}" not found`);
+    }
+
+    const members = this.normalizeIds(chat.members);
+    const normalizedUserId = this.normalizeId(user.userId);
+
+    if (!members.includes(normalizedUserId)) {
+      throw new ForbiddenException('You do not have access to this chat');
+    }
+
+    chat.readStates = this.markReadState(
+      chat.readStates,
+      normalizedUserId,
+      chat.lastMessageAt || new Date(),
+    );
+    await chat.save();
+
+    const [formattedChat] = await this.formatChats([chat.toObject()], normalizedUserId);
+    return formattedChat;
   }
 
   private async findAccessibleChat(chatId: string, user: AuthenticatedUser) {
@@ -229,11 +261,12 @@ export class ChatsService {
     const usersById = new Map(users.map((user: any) => [user._id.toString(), user]));
     const projectsById = new Map(projects.map((project: any) => [project._id.toString(), project]));
 
-    return chats.map((chat) => {
+    const formattedChats = await Promise.all(chats.map(async (chat) => {
       const id = this.normalizeId(chat._id);
       const members = this.normalizeIds(chat.members);
       const projectId = this.normalizeId(chat.projectId);
       const project = projectId ? projectsById.get(projectId) : null;
+      const unreadCount = await this.countUnreadMessages(chat, currentUserId);
 
       if (chat.type === ChatType.Direct) {
         const participantId = members.find((memberId) => memberId !== currentUserId) || null;
@@ -247,6 +280,7 @@ export class ChatsService {
           memberCount: members.length,
           lastMessageText: chat.lastMessageText || '',
           lastMessageAt: chat.lastMessageAt || null,
+          unreadCount,
           createdAt: chat.createdAt || null,
           updatedAt: chat.updatedAt || null,
           participant: participant
@@ -270,6 +304,7 @@ export class ChatsService {
         memberCount: members.length,
         lastMessageText: chat.lastMessageText || '',
         lastMessageAt: chat.lastMessageAt || null,
+        unreadCount,
         createdAt: chat.createdAt || null,
         updatedAt: chat.updatedAt || null,
         participant: null,
@@ -280,7 +315,73 @@ export class ChatsService {
               }
           : null,
       };
+    }));
+
+    return formattedChats;
+  }
+
+  private buildReadStates(memberIds: string[]) {
+    return this.normalizeIds(memberIds).map((memberId) => ({
+      memberId,
+      lastReadAt: null,
+    }));
+  }
+
+  private mergeReadStates(readStates: Array<{ memberId: string; lastReadAt?: Date | null }> = [], memberIds: string[]) {
+    const existingByMemberId = new Map(
+      (readStates || []).map((entry) => [this.normalizeId(entry.memberId), entry]),
+    );
+
+    return this.normalizeIds(memberIds).map((memberId) => {
+      const existingEntry = existingByMemberId.get(memberId);
+      return {
+        memberId,
+        lastReadAt: existingEntry?.lastReadAt || null,
+      };
     });
+  }
+
+  private markReadState(
+    readStates: Array<{ memberId: string; lastReadAt?: Date | null }> = [],
+    memberId: string,
+    lastReadAt: Date,
+  ) {
+    const nextReadStates = this.mergeReadStates(readStates, [
+      ...this.normalizeIds(readStates.map((entry) => entry.memberId)),
+      memberId,
+    ]);
+
+    return nextReadStates.map((entry) =>
+      entry.memberId === memberId
+        ? {
+            ...entry,
+            lastReadAt,
+          }
+        : entry,
+    );
+  }
+
+  private async countUnreadMessages(chat: any, currentUserId: string) {
+    const chatId = this.normalizeId(chat._id);
+    if (!chatId || !chat.lastMessageAt) {
+      return 0;
+    }
+
+    const readState = Array.isArray(chat.readStates)
+      ? chat.readStates.find((entry) => this.normalizeId(entry.memberId) === currentUserId)
+      : null;
+
+    const lastReadAt = readState?.lastReadAt ? new Date(readState.lastReadAt) : null;
+    const filter: Record<string, unknown> = {
+      chatId,
+      userId: { $ne: currentUserId },
+    };
+
+    if (lastReadAt) {
+      filter.timestamp = { $gt: lastReadAt };
+    }
+
+    return this.messageModel.countDocuments(filter).exec();
   }
 
   private normalizeId(value: any) {

@@ -35,4 +35,10 @@ export class ChatsController {
   findOne(@Request() req, @Param('id') id: string) {
     return this.chatsService.findOneAccessible(id, req.user);
   }
+
+  @Post(':id/read')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  markAsRead(@Request() req, @Param('id') id: string) {
+    return this.chatsService.markAsRead(id, req.user);
+  }
 }

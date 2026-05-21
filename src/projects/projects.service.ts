@@ -281,7 +281,7 @@ export class ProjectsService {
       throw new NotFoundException(`Project with ID "${id}" not found`);
     }
 
-    return updatedProject;
+    return this.findOneWithPopulated(id);
   }
 
   async update(id: string, updateProjectDto: Partial<CreateProjectDto>): Promise<Project> {

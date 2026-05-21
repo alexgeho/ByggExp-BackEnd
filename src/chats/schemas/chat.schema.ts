@@ -8,6 +8,11 @@ export enum ChatType {
   Group = 'group',
 }
 
+export class ChatReadState {
+  memberId: string;
+  lastReadAt?: Date | null;
+}
+
 @Schema({ timestamps: true })
 export class Chat {
   @Prop({ required: true, ref: 'User' }) // Владелец чата
@@ -36,6 +41,18 @@ export class Chat {
 
   @Prop({ type: Date, default: null })
   lastMessageAt?: Date | null;
+
+  @Prop({
+    type: [
+      {
+        _id: false,
+        memberId: { type: String, ref: 'User', required: true },
+        lastReadAt: { type: Date, default: null },
+      },
+    ],
+    default: [],
+  })
+  readStates: ChatReadState[];
 }
 
 export const ChatSchema = SchemaFactory.createForClass(Chat);
