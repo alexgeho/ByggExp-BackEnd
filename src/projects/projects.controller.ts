@@ -174,15 +174,46 @@ export class ProjectsController {
     return this.projectsService.addProjectAdmin(id, userId);
   }
 
+  @Post(':id/documents')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @UseInterceptors(FilesInterceptor('documents', 10, { storage: documentsStorage }))
+  uploadDocuments(
+    @Param('id') id: string,
+    @UploadedFiles() files: UploadedDocumentFile[],
+  ): Promise<Project> {
+    const documents = (files || []).map((file) => ({
+      name: file.originalname,
+      url: `/uploads/project-documents/${file.filename}`,
+      mimeType: file.mimetype,
+      size: file.size,
+      uploadedAt: new Date(),
+    }));
+
+    return this.projectsService.uploadDocuments(id, documents);
+  }
+
   @Put(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @UseInterceptors(FilesInterceptor('documents', 10, { storage: documentsStorage }))
   update(
     @Param('id') id: string,
     @Body() updateProjectDto: Partial<CreateProjectDto>,
+    @UploadedFiles() files: UploadedDocumentFile[],
     @Request() req,
   ): Promise<Project> {
     if (req.user.role === UserRole.ProjectAdmin) {
     }
+
+    if (files?.length) {
+      updateProjectDto.documents = files.map((file) => ({
+        name: file.originalname,
+        url: `/uploads/project-documents/${file.filename}`,
+        mimeType: file.mimetype,
+        size: file.size,
+        uploadedAt: new Date(),
+      }));
+    }
+
     return this.projectsService.update(id, updateProjectDto);
   }
 

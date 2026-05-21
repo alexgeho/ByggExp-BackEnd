@@ -262,9 +262,44 @@ export class ProjectsService {
     return this.findOneWithPopulated(projectId);
   }
 
-  async update(id: string, updateProjectDto: Partial<CreateProjectDto>): Promise<Project> {
+  async uploadDocuments(
+    id: string,
+    documents: Array<string | { name: string; url: string; mimeType?: string; size?: number; uploadedAt?: Date }>,
+  ): Promise<Project> {
+    const existingProject = await this.findOne(id);
     const updatedProject = await this.projectModel
-      .findByIdAndUpdate(id, updateProjectDto, { new: true })
+      .findByIdAndUpdate(
+        id,
+        {
+          documents: [...(existingProject.documents || []), ...(documents || [])],
+        },
+        { new: true },
+      )
+      .exec();
+
+    if (!updatedProject) {
+      throw new NotFoundException(`Project with ID "${id}" not found`);
+    }
+
+    return updatedProject;
+  }
+
+  async update(id: string, updateProjectDto: Partial<CreateProjectDto>): Promise<Project> {
+    const existingProject = await this.findOne(id);
+    const nextDocuments =
+      Array.isArray(updateProjectDto.documents) && updateProjectDto.documents.length > 0
+        ? [...(existingProject.documents || []), ...updateProjectDto.documents]
+        : existingProject.documents;
+
+    const updatedProject = await this.projectModel
+      .findByIdAndUpdate(
+        id,
+        {
+          ...updateProjectDto,
+          documents: nextDocuments,
+        },
+        { new: true },
+      )
       .exec();
     if (!updatedProject) {
       throw new NotFoundException(`Project with ID "${id}" not found`);
