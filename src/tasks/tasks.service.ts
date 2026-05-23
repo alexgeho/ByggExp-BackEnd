@@ -246,6 +246,7 @@ export class TasksService {
       await this.notificationsService.sendToUsers(recipients, {
         title: `New task in ${project.name}`,
         body: task.taskTitle,
+        preferenceKey: 'tasks',
         data: {
           type: 'task_created',
           screen: 'Project',
@@ -272,6 +273,7 @@ export class TasksService {
       await this.notificationsService.sendToUsers(recipients, {
         title: `Task deadline updated in ${project.name}`,
         body: `${task.taskTitle} has a new due date.`,
+        preferenceKey: 'tasks',
         data: {
           type: 'task_due_updated',
           screen: 'Project',

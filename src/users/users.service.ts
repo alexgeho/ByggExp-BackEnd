@@ -2,7 +2,13 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
-import { User, UserDocument, UserRole, UserWorkStatus } from './schemas/user.schema';
+import {
+  normalizeUserNotificationPreferences,
+  User,
+  UserDocument,
+  UserRole,
+  UserWorkStatus,
+} from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { Company, CompanyDocument } from '../company/schemas/company.schema';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
@@ -43,6 +49,12 @@ type UserDetailResponse = {
   phoneNumber: number;
   language: Record<string, any>;
   additionalDocuments: string[];
+  notificationPreferences: {
+    flowMode: boolean;
+    messages: boolean;
+    tasks: boolean;
+    productAndMarketingAlerts: boolean;
+  };
   workPresence: {
     status: UserWorkStatus;
     projectId: string | null;
@@ -135,8 +147,24 @@ export class UsersService {
 
   async findUserById(
     id: string,
-  ): Promise<{ id: string; email: string; name: string; profession: string; role: string; avatarUrl: string } | null> {
-    const user = await this.userModel.findById(id).select('email name profession role avatarUrl').exec();
+  ): Promise<{
+    id: string;
+    email: string;
+    name: string;
+    profession: string;
+    role: string;
+    avatarUrl: string;
+    notificationPreferences: {
+      flowMode: boolean;
+      messages: boolean;
+      tasks: boolean;
+      productAndMarketingAlerts: boolean;
+    };
+  } | null> {
+    const user = await this.userModel
+      .findById(id)
+      .select('email name profession role avatarUrl notificationPreferences')
+      .exec();
     if (!user) return null;
     return {
       id: user._id.toString(),
@@ -145,6 +173,7 @@ export class UsersService {
       profession: user.profession || '',
       role: user.role,
       avatarUrl: user.avatarUrl || '',
+      notificationPreferences: normalizeUserNotificationPreferences(user.notificationPreferences),
     };
   }
 
@@ -222,6 +251,7 @@ export class UsersService {
       phoneNumber: user.phoneNumber,
       language: user.language || {},
       additionalDocuments: Array.isArray(user.additionalDocuments) ? user.additionalDocuments : [],
+      notificationPreferences: normalizeUserNotificationPreferences(user.notificationPreferences),
       workPresence: {
         status: user.workStatus || UserWorkStatus.OffDuty,
         projectId: user.workStatusProjectId || null,

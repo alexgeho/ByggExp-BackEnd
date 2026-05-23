@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Expo, ExpoPushMessage, ExpoPushReceipt } from 'expo-server-sdk';
 import { Model } from 'mongoose';
@@ -8,11 +8,20 @@ import {
   DeviceToken,
   DeviceTokenDocument,
 } from './schemas/device-token.schema';
+import {
+  normalizeUserNotificationPreferences,
+  User,
+  UserDocument,
+  UserNotificationPreferences,
+} from '../users/schemas/user.schema';
+
+export type NotificationPreferenceKey = keyof UserNotificationPreferences;
 
 type PushPayload = {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  preferenceKey?: NotificationPreferenceKey;
 };
 
 @Injectable()
@@ -25,7 +34,40 @@ export class NotificationsService {
   constructor(
     @InjectModel(DeviceToken.name)
     private readonly deviceTokenModel: Model<DeviceTokenDocument>,
+    @InjectModel(User.name)
+    private readonly userModel: Model<UserDocument>,
   ) {}
+
+  async getUserPreferences(userId: string) {
+    const user = await this.userModel
+      .findById(userId)
+      .select('notificationPreferences')
+      .lean()
+      .exec();
+
+    return normalizeUserNotificationPreferences(user?.notificationPreferences);
+  }
+
+  async updateUserPreferences(
+    userId: string,
+    preferences: UserNotificationPreferences,
+  ) {
+    const normalizedPreferences = normalizeUserNotificationPreferences(preferences);
+
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        { notificationPreferences: normalizedPreferences },
+        { new: false },
+      )
+      .exec();
+
+    if (!updatedUser) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+
+    return normalizedPreferences;
+  }
 
   async registerPushToken(userId: string, dto: RegisterPushTokenDto) {
     if (!Expo.isExpoPushToken(dto.expoPushToken)) {
@@ -109,6 +151,7 @@ export class NotificationsService {
       body: options.projectName
         ? `Your shift for ${options.projectName} was ended because you left the project area.`
         : 'Your shift was ended because you left the project area.',
+      preferenceKey: 'flowMode',
       data: {
         type: 'shift_outside_project_area',
         screen: 'Shifts',
@@ -125,8 +168,16 @@ export class NotificationsService {
       return { attempted: 0, sent: 0, disabledTokens: 0 };
     }
 
+    const preferenceKey =
+      payload.preferenceKey ?? this.inferPreferenceKey(payload.data?.type);
+    const allowedUserIds = await this.filterUsersByPreference(uniqueUserIds, preferenceKey);
+
+    if (!allowedUserIds.length) {
+      return { attempted: 0, sent: 0, disabledTokens: 0 };
+    }
+
     const deviceTokens = await this.deviceTokenModel.find({
-      userId: { $in: uniqueUserIds },
+      userId: { $in: allowedUserIds },
       enabled: true,
     }).exec();
 
@@ -251,5 +302,56 @@ export class NotificationsService {
         lastSeenAt: new Date(),
       },
     ).exec();
+  }
+
+  private inferPreferenceKey(type?: unknown): NotificationPreferenceKey | undefined {
+    if (typeof type !== 'string') {
+      return undefined;
+    }
+
+    if (type.startsWith('task_')) {
+      return 'tasks';
+    }
+
+    if (type.startsWith('message_') || type === 'chat_message') {
+      return 'messages';
+    }
+
+    if (
+      type.startsWith('marketing_')
+      || type.startsWith('product_')
+      || type === 'product_marketing_alert'
+    ) {
+      return 'productAndMarketingAlerts';
+    }
+
+    if (
+      type === 'shift_outside_project_area'
+      || type === 'flow_mode'
+      || type === 'app_flow_alert'
+    ) {
+      return 'flowMode';
+    }
+
+    return undefined;
+  }
+
+  private async filterUsersByPreference(
+    userIds: string[],
+    preferenceKey?: NotificationPreferenceKey,
+  ) {
+    if (!preferenceKey) {
+      return userIds;
+    }
+
+    const users = await this.userModel
+      .find({ _id: { $in: userIds } })
+      .select('_id notificationPreferences')
+      .lean()
+      .exec();
+
+    return users
+      .filter((user) => normalizeUserNotificationPreferences(user.notificationPreferences)[preferenceKey])
+      .map((user) => user._id.toString());
   }
 }

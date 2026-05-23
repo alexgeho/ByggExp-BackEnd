@@ -16,6 +16,41 @@ export enum UserWorkStatus {
   OutsideProjectArea = 'outside_project_area',
 }
 
+export type UserNotificationPreferences = {
+  flowMode: boolean;
+  messages: boolean;
+  tasks: boolean;
+  productAndMarketingAlerts: boolean;
+};
+
+export const DEFAULT_USER_NOTIFICATION_PREFERENCES: UserNotificationPreferences = {
+  flowMode: true,
+  messages: true,
+  tasks: true,
+  productAndMarketingAlerts: true,
+};
+
+export const normalizeUserNotificationPreferences = (
+  value?: Partial<UserNotificationPreferences> | null,
+): UserNotificationPreferences => ({
+  flowMode:
+    typeof value?.flowMode === 'boolean'
+      ? value.flowMode
+      : DEFAULT_USER_NOTIFICATION_PREFERENCES.flowMode,
+  messages:
+    typeof value?.messages === 'boolean'
+      ? value.messages
+      : DEFAULT_USER_NOTIFICATION_PREFERENCES.messages,
+  tasks:
+    typeof value?.tasks === 'boolean'
+      ? value.tasks
+      : DEFAULT_USER_NOTIFICATION_PREFERENCES.tasks,
+  productAndMarketingAlerts:
+    typeof value?.productAndMarketingAlerts === 'boolean'
+      ? value.productAndMarketingAlerts
+      : DEFAULT_USER_NOTIFICATION_PREFERENCES.productAndMarketingAlerts,
+});
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true, unique: true })
@@ -71,6 +106,12 @@ export class User {
 
   @Prop({ type: Date, default: null })
   workStatusUpdatedAt?: Date | null;
+
+  @Prop({
+    type: Object,
+    default: () => ({ ...DEFAULT_USER_NOTIFICATION_PREFERENCES }),
+  })
+  notificationPreferences: UserNotificationPreferences;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

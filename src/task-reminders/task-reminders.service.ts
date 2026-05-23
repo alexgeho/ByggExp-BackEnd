@@ -61,6 +61,7 @@ export class TaskRemindersService {
     return this.notificationsService.sendToUsers(recipients, {
       title: `Task assigned in ${params.projectName}`,
       body: buildAssignmentMessage(params.taskTitle, settings),
+      preferenceKey: 'tasks',
       data: {
         type: 'task_assignment',
         screen: 'Project',
@@ -152,6 +153,7 @@ export class TaskRemindersService {
       await this.notificationsService.sendToUsers([reminder.targetUserId], {
         title: reminder.messageTitle || `Reminder for ${reminder.taskTitle || 'task'}`,
         body: reminder.messageBody || 'Task reminder',
+        preferenceKey: 'tasks',
         data: {
           type: 'task_reminder',
           screen: 'Project',

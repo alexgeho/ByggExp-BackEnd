@@ -3,8 +3,10 @@ import {
   Controller,
   Delete,
   ForbiddenException,
+  Get,
   Param,
   Post,
+  Put,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -17,6 +19,7 @@ import { UsersService } from '../users/users.service';
 import { RegisterPushTokenDto } from './dto/register-push-token.dto';
 import { SendTestNotificationDto } from './dto/send-test-notification.dto';
 import { NotificationsService } from './notifications.service';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 
 @Controller('notifications')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -49,6 +52,34 @@ export class NotificationsController {
       title: dto.title,
       body: dto.body,
     });
+  }
+
+  @Get('preferences')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  getNotificationPreferences(@Request() req) {
+    return this.notificationsService.getUserPreferences(req.user.userId);
+  }
+
+  @Put('preferences')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  async updateNotificationPreferences(
+    @Request() req,
+    @Body() dto: UpdateNotificationPreferencesDto,
+  ) {
+    const preferences = await this.notificationsService.updateUserPreferences(req.user.userId, dto);
+
+    await this.usersService.logActivity(req.user.userId, {
+      category: 'notifications',
+      type: 'preferences_updated',
+      level: UserActivityLogLevel.Info,
+      message: 'Notification preferences were updated.',
+      source: 'mobile_app',
+      details: {
+        preferences,
+      },
+    });
+
+    return preferences;
   }
 
   @Post('users/:userId/test')
