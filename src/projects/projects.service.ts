@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Project, ProjectDocument } from './schemas/project.schema';
@@ -9,6 +15,14 @@ import { User, UserRole } from '../users/schemas/user.schema';
 
 @Injectable()
 export class ProjectsService {
+  private readonly geocoderHeaders = {
+    Accept: 'application/json',
+    'Accept-Language': 'en',
+    'User-Agent':
+      process.env.GEOCODER_USER_AGENT ||
+      'ByggExp/1.0 (server geocoding proxy)',
+  };
+
   constructor(
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
     private usersService: UsersService,
@@ -38,6 +52,27 @@ export class ProjectsService {
     }
 
     return '';
+  }
+
+  private async fetchGeocoderJson(
+    pathname: string,
+    params: Record<string, string>,
+  ): Promise<unknown> {
+    const searchParams = new URLSearchParams(params);
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org${pathname}?${searchParams.toString()}`,
+      {
+        headers: this.geocoderHeaders,
+      },
+    );
+
+    if (!response.ok) {
+      throw new InternalServerErrorException(
+        `Geocoder request failed with status ${response.status}`,
+      );
+    }
+
+    return response.json();
   }
 
   private async resolveCreatePayload(
@@ -190,6 +225,73 @@ export class ProjectsService {
       location: project.location || '',
       locationLatitude: project.locationLatitude,
       locationLongitude: project.locationLongitude,
+    };
+  }
+
+  async searchAddressSuggestions(query: string, limit = 8) {
+    const normalizedQuery = query.trim();
+    if (normalizedQuery.length < 2) {
+      return [];
+    }
+
+    const normalizedLimit = Math.max(1, Math.min(limit, 10));
+    const data = await this.fetchGeocoderJson('/search', {
+      format: 'jsonv2',
+      addressdetails: '1',
+      limit: String(normalizedLimit),
+      q: normalizedQuery,
+    });
+
+    const matches = Array.isArray(data) ? data : [];
+    const seenLabels = new Set<string>();
+
+    return matches.reduce<
+      Array<{ id: string; label: string; latitude: number; longitude: number }>
+    >((suggestions, match, index) => {
+      const candidate = match as {
+        place_id?: string | number;
+        display_name?: string;
+        lat?: string | number;
+        lon?: string | number;
+      };
+      const label = candidate.display_name?.trim();
+      const latitude = Number(candidate.lat);
+      const longitude = Number(candidate.lon);
+
+      if (
+        !label ||
+        Number.isNaN(latitude) ||
+        Number.isNaN(longitude) ||
+        seenLabels.has(label)
+      ) {
+        return suggestions;
+      }
+
+      seenLabels.add(label);
+      suggestions.push({
+        id: String(candidate.place_id || `${label}-${index}`),
+        label,
+        latitude,
+        longitude,
+      });
+
+      return suggestions;
+    }, []);
+  }
+
+  async reverseGeocodeCoordinate(latitude: number, longitude: number) {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      throw new BadRequestException('Latitude and longitude must be valid numbers');
+    }
+
+    const data = (await this.fetchGeocoderJson('/reverse', {
+      format: 'jsonv2',
+      lat: String(latitude),
+      lon: String(longitude),
+    })) as { display_name?: string };
+
+    return {
+      label: data?.display_name || '',
     };
   }
 

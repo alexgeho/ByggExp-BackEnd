@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -6,6 +7,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   UseGuards,
   Request,
   NotFoundException,
@@ -48,6 +50,47 @@ type UploadedDocumentFile = {
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
+
+  @Get('geocode/search')
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  searchAddressSuggestions(
+    @Query('query') query?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.projectsService.searchAddressSuggestions(
+      query || '',
+      limit ? Number(limit) : 8,
+    );
+  }
+
+  @Get('geocode/reverse')
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  reverseGeocode(
+    @Query('lat') latitude?: string,
+    @Query('lon') longitude?: string,
+  ) {
+    const parsedLatitude = Number(latitude);
+    const parsedLongitude = Number(longitude);
+
+    if (!Number.isFinite(parsedLatitude) || !Number.isFinite(parsedLongitude)) {
+      throw new BadRequestException('lat and lon query parameters are required');
+    }
+
+    return this.projectsService.reverseGeocodeCoordinate(
+      parsedLatitude,
+      parsedLongitude,
+    );
+  }
 
   @Post()
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
