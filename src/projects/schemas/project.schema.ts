@@ -40,6 +40,9 @@ export class Project {
   @Prop({ type: Number })
   locationLongitude?: number;
 
+  @Prop({ type: Number, default: 500 })
+  locationRadiusMeters?: number;
+
   @Prop()
   contractNumber: string;
 

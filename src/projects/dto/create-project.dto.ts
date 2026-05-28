@@ -92,6 +92,11 @@ export class CreateProjectDto {
   @IsOptional()
   locationLongitude?: number;
 
+  @Transform(({ value }) => parseOptionalNumberField(value))
+  @IsNumber()
+  @IsOptional()
+  locationRadiusMeters?: number;
+
   @IsString()
   @IsOptional()
   contractNumber?: string;
