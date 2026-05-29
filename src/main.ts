@@ -51,6 +51,11 @@ async function bootstrap() {
     })
   );
 
+  const extraOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   const allowedOrigins = new Set([
     'http://localhost:3000',
     'http://localhost:4000',
@@ -58,9 +63,12 @@ async function bootstrap() {
     'http://localhost:5174',
     'https://bygghub.nu',
     'https://www.bygghub.nu',
+    'https://byggexp.se',
+    'https://www.byggexp.se',
     'https://tot-bygghub-admin-site.vercel.app',
     'http://localhost:8081',
     'https://admin.byggexp.se',
+    ...extraOrigins,
   ]);
 
   const allowedOriginPatterns = [

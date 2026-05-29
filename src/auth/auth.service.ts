@@ -2,6 +2,8 @@ import { Injectable, UnauthorizedException, ConflictException, Logger } from '@n
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
+import { CompanyService } from '../company/company.service';
+import { RegisterCompanyWithAdminDto } from '../company/dto/register-company-with-admin.dto';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { UserRole } from '../users/schemas/user.schema';
@@ -13,6 +15,7 @@ export class AuthService {
 
   constructor(
     private usersService: UsersService,
+    private companyService: CompanyService,
     private jwtService: JwtService,
   ) {}
 
@@ -40,6 +43,11 @@ export class AuthService {
     });
 
     return this.generateTokens(user);
+  }
+
+  async registerCompany(dto: RegisterCompanyWithAdminDto) {
+    const { admin } = await this.companyService.registerCompanyWithAdmin(dto);
+    return this.generateTokens(admin);
   }
 
   // Регистрация SuperAdmin (только первый раз)
