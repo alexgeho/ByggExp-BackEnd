@@ -1,9 +1,11 @@
 import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { CompanyService } from '../company/company.service';
 import { RegisterCompanyWithAdminDto } from '../company/dto/register-company-with-admin.dto';
+import { RegisterCompanyPublicDto } from './dto/register-company-public.dto';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { UserRole } from '../users/schemas/user.schema';
@@ -45,8 +47,17 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  async registerCompany(dto: RegisterCompanyWithAdminDto) {
-    const { admin } = await this.companyService.registerCompanyWithAdmin(dto);
+  async registerCompany(dto: RegisterCompanyPublicDto) {
+    const fullDto: RegisterCompanyWithAdminDto = {
+      name: dto.companyName.trim(),
+      address: '—',
+      email: dto.email.trim().toLowerCase(),
+      adminName: dto.userName.trim(),
+      adminEmail: dto.email.trim().toLowerCase(),
+      adminPassword: randomBytes(18).toString('base64url'),
+    };
+
+    const { admin } = await this.companyService.registerCompanyWithAdmin(fullDto);
     return this.generateTokens(admin);
   }
 
