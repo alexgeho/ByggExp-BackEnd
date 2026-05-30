@@ -75,6 +75,63 @@ export class ProjectsService {
     return response.json();
   }
 
+  private formatNominatimAddressLabel(match: {
+    display_name?: string;
+    address?: {
+      house_number?: string;
+      road?: string;
+      street?: string;
+      pedestrian?: string;
+      footway?: string;
+      city?: string;
+      town?: string;
+      village?: string;
+      municipality?: string;
+      suburb?: string;
+      postcode?: string;
+      country?: string;
+    };
+  }): string {
+    const address = match.address;
+    if (!address) {
+      return match.display_name?.trim() || '';
+    }
+
+    const houseNumber = address.house_number?.trim();
+    const road = (
+      address.road ||
+      address.street ||
+      address.pedestrian ||
+      address.footway
+    )?.trim();
+
+    let streetLine = '';
+    if (road && houseNumber) {
+      streetLine = `${road} ${houseNumber}`;
+    } else if (road) {
+      streetLine = road;
+    } else if (houseNumber) {
+      streetLine = houseNumber;
+    }
+
+    const locality =
+      address.city ||
+      address.town ||
+      address.village ||
+      address.municipality ||
+      address.suburb;
+
+    const parts = [streetLine, locality, address.postcode, address.country].filter(
+      Boolean,
+    );
+
+    if (parts.length) {
+      return parts.join(', ');
+    }
+
+    return match.display_name?.trim() || '';
+  }
+
   private async resolveCreatePayload(
     createProjectDto: CreateProjectDto,
     currentUser?: { userId?: string; role?: UserRole; companyId?: string | null },
@@ -257,8 +314,22 @@ export class ProjectsService {
         display_name?: string;
         lat?: string | number;
         lon?: string | number;
+        address?: {
+          house_number?: string;
+          road?: string;
+          street?: string;
+          pedestrian?: string;
+          footway?: string;
+          city?: string;
+          town?: string;
+          village?: string;
+          municipality?: string;
+          suburb?: string;
+          postcode?: string;
+          country?: string;
+        };
       };
-      const label = candidate.display_name?.trim();
+      const label = this.formatNominatimAddressLabel(candidate);
       const latitude = Number(candidate.lat);
       const longitude = Number(candidate.lon);
 
@@ -290,12 +361,29 @@ export class ProjectsService {
 
     const data = (await this.fetchGeocoderJson('/reverse', {
       format: 'jsonv2',
+      addressdetails: '1',
       lat: String(latitude),
       lon: String(longitude),
-    })) as { display_name?: string };
+    })) as {
+      display_name?: string;
+      address?: {
+        house_number?: string;
+        road?: string;
+        street?: string;
+        pedestrian?: string;
+        footway?: string;
+        city?: string;
+        town?: string;
+        village?: string;
+        municipality?: string;
+        suburb?: string;
+        postcode?: string;
+        country?: string;
+      };
+    };
 
     return {
-      label: data?.display_name || '',
+      label: this.formatNominatimAddressLabel(data) || data?.display_name || '',
     };
   }
 
