@@ -61,6 +61,7 @@ async function bootstrap() {
     'http://localhost:4000',
     'http://localhost:5173',
     'http://localhost:5174',
+    'http://185.189.51.128:8080',
     'https://bygghub.nu',
     'https://www.bygghub.nu',
     'https://byggexp.se',
