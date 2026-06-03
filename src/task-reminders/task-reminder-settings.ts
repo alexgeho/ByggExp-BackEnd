@@ -1,4 +1,11 @@
 import { TaskReminderScheduleType } from './schemas/task-reminder.schema';
+import {
+  DEFAULT_REPEAT_INTERVAL_MINUTES,
+  MAX_HOURLY_REPEAT_RUNS,
+  MAX_MINUTE_REPEAT_RUNS,
+  MAX_REPEAT_INTERVAL_MINUTES,
+  MIN_REPEAT_INTERVAL_MINUTES,
+} from './task-reminder.settings';
 
 const MINUTE_IN_MS = 60 * 1000;
 const HOUR_IN_MS = 60 * MINUTE_IN_MS;
@@ -17,12 +24,14 @@ export type TaskNotificationSettings = {
   autoReminder: boolean;
   customReminder: boolean;
   customMessage: string;
-  repeat: 'none' | 'hourly' | 'daily' | 'weekly';
+  repeat: 'none' | 'minutes' | 'hourly' | 'daily' | 'weekly';
+  repeatIntervalMinutes: number;
 };
 
 export type TaskReminderPlan = {
   endAt: Date;
   firstRunAt: Date;
+  intervalMinutes?: number;
   maxRuns: number;
   scheduleType: TaskReminderScheduleType;
 };
@@ -50,9 +59,17 @@ export const normalizeTaskNotificationSettings = (
     : [];
 
   const repeat = typeof source.repeat === 'string'
-    && ['none', 'hourly', 'daily', 'weekly'].includes(source.repeat)
+    && ['none', 'minutes', 'hourly', 'daily', 'weekly'].includes(source.repeat)
     ? source.repeat as TaskNotificationSettings['repeat']
     : 'none';
+
+  const parsedIntervalMinutes = Number(source.repeatIntervalMinutes);
+  const repeatIntervalMinutes = Number.isFinite(parsedIntervalMinutes)
+    ? Math.min(
+      MAX_REPEAT_INTERVAL_MINUTES,
+      Math.max(MIN_REPEAT_INTERVAL_MINUTES, Math.round(parsedIntervalMinutes)),
+    )
+    : DEFAULT_REPEAT_INTERVAL_MINUTES;
 
   return {
     assignees,
@@ -61,6 +78,7 @@ export const normalizeTaskNotificationSettings = (
     customReminder: Boolean(source.customReminder),
     customMessage: typeof source.customMessage === 'string' ? source.customMessage.trim() : '',
     repeat,
+    repeatIntervalMinutes,
   };
 };
 
@@ -126,16 +144,48 @@ export const buildTaskReminderPlan = ({
     return null;
   }
 
-  if (settings.repeat === 'hourly') {
-    if (diffMs < HOUR_IN_MS || diffMs > DAY_IN_MS) {
+  if (settings.repeat === 'minutes') {
+    const intervalMs = settings.repeatIntervalMinutes * MINUTE_IN_MS;
+
+    if (diffMs < intervalMs) {
       return null;
     }
+
+    const maxRuns = Math.max(
+      1,
+      Math.min(
+        MAX_MINUTE_REPEAT_RUNS,
+        Math.floor(diffMs / intervalMs),
+      ),
+    );
+
+    return {
+      scheduleType: TaskReminderScheduleType.Minutes,
+      firstRunAt: new Date(now.getTime() + intervalMs),
+      endAt: normalizedDueDate,
+      intervalMinutes: settings.repeatIntervalMinutes,
+      maxRuns,
+    };
+  }
+
+  if (settings.repeat === 'hourly') {
+    if (diffMs < HOUR_IN_MS) {
+      return null;
+    }
+
+    const maxRuns = Math.max(
+      1,
+      Math.min(
+        MAX_HOURLY_REPEAT_RUNS,
+        Math.floor(diffMs / HOUR_IN_MS),
+      ),
+    );
 
     return {
       scheduleType: TaskReminderScheduleType.Hourly,
       firstRunAt: new Date(now.getTime() + HOUR_IN_MS),
       endAt: normalizedDueDate,
-      maxRuns: Math.max(1, Math.min(8, Math.floor(diffMs / HOUR_IN_MS))),
+      maxRuns,
     };
   }
 
@@ -178,7 +228,14 @@ export const buildTaskReminderPlan = ({
   };
 };
 
-export const getRecurringIntervalMs = (scheduleType: TaskReminderScheduleType) => {
+export const getRecurringIntervalMs = (
+  scheduleType: TaskReminderScheduleType,
+  intervalMinutes = DEFAULT_REPEAT_INTERVAL_MINUTES,
+) => {
+  if (scheduleType === TaskReminderScheduleType.Minutes) {
+    return intervalMinutes * MINUTE_IN_MS;
+  }
+
   if (scheduleType === TaskReminderScheduleType.Hourly) {
     return HOUR_IN_MS;
   }

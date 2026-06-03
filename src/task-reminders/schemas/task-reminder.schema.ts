@@ -5,6 +5,7 @@ export type TaskReminderDocument = TaskReminder & Document;
 
 export enum TaskReminderScheduleType {
   Once = 'once',
+  Minutes = 'minutes',
   Hourly = 'hourly',
   Daily = 'daily',
   Weekly = 'weekly',
@@ -77,6 +78,9 @@ export class TaskReminder {
 
   @Prop({ default: 1 })
   maxRuns: number;
+
+  @Prop()
+  intervalMinutes?: number;
 
   @Prop({
     required: true,

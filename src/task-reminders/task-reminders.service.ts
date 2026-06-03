@@ -97,6 +97,7 @@ export class TaskRemindersService {
       startAt: new Date(),
       endAt: plan.endAt,
       nextRunAt: plan.firstRunAt,
+      intervalMinutes: plan.intervalMinutes,
       projectId: params.projectId,
       projectName: params.projectName,
       taskTitle: params.taskTitle,
@@ -190,7 +191,10 @@ export class TaskRemindersService {
       return null;
     }
 
-    const intervalMs = getRecurringIntervalMs(reminder.scheduleType);
+    const intervalMs = getRecurringIntervalMs(
+      reminder.scheduleType,
+      reminder.intervalMinutes,
+    );
     if (!intervalMs) {
       return null;
     }
