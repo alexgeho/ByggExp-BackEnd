@@ -14,6 +14,12 @@ export class ListShiftsDto {
   to?: string;
 
   @IsOptional()
+  @Matches(/^(\d{4}-\d{2}-\d{2})(,\d{4}-\d{2}-\d{2})*$/, {
+    message: 'dates must be comma-separated YYYY-MM-DD values',
+  })
+  dates?: string;
+
+  @IsOptional()
   @Matches(/^[a-f\d]{24}$/i, { message: 'projectId must be a valid ObjectId' })
   projectId?: string;
 

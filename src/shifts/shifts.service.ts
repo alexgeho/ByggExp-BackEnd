@@ -470,7 +470,7 @@ export class ShiftsService {
 
   private async findAccessibleShifts(
     user: AuthenticatedUser,
-    query: Pick<ListShiftsDto, 'month' | 'from' | 'to' | 'projectId' | 'workerId'>,
+    query: Pick<ListShiftsDto, 'month' | 'from' | 'to' | 'dates' | 'projectId' | 'workerId'>,
     order: 'asc' | 'desc',
   ) {
     const filter = await this.buildAccessibleShiftFilter(user, query);
@@ -484,8 +484,21 @@ export class ShiftsService {
 
   private applyShiftDateFilter(
     filter: Record<string, unknown>,
-    query: Pick<ListShiftsDto, 'month' | 'from' | 'to'>,
+    query: Pick<ListShiftsDto, 'month' | 'from' | 'to' | 'dates'>,
   ) {
+    if (query.dates) {
+      const dateList = query.dates
+        .split(',')
+        .map((date) => date.trim())
+        .filter(Boolean);
+
+      if (dateList.length) {
+        filter.shiftDate = { $in: dateList };
+      }
+
+      return;
+    }
+
     if (query.month) {
       filter.shiftDate = new RegExp(`^${query.month}`);
       return;
@@ -897,7 +910,25 @@ export class ShiftsService {
     return new Date(year, month - 1, day, 23, 59, 59, 999);
   }
 
-  private getReportPeriodLabel(query: Pick<ListShiftsDto, 'month' | 'from' | 'to'>, days: ShiftDayRecord[]) {
+  private getReportPeriodLabel(
+    query: Pick<ListShiftsDto, 'month' | 'from' | 'to' | 'dates'>,
+    days: ShiftDayRecord[],
+  ) {
+    if (query.dates) {
+      const dateList = query.dates
+        .split(',')
+        .map((date) => date.trim())
+        .filter(Boolean);
+
+      if (dateList.length === 1) {
+        return dateList[0];
+      }
+
+      if (dateList.length > 1) {
+        return `${dateList[0]} - ${dateList[dateList.length - 1]} (${dateList.length} days)`;
+      }
+    }
+
     if (query.month) {
       return query.month;
     }
