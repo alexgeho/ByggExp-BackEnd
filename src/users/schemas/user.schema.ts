@@ -16,6 +16,11 @@ export enum UserWorkStatus {
   OutsideProjectArea = 'outside_project_area',
 }
 
+export enum UserAccountStatus {
+  WaitingForApproval = 'waiting_for_approval',
+  Active = 'active',
+}
+
 export type UserNotificationPreferences = {
   flowMode: boolean;
   messages: boolean;
@@ -82,6 +87,26 @@ export class User {
 
   @Prop({ required: true, enum: UserRole, default: UserRole.Worker })
   role: UserRole;
+
+  @Prop({
+    required: true,
+    enum: UserAccountStatus,
+    default: UserAccountStatus.Active,
+    index: true,
+  })
+  accountStatus: UserAccountStatus;
+
+  @Prop({ default: null, select: false })
+  emailVerificationToken?: string | null;
+
+  @Prop({ type: Date, default: null, select: false })
+  emailVerificationExpiresAt?: Date | null;
+
+  @Prop({ default: null, select: false })
+  magicLoginCode?: string | null;
+
+  @Prop({ type: Date, default: null, select: false })
+  magicLoginExpiresAt?: Date | null;
 
   @Prop({ type: String, ref: 'Company', default: null })
   companyId: string | null;

@@ -8,6 +8,8 @@ import {
   IsNumber,
   IsNotEmpty,
   IsObject,
+  IsBoolean,
+  ValidateIf,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { UserRole } from '../schemas/user.schema';
@@ -17,10 +19,15 @@ export class CreateUserDto {
   @IsNotEmpty()
   email: string;
 
+  @ValidateIf((dto) => !dto.inviteViaEmail)
   @IsString()
   @MinLength(6)
   @IsNotEmpty()
-  password: string;
+  password?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  inviteViaEmail?: boolean;
 
   @IsString()
   @IsNotEmpty()

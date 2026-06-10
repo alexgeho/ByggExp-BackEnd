@@ -18,7 +18,7 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { User, UserRole } from './schemas/user.schema';
+import { User, UserAccountStatus, UserRole } from './schemas/user.schema';
 import { UserActivityLogLevel } from './schemas/user-activity-log.schema';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -88,12 +88,26 @@ export class UsersController {
       }
     }
 
-    // Хешируем пароль перед сохранением
+    const role = createUserDto.role ?? UserRole.Worker;
+
+    if (createUserDto.inviteViaEmail) {
+      return this.usersService.createUserPendingApproval({
+        ...createUserDto,
+        role,
+      });
+    }
+
+    if (!createUserDto.password) {
+      throw new BadRequestException('Password is required');
+    }
+
     const hashedPassword = await this.usersService.hashPassword(createUserDto.password);
-    
+
     return this.usersService.create({
       ...createUserDto,
+      role,
       password: hashedPassword,
+      accountStatus: UserAccountStatus.Active,
     });
   }
 

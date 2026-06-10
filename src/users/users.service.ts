@@ -1,14 +1,17 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
+import { createHash, randomBytes } from 'crypto';
 import {
   normalizeUserNotificationPreferences,
   User,
+  UserAccountStatus,
   UserDocument,
   UserRole,
   UserWorkStatus,
 } from './schemas/user.schema';
+import { MailService } from '../mail/mail.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { Company, CompanyDocument } from '../company/schemas/company.schema';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
@@ -109,6 +112,8 @@ type UserDetailResponse = {
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
@@ -116,15 +121,152 @@ export class UsersService {
     @InjectModel(DeviceToken.name) private deviceTokenModel: Model<DeviceTokenDocument>,
     @InjectModel(UserActivityLog.name)
     private userActivityLogModel: Model<UserActivityLogDocument>,
+    private readonly mailService: MailService,
   ) {}
 
   async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, 10);
   }
 
-  async create(createUserDto: CreateUserDto): Promise<UserDocument> {
-    const createdUser = new this.userModel(createUserDto);
+  private hashVerificationToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private buildVerificationToken(): { plainToken: string; hashedToken: string } {
+    const plainToken = randomBytes(32).toString('hex');
+
+    return {
+      plainToken,
+      hashedToken: this.hashVerificationToken(plainToken),
+    };
+  }
+
+  async create(
+    createUserDto: CreateUserDto & {
+      password: string;
+      accountStatus?: UserAccountStatus;
+    },
+  ): Promise<UserDocument> {
+    const createdUser = new this.userModel({
+      ...createUserDto,
+      accountStatus: createUserDto.accountStatus ?? UserAccountStatus.Active,
+    });
     return createdUser.save();
+  }
+
+  private generateInvitePassword(): string {
+    return randomBytes(12).toString('base64url');
+  }
+
+  private getRoleLabel(role: UserRole): string {
+    const labels: Record<UserRole, string> = {
+      [UserRole.SuperAdmin]: 'Super Admin',
+      [UserRole.CompanyAdmin]: 'Company Admin',
+      [UserRole.ProjectAdmin]: 'Project Admin',
+      [UserRole.Worker]: 'Worker',
+    };
+
+    return labels[role] || 'User';
+  }
+
+  async createUserPendingApproval(
+    createUserDto: CreateUserDto & { role: UserRole; companyId?: string | null },
+  ): Promise<UserDocument> {
+    const plainPassword = this.generateInvitePassword();
+    const hashedPassword = await this.hashPassword(plainPassword);
+    const { plainToken, hashedToken } = this.buildVerificationToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const createdUser = new this.userModel({
+      ...createUserDto,
+      password: hashedPassword,
+      accountStatus: UserAccountStatus.WaitingForApproval,
+      emailVerificationToken: hashedToken,
+      emailVerificationExpiresAt: expiresAt,
+    });
+
+    const savedUser = await createdUser.save();
+
+    try {
+      await this.mailService.sendUserInviteEmail(
+        savedUser.email,
+        savedUser.name,
+        plainToken,
+        plainPassword,
+        this.getRoleLabel(savedUser.role),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send invite email to ${savedUser.email}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+
+    return savedUser;
+  }
+
+  async verifyEmailByToken(token: string): Promise<{
+    user: UserDocument;
+    magicLoginCode: string;
+  }> {
+    const hashedToken = this.hashVerificationToken(token);
+    const user = await this.userModel
+      .findOne({
+        emailVerificationToken: hashedToken,
+        emailVerificationExpiresAt: { $gt: new Date() },
+        accountStatus: UserAccountStatus.WaitingForApproval,
+      })
+      .select('+emailVerificationToken +emailVerificationExpiresAt')
+      .exec();
+
+    if (!user) {
+      throw new BadRequestException('Invalid or expired verification link');
+    }
+
+    user.accountStatus = UserAccountStatus.Active;
+    user.emailVerificationToken = null;
+    user.emailVerificationExpiresAt = null;
+
+    const savedUser = await user.save();
+    const magicLoginCode = await this.createMagicLoginCode(savedUser._id.toString());
+
+    return {
+      user: savedUser,
+      magicLoginCode,
+    };
+  }
+
+  async createMagicLoginCode(userId: string): Promise<string> {
+    const plainCode = randomBytes(32).toString('hex');
+    const hashedCode = this.hashVerificationToken(plainCode);
+
+    await this.userModel.findByIdAndUpdate(userId, {
+      magicLoginCode: hashedCode,
+      magicLoginExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+    });
+
+    return plainCode;
+  }
+
+  async consumeMagicLoginCode(code: string): Promise<UserDocument> {
+    const hashedCode = this.hashVerificationToken(code);
+    const user = await this.userModel
+      .findOne({
+        magicLoginCode: hashedCode,
+        magicLoginExpiresAt: { $gt: new Date() },
+        accountStatus: UserAccountStatus.Active,
+      })
+      .select('+magicLoginCode +magicLoginExpiresAt')
+      .exec();
+
+    if (!user) {
+      throw new BadRequestException('Invalid or expired sign-in link');
+    }
+
+    user.magicLoginCode = null;
+    user.magicLoginExpiresAt = null;
+
+    return user.save();
   }
 
   async findAll(): Promise<User[]> {

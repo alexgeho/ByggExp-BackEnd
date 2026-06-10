@@ -8,7 +8,7 @@ import { RegisterCompanyWithAdminDto } from '../company/dto/register-company-wit
 import { RegisterCompanyPublicDto } from './dto/register-company-public.dto';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
-import { UserRole } from '../users/schemas/user.schema';
+import { UserAccountStatus, UserRole } from '../users/schemas/user.schema';
 import { UserActivityLogLevel } from '../users/schemas/user-activity-log.schema';
 
 @Injectable()
@@ -32,6 +32,10 @@ export class AuthService {
   // Регистрация нового пользователя
   async register(createUserDto: CreateUserDto) {
     const { email, password, ...userData } = createUserDto;
+
+    if (!password) {
+      throw new ConflictException('Password is required');
+    }
 
     const existing = await this.usersService.findByEmail(email);
     if (existing) throw new ConflictException('Email already exists');
@@ -65,6 +69,10 @@ export class AuthService {
   async registerSuperAdmin(createUserDto: CreateUserDto) {
     const { email, password, ...userData } = createUserDto;
 
+    if (!password) {
+      throw new ConflictException('Password is required');
+    }
+
     const existing = await this.usersService.findByEmail(email);
     if (existing) throw new ConflictException('Email already exists');
 
@@ -95,6 +103,12 @@ export class AuthService {
 
     if (!user || !isMatch) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.accountStatus === UserAccountStatus.WaitingForApproval) {
+      throw new UnauthorizedException(
+        'Please confirm your email before logging in.',
+      );
     }
 
     try {
@@ -151,6 +165,43 @@ export class AuthService {
 
   async validateUser(id: string) {
     return this.usersService.findOne(id);
+  }
+
+  async verifyEmail(token: string) {
+    const { user, magicLoginCode } =
+      await this.usersService.verifyEmailByToken(token);
+
+    return {
+      success: true,
+      message:
+        'Email confirmed. Opening ByggExp to sign you in automatically.',
+      magicLoginCode,
+      user: {
+        id: user._id.toString(),
+        email: user.email,
+        name: user.name,
+      },
+    };
+  }
+
+  async magicLogin(code: string) {
+    const user = await this.usersService.consumeMagicLoginCode(code);
+
+    try {
+      await this.usersService.logActivity(user._id.toString(), {
+        category: 'auth',
+        type: 'magic_login_succeeded',
+        level: UserActivityLogLevel.Info,
+        message: 'User signed in via email verification link.',
+        source: 'backend',
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to store magic login activity for user ${user._id.toString()}`,
+      );
+    }
+
+    return this.generateTokens(user);
   }
 
   async validateUserForLocal(email: string, password: string) {

@@ -7,9 +7,11 @@ import { Company, CompanySchema } from '../company/schemas/company.schema';
 import { Project, ProjectSchema } from '../projects/schemas/project.schema';
 import { DeviceToken, DeviceTokenSchema } from '../notifications/schemas/device-token.schema';
 import { UserActivityLog, UserActivityLogSchema } from './schemas/user-activity-log.schema';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
+    MailModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Company.name, schema: CompanySchema },
