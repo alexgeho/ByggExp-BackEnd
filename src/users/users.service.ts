@@ -48,8 +48,8 @@ type UserDetailResponse = {
   profession: string;
   role: string;
   avatarUrl: string;
-  phoneAreaCode: number;
-  phoneNumber: number;
+  phoneAreaCode: number | null;
+  phoneNumber: number | null;
   language: Record<string, any>;
   additionalDocuments: string[];
   notificationPreferences: {
@@ -403,8 +403,8 @@ export class UsersService {
       profession: user.profession || '',
       role: user.role,
       avatarUrl: user.avatarUrl || '',
-      phoneAreaCode: user.phoneAreaCode,
-      phoneNumber: user.phoneNumber,
+      phoneAreaCode: user.phoneAreaCode ?? null,
+      phoneNumber: user.phoneNumber ?? null,
       language: user.language || {},
       additionalDocuments: Array.isArray(user.additionalDocuments) ? user.additionalDocuments : [],
       notificationPreferences: normalizeUserNotificationPreferences(user.notificationPreferences),
