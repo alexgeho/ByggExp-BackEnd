@@ -30,8 +30,8 @@ export class CreateUserDto {
   inviteViaEmail?: boolean;
 
   @IsString()
-  @IsNotEmpty()
-  name: string;
+  @IsOptional()
+  name?: string;
 
   @IsString()
   @IsOptional()
@@ -41,19 +41,27 @@ export class CreateUserDto {
   @IsOptional()
   avatarUrl?: string;
 
-  @Transform(({ value }) =>
-    typeof value === 'string' ? parseInt(value.replace(/\D/g, ''), 10) : value
-  )
-  @IsNumber()
-  @IsNotEmpty()
-  phoneAreaCode: number;
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
 
-  @Transform(({ value }) =>
-    typeof value === 'string' ? parseInt(value.replace(/\D/g, ''), 10) : value
-  )
+    return typeof value === 'string' ? parseInt(value.replace(/\D/g, ''), 10) : value;
+  })
   @IsNumber()
-  @IsNotEmpty()
-  phoneNumber: number;
+  @IsOptional()
+  phoneAreaCode?: number;
+
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+
+    return typeof value === 'string' ? parseInt(value.replace(/\D/g, ''), 10) : value;
+  })
+  @IsNumber()
+  @IsOptional()
+  phoneNumber?: number;
 
   @IsEnum(UserRole)
   @IsOptional()

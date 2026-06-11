@@ -147,10 +147,7 @@ export class UsersService {
       accountStatus?: UserAccountStatus;
     },
   ): Promise<UserDocument> {
-    const createdUser = new this.userModel({
-      ...createUserDto,
-      accountStatus: createUserDto.accountStatus ?? UserAccountStatus.Active,
-    });
+    const createdUser = new this.userModel(this.normalizeCreateUserInput(createUserDto));
     return createdUser.save();
   }
 
@@ -169,6 +166,21 @@ export class UsersService {
     return labels[role] || 'User';
   }
 
+  private normalizeCreateUserInput(
+    createUserDto: CreateUserDto & {
+      password: string;
+      accountStatus?: UserAccountStatus;
+    },
+  ) {
+    return {
+      ...createUserDto,
+      name: createUserDto.name?.trim() || createUserDto.email.split('@')[0] || '',
+      accountStatus: createUserDto.accountStatus ?? UserAccountStatus.Active,
+      ...(createUserDto.phoneAreaCode != null ? { phoneAreaCode: createUserDto.phoneAreaCode } : {}),
+      ...(createUserDto.phoneNumber != null ? { phoneNumber: createUserDto.phoneNumber } : {}),
+    };
+  }
+
   async createUserPendingApproval(
     createUserDto: CreateUserDto & { role: UserRole; companyId?: string | null },
   ): Promise<UserDocument> {
@@ -178,9 +190,11 @@ export class UsersService {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     const createdUser = new this.userModel({
-      ...createUserDto,
-      password: hashedPassword,
-      accountStatus: UserAccountStatus.WaitingForApproval,
+      ...this.normalizeCreateUserInput({
+        ...createUserDto,
+        password: hashedPassword,
+        accountStatus: UserAccountStatus.WaitingForApproval,
+      }),
       emailVerificationToken: hashedToken,
       emailVerificationExpiresAt: expiresAt,
     });

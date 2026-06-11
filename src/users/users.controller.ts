@@ -90,15 +90,11 @@ export class UsersController {
 
     const role = createUserDto.role ?? UserRole.Worker;
 
-    if (createUserDto.inviteViaEmail) {
+    if (createUserDto.inviteViaEmail || !createUserDto.password) {
       return this.usersService.createUserPendingApproval({
         ...createUserDto,
         role,
       });
-    }
-
-    if (!createUserDto.password) {
-      throw new BadRequestException('Password is required');
     }
 
     const hashedPassword = await this.usersService.hashPassword(createUserDto.password);

@@ -64,13 +64,13 @@ export class User {
   @Prop({ required: true, select: false })
   password: string;
 
-  @Prop({ required: true })
-  phoneAreaCode: number;
+  @Prop({ type: Number, default: null })
+  phoneAreaCode?: number | null;
 
-  @Prop({ required: true })
-  phoneNumber: number;
+  @Prop({ type: Number, default: null })
+  phoneNumber?: number | null;
 
-  @Prop({ required: true })
+  @Prop({ default: '' })
   name: string;
 
   @Prop({ default: '' })
