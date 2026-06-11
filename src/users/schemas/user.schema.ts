@@ -96,13 +96,13 @@ export class User {
   })
   accountStatus: UserAccountStatus;
 
-  @Prop({ default: null, select: false })
+  @Prop({ type: String, default: null, select: false })
   emailVerificationToken?: string | null;
 
   @Prop({ type: Date, default: null, select: false })
   emailVerificationExpiresAt?: Date | null;
 
-  @Prop({ default: null, select: false })
+  @Prop({ type: String, default: null, select: false })
   magicLoginCode?: string | null;
 
   @Prop({ type: Date, default: null, select: false })
