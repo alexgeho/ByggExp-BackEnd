@@ -13,6 +13,7 @@ async function bootstrap() {
   const shiftUploadsDir = join(process.cwd(), 'uploads', 'shift-photos');
   const avatarUploadsDir = join(process.cwd(), 'uploads', 'user-avatars');
   const userDocumentsDir = join(process.cwd(), 'uploads', 'user-documents');
+  const toolPhotosDir = join(process.cwd(), 'uploads', 'tool-photos');
 
   if (!existsSync(uploadsDir)) {
     mkdirSync(uploadsDir, { recursive: true });
@@ -32,6 +33,10 @@ async function bootstrap() {
 
   if (!existsSync(userDocumentsDir)) {
     mkdirSync(userDocumentsDir, { recursive: true });
+  }
+
+  if (!existsSync(toolPhotosDir)) {
+    mkdirSync(toolPhotosDir, { recursive: true });
   }
 
   const logger = new Logger('Bootstrap');

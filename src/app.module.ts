@@ -14,6 +14,7 @@ import { AuthModule } from './auth/auth.module';
 import { ShiftsModule } from './shifts/shifts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { TaskRemindersModule } from './task-reminders/task-reminders.module';
+import { ToolsModule } from './tools/tools.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { TaskRemindersModule } from './task-reminders/task-reminders.module';
     ShiftsModule,
     NotificationsModule,
     TaskRemindersModule,
+    ToolsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
