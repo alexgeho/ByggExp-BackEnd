@@ -15,6 +15,9 @@ import { ShiftsModule } from './shifts/shifts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { TaskRemindersModule } from './task-reminders/task-reminders.module';
 import { ToolsModule } from './tools/tools.module';
+import { InvoicesModule } from './invoices/invoices.module';
+import { ClientsModule } from './clients/clients.module';
+import { ArticlesModule } from './articles/articles.module';
 
 @Module({
   imports: [
@@ -34,6 +37,9 @@ import { ToolsModule } from './tools/tools.module';
     NotificationsModule,
     TaskRemindersModule,
     ToolsModule,
+    InvoicesModule,
+    ClientsModule,
+    ArticlesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
