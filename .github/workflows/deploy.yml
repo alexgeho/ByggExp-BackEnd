@@ -71,6 +71,7 @@ jobs:
 
             cd "$DIR"
             echo "==> Installing production deps"
+            export PUPPETEER_SKIP_DOWNLOAD=true
             npm ci --omit=dev --no-audit --no-fund
 
             # atomic switch

@@ -1,5 +1,5 @@
 import { existsSync } from 'fs';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
 
 function resolveChromeExecutable(): string | undefined {
   const fromEnv =
