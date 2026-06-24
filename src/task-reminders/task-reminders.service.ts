@@ -64,8 +64,8 @@ export class TaskRemindersService {
       preferenceKey: 'tasks',
       data: {
         type: 'task_assignment',
-        screen: 'Project',
-        projectId: params.projectId,
+        screen: params.projectId ? 'Project' : 'Tasks',
+        ...(params.projectId ? { projectId: params.projectId } : {}),
         entityId: params.taskId,
       },
     });
@@ -157,8 +157,8 @@ export class TaskRemindersService {
         preferenceKey: 'tasks',
         data: {
           type: 'task_reminder',
-          screen: 'Project',
-          projectId: reminder.projectId,
+          screen: reminder.projectId ? 'Project' : 'Tasks',
+          ...(reminder.projectId ? { projectId: reminder.projectId } : {}),
           entityId: reminder.taskId,
         },
       });

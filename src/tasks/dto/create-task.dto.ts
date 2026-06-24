@@ -49,8 +49,12 @@ const parseJsonField = (value: unknown) => {
 
 export class CreateTaskDto {
   @IsString()
-  @IsNotEmpty()
-  projectId: string;
+  @IsOptional()
+  projectId?: string;
+
+  @IsString()
+  @IsOptional()
+  assigneeUserId?: string;
 
   @IsString()
   @IsNotEmpty()

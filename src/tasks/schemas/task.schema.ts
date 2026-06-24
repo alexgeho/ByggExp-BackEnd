@@ -11,8 +11,17 @@ export class TaskDocumentFile {
 
 @Schema({ timestamps: true })
 export class Task {
-  @Prop({ required: true, ref: 'Project' }) // Ссылка на проект
-  projectId: string;
+  @Prop({ ref: 'Project', default: null, index: true }) // Ссылка на проект
+  projectId?: string | null;
+
+  @Prop({ ref: 'User', default: null, index: true }) // Персональная задача
+  assigneeUserId?: string | null;
+
+  @Prop({ default: '' })
+  assigneeUserName?: string;
+
+  @Prop({ ref: 'User', default: null, index: true })
+  createdByUserId?: string | null;
 
   @Prop({ required: true })
   taskTitle: string;

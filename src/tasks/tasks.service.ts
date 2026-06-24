@@ -1,11 +1,11 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Task, TaskDocument } from './schemas/task.schema';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { UpdateTaskDto } from './dto/update-task.dto';
-import { UserRole } from '../users/schemas/user.schema';
+import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TaskRemindersService } from '../task-reminders/task-reminders.service';
 
@@ -30,20 +30,36 @@ export class TasksService {
   constructor(
     @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
     private readonly notificationsService: NotificationsService,
     private readonly taskRemindersService: TaskRemindersService,
   ) {}
 
   async create(createTaskDto: CreateTaskDto, actorUserId?: string): Promise<Task> {
-    const project = await this.projectModel.findById(createTaskDto.projectId).exec();
+    const hasProject = Boolean(createTaskDto.projectId);
+    const hasAssignee = Boolean(createTaskDto.assigneeUserId);
 
-    if (!project) {
-      throw new NotFoundException(`Project with ID "${createTaskDto.projectId}" not found`);
+    if (hasProject === hasAssignee) {
+      throw new BadRequestException('Task must be assigned to either a project or one user.');
     }
 
-    const createdTask = await new this.taskModel(createTaskDto).save();
+    if (hasAssignee) {
+      return this.createPersonalTask(createTaskDto, actorUserId);
+    }
 
-    await this.projectModel.findByIdAndUpdate(createTaskDto.projectId, {
+    const projectId = createTaskDto.projectId as string;
+    const project = await this.projectModel.findById(projectId).exec();
+
+    if (!project) {
+      throw new NotFoundException(`Project with ID "${projectId}" not found`);
+    }
+
+    const createdTask = await new this.taskModel({
+      ...createTaskDto,
+      createdByUserId: actorUserId || null,
+    }).save();
+
+    await this.projectModel.findByIdAndUpdate(projectId, {
       $push: { tasks: createdTask._id.toString() },
     });
 
@@ -55,7 +71,7 @@ export class TasksService {
       actorUserId,
       notificationSettings: createTaskDto.notificationSettings,
       projectMemberIds,
-      projectId: createTaskDto.projectId,
+      projectId,
       projectName: project.name,
       taskId: createdTask._id.toString(),
       taskTitle: createdTask.taskTitle,
@@ -63,8 +79,68 @@ export class TasksService {
     await this.taskRemindersService.syncTaskReminders({
       notificationSettings: createTaskDto.notificationSettings,
       projectMemberIds,
-      projectId: createTaskDto.projectId,
+      projectId,
       projectName: project.name,
+      taskDueDate: createdTask.dueDate,
+      taskId: createdTask._id.toString(),
+      taskTitle: createdTask.taskTitle,
+    });
+
+    return createdTask;
+  }
+
+  private async createPersonalTask(
+    createTaskDto: CreateTaskDto,
+    actorUserId?: string,
+  ): Promise<Task> {
+    const assignee = await this.userModel.findById(createTaskDto.assigneeUserId).exec();
+
+    if (!assignee) {
+      throw new NotFoundException(`User with ID "${createTaskDto.assigneeUserId}" not found`);
+    }
+
+    const personalTaskPayload = {
+      ...createTaskDto,
+      projectId: null,
+      assigneeUserId: assignee._id.toString(),
+      assigneeUserName: assignee.name || assignee.email || 'User',
+      createdByUserId: actorUserId || null,
+    };
+    const createdTask = await new this.taskModel(personalTaskPayload).save();
+    const personalMemberIds = [assignee._id.toString()];
+
+    await this.taskRemindersService.sendAssignmentNotification({
+      actorUserId,
+      notificationSettings: {
+        ...createTaskDto.notificationSettings,
+        assignees: [
+          {
+            id: assignee._id.toString(),
+            name: assignee.name,
+            profession: assignee.profession,
+          },
+        ],
+      },
+      projectMemberIds: personalMemberIds,
+      projectId: '',
+      projectName: 'Personal task',
+      taskId: createdTask._id.toString(),
+      taskTitle: createdTask.taskTitle,
+    });
+    await this.taskRemindersService.syncTaskReminders({
+      notificationSettings: {
+        ...createTaskDto.notificationSettings,
+        assignees: [
+          {
+            id: assignee._id.toString(),
+            name: assignee.name,
+            profession: assignee.profession,
+          },
+        ],
+      },
+      projectMemberIds: personalMemberIds,
+      projectId: '',
+      projectName: 'Personal task',
       taskDueDate: createdTask.dueDate,
       taskId: createdTask._id.toString(),
       taskTitle: createdTask.taskTitle,
@@ -94,12 +170,25 @@ export class TasksService {
     const projects = await this.projectModel.find(projectFilter).select('_id').lean().exec();
     const projectIds = projects.map((project) => project._id.toString());
 
-    if (!projectIds.length) {
+    const personalTaskFilter = user.userId
+      ? {
+          $or: [
+            { assigneeUserId: user.userId },
+            { createdByUserId: user.userId },
+          ],
+        }
+      : null;
+    const taskFilters = [
+      ...(projectIds.length ? [{ projectId: { $in: projectIds } }] : []),
+      ...(personalTaskFilter ? [personalTaskFilter] : []),
+    ];
+
+    if (!taskFilters.length) {
       return [];
     }
 
     return this.taskModel
-      .find({ projectId: { $in: projectIds } })
+      .find({ $or: taskFilters })
       .sort({ dueDate: 1, createdAt: -1 })
       .exec();
   }
@@ -118,22 +207,25 @@ export class TasksService {
       throw new NotFoundException(`Task with ID "${id}" not found`);
     }
 
-    const nextProjectId = updateTaskDto.projectId || existingTask.projectId;
+    const currentProjectId = existingTask.projectId || null;
+    const nextProjectId = updateTaskDto.projectId || currentProjectId;
     const dueDateChanged = this.hasDueDateChanged(existingTask.dueDate, updateTaskDto.dueDate);
-    let targetProject = nextProjectId === existingTask.projectId
-      ? await this.projectModel.findById(existingTask.projectId).exec()
+    let targetProject = nextProjectId && nextProjectId === currentProjectId
+      ? await this.projectModel.findById(currentProjectId).exec()
       : null;
 
-    if (nextProjectId !== existingTask.projectId) {
+    if (nextProjectId && nextProjectId !== currentProjectId) {
       targetProject = await this.projectModel.findById(nextProjectId).exec();
 
       if (!targetProject) {
         throw new NotFoundException(`Project with ID "${nextProjectId}" not found`);
       }
 
-      await this.projectModel.findByIdAndUpdate(existingTask.projectId, {
-        $pull: { tasks: existingTask._id.toString() },
-      });
+      if (currentProjectId) {
+        await this.projectModel.findByIdAndUpdate(currentProjectId, {
+          $pull: { tasks: existingTask._id.toString() },
+        });
+      }
 
       await this.projectModel.findByIdAndUpdate(nextProjectId, {
         $addToSet: { tasks: existingTask._id.toString() },
@@ -156,7 +248,7 @@ export class TasksService {
       await this.taskRemindersService.syncTaskReminders({
         notificationSettings: existingTask.notificationSettings,
         projectMemberIds,
-        projectId: nextProjectId,
+        projectId: nextProjectId as string,
         projectName: targetProject.name,
         taskDueDate: existingTask.dueDate,
         taskId: existingTask._id.toString(),
@@ -177,9 +269,11 @@ export class TasksService {
     }
 
     await this.taskModel.findByIdAndDelete(id).exec();
-    await this.projectModel.findByIdAndUpdate(task.projectId, {
-      $pull: { tasks: task._id.toString() },
-    });
+    if (task.projectId) {
+      await this.projectModel.findByIdAndUpdate(task.projectId, {
+        $pull: { tasks: task._id.toString() },
+      });
+    }
     await this.taskRemindersService.cancelTaskReminders(task._id.toString());
 
     return task;
