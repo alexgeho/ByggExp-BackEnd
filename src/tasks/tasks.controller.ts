@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Request,
@@ -80,6 +81,18 @@ export class TasksController {
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   update(@Request() req, @Param('id') id: string, @Body() updateTaskDto: UpdateTaskDto) {
     return this.tasksService.update(id, updateTaskDto, req.user.userId);
+  }
+
+  @Patch(':id/complete')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  complete(@Request() req, @Param('id') id: string) {
+    return this.tasksService.complete(id, req.user.userId);
+  }
+
+  @Patch(':id/reopen')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  reopen(@Request() req, @Param('id') id: string) {
+    return this.tasksService.reopen(id, req.user.userId);
   }
 
   @Delete(':id')

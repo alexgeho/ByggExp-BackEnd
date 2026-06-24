@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Task, TaskDocument } from './schemas/task.schema';
+import { Task, TaskDocument, TaskStatus } from './schemas/task.schema';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -275,6 +275,37 @@ export class TasksService {
       });
     }
     await this.taskRemindersService.cancelTaskReminders(task._id.toString());
+
+    return task;
+  }
+
+  async complete(id: string, actorUserId?: string): Promise<Task> {
+    const task = await this.taskModel.findById(id).exec();
+
+    if (!task) {
+      throw new NotFoundException(`Task with ID "${id}" not found`);
+    }
+
+    task.status = TaskStatus.Completed;
+    task.completedAt = new Date();
+    task.completedByUserId = actorUserId || null;
+    await task.save();
+    await this.taskRemindersService.cancelTaskReminders(task._id.toString());
+
+    return task;
+  }
+
+  async reopen(id: string, _actorUserId?: string): Promise<Task> {
+    const task = await this.taskModel.findById(id).exec();
+
+    if (!task) {
+      throw new NotFoundException(`Task with ID "${id}" not found`);
+    }
+
+    task.status = TaskStatus.Open;
+    task.completedAt = null;
+    task.completedByUserId = null;
+    await task.save();
 
     return task;
   }
