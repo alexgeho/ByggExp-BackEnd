@@ -18,6 +18,7 @@ import { ToolsModule } from './tools/tools.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { ClientsModule } from './clients/clients.module';
 import { ArticlesModule } from './articles/articles.module';
+import { OffersModule } from './offers/offers.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { ArticlesModule } from './articles/articles.module';
     TaskRemindersModule,
     ToolsModule,
     InvoicesModule,
+    OffersModule,
     ClientsModule,
     ArticlesModule,
   ],
