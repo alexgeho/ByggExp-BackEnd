@@ -24,6 +24,13 @@ import {
   ShiftSegment,
   ShiftStatus,
 } from './schemas/shift.schema';
+import {
+  getCompleteWindowErrorMessage,
+  getScheduledShiftDeadline,
+  getShiftScheduleWindow,
+  getStartWindowErrorMessage,
+  isPastShiftScheduleDeadline,
+} from './shift-schedule.util';
 
 type AuthenticatedUser = {
   userId: string;
@@ -85,9 +92,10 @@ export class ShiftsService {
   ) {}
 
   async start(user: AuthenticatedUser, dto: StartShiftDto) {
-    await this.finalizeExpiredOpenShifts(user.userId);
+    await this.finalizeStaleShifts(user.userId);
 
     const project = await this.ensureProjectAccess(user, dto.projectId);
+    this.assertCanStartShift(project);
     const activeShift = await this.shiftModel
       .findOne({ workerId: user.userId, status: ShiftStatus.Active })
       .exec();
@@ -143,7 +151,7 @@ export class ShiftsService {
   }
 
   async pause(user: AuthenticatedUser, shiftId: string) {
-    await this.finalizeExpiredOpenShifts(user.userId);
+    await this.finalizeStaleShifts(user.userId);
 
     const shift = await this.findOwnedShift(user.userId, shiftId);
 
@@ -168,13 +176,16 @@ export class ShiftsService {
   }
 
   async resume(user: AuthenticatedUser, shiftId: string) {
-    await this.finalizeExpiredOpenShifts(user.userId);
+    await this.finalizeStaleShifts(user.userId);
 
     const shift = await this.findOwnedShift(user.userId, shiftId);
 
     if (shift.status !== ShiftStatus.Paused) {
       throw new BadRequestException('Only a paused shift can be resumed.');
     }
+
+    const project = await this.ensureProjectAccess(user, shift.projectId);
+    this.assertCanStartShift(project);
 
     const today = this.getDateKey(new Date());
     if (shift.shiftDate !== today) {
@@ -215,10 +226,10 @@ export class ShiftsService {
   }
 
   async complete(user: AuthenticatedUser, shiftId: string, dto: CompleteShiftDto = {}) {
-    await this.finalizeExpiredOpenShifts(user.userId);
+    await this.finalizeStaleShifts(user.userId);
 
     const shift = await this.findOwnedShift(user.userId, shiftId);
-    const now = new Date();
+    const project = await this.projectModel.findById(shift.projectId).exec();
     const completionReason = dto.reason?.trim() || 'manual';
     const completionSource = dto.source?.trim() || 'api';
     const shouldNotifyUser = Boolean(dto.notifyUser) && completionReason === 'outside_project_area';
@@ -226,6 +237,17 @@ export class ShiftsService {
     if (shift.status === ShiftStatus.Completed) {
       return this.serializeShift(shift);
     }
+
+    if (
+      completionReason === 'manual' &&
+      project &&
+      !this.canCompleteShift(project)
+    ) {
+      const window = getShiftScheduleWindow(project.shiftSchedule);
+      throw new BadRequestException(getCompleteWindowErrorMessage(window));
+    }
+
+    const now = new Date();
 
     if (shift.status === ShiftStatus.Active) {
       this.closeOpenSegment(shift, now);
@@ -296,7 +318,7 @@ export class ShiftsService {
   }
 
   async uploadPhotos(user: AuthenticatedUser, shiftId: string, files: ShiftPhotoFile[]) {
-    await this.finalizeExpiredOpenShifts(user.userId);
+    await this.finalizeStaleShifts(user.userId);
 
     const shift = await this.findOwnedShift(user.userId, shiftId);
     shift.photos = [...(shift.photos || []), ...files];
@@ -306,7 +328,7 @@ export class ShiftsService {
   }
 
   async getCurrent(user: AuthenticatedUser, projectId?: string) {
-    await this.finalizeExpiredOpenShifts(user.userId);
+    await this.finalizeStaleShifts(user.userId);
 
     const today = this.getDateKey(new Date());
     const shift = await this.shiftModel
@@ -336,7 +358,7 @@ export class ShiftsService {
   }
 
   async getHistory(user: AuthenticatedUser, query: ListShiftsDto) {
-    await this.finalizeExpiredOpenShifts(user.userId);
+    await this.finalizeStaleShifts(user.userId);
 
     const availableMonths = await this.getMonths(user, query);
     const fallbackMonth = availableMonths[0] || this.getMonthKey(new Date());
@@ -365,7 +387,7 @@ export class ShiftsService {
   }
 
   async list(user: AuthenticatedUser, query: ListShiftsDto) {
-    await this.finalizeExpiredOpenShifts(user.userId);
+    await this.finalizeStaleShifts(user.userId);
     const shifts = await this.findAccessibleShifts(user, query, 'desc');
 
     const serializedShifts = await this.serializeShifts(shifts);
@@ -377,7 +399,7 @@ export class ShiftsService {
   }
 
   async export(user: AuthenticatedUser, query: ExportShiftsDto): Promise<ShiftExportResult> {
-    await this.finalizeExpiredOpenShifts(user.userId);
+    await this.finalizeStaleShifts(user.userId);
 
     const format = query.format || 'pdf';
     const shifts = await this.findAccessibleShifts(user, query, 'asc');
@@ -402,7 +424,7 @@ export class ShiftsService {
   }
 
   async findOneAccessible(user: AuthenticatedUser, shiftId: string) {
-    await this.finalizeExpiredOpenShifts(user.userId);
+    await this.finalizeStaleShifts(user.userId);
 
     const filter = await this.buildAccessibleShiftFilter(user, {});
     const shift = await this.shiftModel
@@ -597,6 +619,88 @@ export class ShiftsService {
     return filter;
   }
 
+  private async finalizeStaleShifts(userId: string) {
+    await this.finalizeExpiredOpenShifts(userId);
+    await this.finalizeShiftsPastScheduleDeadline(userId);
+  }
+
+  private assertCanStartShift(project: ProjectDocument) {
+    const window = getShiftScheduleWindow(project.shiftSchedule);
+
+    if (window.enforced && !window.canStart) {
+      throw new BadRequestException(getStartWindowErrorMessage(window));
+    }
+  }
+
+  private canCompleteShift(project: ProjectDocument, at: Date = new Date()) {
+    const window = getShiftScheduleWindow(project.shiftSchedule, at);
+    return !window.enforced || window.canComplete;
+  }
+
+  private async getShiftCloseTime(projectId: string, shiftDate: string) {
+    const project = await this.projectModel
+      .findById(projectId)
+      .select('shiftSchedule')
+      .lean()
+      .exec();
+    const scheduledDeadline = project?.shiftSchedule?.enabled
+      ? getScheduledShiftDeadline(project.shiftSchedule, shiftDate)
+      : null;
+
+    return scheduledDeadline || this.getDayEnd(shiftDate);
+  }
+
+  private async finalizeShiftsPastScheduleDeadline(userId: string) {
+    const today = this.getDateKey(new Date());
+    const openShifts = await this.shiftModel
+      .find({
+        workerId: userId,
+        shiftDate: today,
+        status: { $in: [ShiftStatus.Active, ShiftStatus.Paused] },
+      })
+      .exec();
+
+    for (const shift of openShifts) {
+      const project = await this.projectModel
+        .findById(shift.projectId)
+        .select('shiftSchedule')
+        .lean()
+        .exec();
+
+      if (!project?.shiftSchedule?.enabled) {
+        continue;
+      }
+
+      if (!isPastShiftScheduleDeadline(project.shiftSchedule)) {
+        continue;
+      }
+
+      const closeAt =
+        getScheduledShiftDeadline(project.shiftSchedule, shift.shiftDate) ||
+        new Date();
+
+      if (shift.status === ShiftStatus.Active) {
+        this.closeOpenSegment(shift, closeAt);
+        shift.durationMs = this.sumSegmentDurations(shift.segments);
+        shift.lastResumedAt = null;
+      }
+
+      shift.endedAt =
+        shift.endedAt ||
+        shift.segments[shift.segments.length - 1]?.endedAt ||
+        closeAt;
+      shift.status = ShiftStatus.Completed;
+      shift.completionReason = shift.completionReason || 'schedule_deadline';
+      shift.completionSource = shift.completionSource || 'system';
+      await shift.save();
+
+      await this.usersService.setOffDutyStatus(userId, {
+        reason: 'schedule_deadline',
+        updatedAt: closeAt,
+      });
+    }
+  }
+
   private async finalizeExpiredOpenShifts(userId: string) {
     const today = this.getDateKey(new Date());
     const outdatedShifts = await this.shiftModel
@@ -608,7 +712,7 @@ export class ShiftsService {
       .exec();
 
     for (const shift of outdatedShifts) {
-      const shiftDayEnd = this.getDayEnd(shift.shiftDate);
+      const shiftDayEnd = await this.getShiftCloseTime(shift.projectId, shift.shiftDate);
 
       if (shift.status === ShiftStatus.Active) {
         this.closeOpenSegment(shift, shiftDayEnd);

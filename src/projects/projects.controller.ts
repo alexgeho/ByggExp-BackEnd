@@ -161,6 +161,7 @@ export class ProjectsController {
       locationLatitude: project.locationLatitude,
       locationLongitude: project.locationLongitude,
       locationRadiusMeters: project.locationRadiusMeters,
+      shiftSchedule: project.shiftSchedule,
     }));
   }
 

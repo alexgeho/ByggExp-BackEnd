@@ -11,6 +11,15 @@ export class ProjectDocumentFile {
   uploadedAt?: Date;
 }
 
+export class ProjectShiftSchedule {
+  enabled: boolean;
+  workDayStartTime: string;
+  workDayEndTime: string;
+  startGraceMinutes: number;
+  endGraceMinutes: number;
+  timezone: string;
+}
+
 @Schema({ timestamps: true })
 export class Project {
   @Prop({ required: true, ref: 'Company' })
@@ -42,6 +51,20 @@ export class Project {
 
   @Prop({ type: Number, default: 500 })
   locationRadiusMeters?: number;
+
+  @Prop({
+    type: {
+      _id: false,
+      enabled: { type: Boolean, default: false },
+      workDayStartTime: { type: String, default: '07:00' },
+      workDayEndTime: { type: String, default: '16:00' },
+      startGraceMinutes: { type: Number, default: 20 },
+      endGraceMinutes: { type: Number, default: 20 },
+      timezone: { type: String, default: 'Europe/Oslo' },
+    },
+    default: undefined,
+  })
+  shiftSchedule?: ProjectShiftSchedule;
 
   @Prop()
   contractNumber: string;

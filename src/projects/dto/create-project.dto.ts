@@ -6,8 +6,10 @@ import {
   IsArray,
   IsDateString,
   IsNumber,
+  ValidateNested,
 } from 'class-validator';
-import { Transform, Expose } from 'class-transformer';
+import { Transform, Expose, Type } from 'class-transformer';
+import { ShiftScheduleDto } from './shift-schedule.dto';
 
 const parseArrayField = (value: unknown) => {
   if (value === undefined || value === null || value === '') {
@@ -37,6 +39,26 @@ const parseOptionalNumberField = (value: unknown) => {
 
   const parsedValue = Number(value);
   return Number.isNaN(parsedValue) ? value : parsedValue;
+};
+
+const parseObjectField = (value: unknown) => {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  if (typeof value === 'object') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return undefined;
+    }
+  }
+
+  return value;
 };
 
 export class CreateProjectDto {
@@ -96,6 +118,12 @@ export class CreateProjectDto {
   @IsNumber()
   @IsOptional()
   locationRadiusMeters?: number;
+
+  @Transform(({ value }) => parseObjectField(value))
+  @ValidateNested()
+  @Type(() => ShiftScheduleDto)
+  @IsOptional()
+  shiftSchedule?: ShiftScheduleDto;
 
   @IsString()
   @IsOptional()
