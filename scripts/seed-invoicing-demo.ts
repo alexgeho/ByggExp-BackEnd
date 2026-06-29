@@ -153,11 +153,34 @@ async function bootstrap() {
       seedTag: String,
     }, { timestamps: true, strict: false });
 
+    const offerSchema = new mongoose.Schema({
+      companyId: { type: String, ref: 'Company', required: true },
+      createdByUserId: { type: String, ref: 'User', required: true },
+      offerNumber: Number,
+      companyName: String,
+      email: String,
+      date: String,
+      validUntil: String,
+      subtitle: String,
+      priceText: String,
+      description: String,
+      clarifications: String,
+      contactPersons: { type: Array, default: [] },
+      logoUrl: { type: String, default: null },
+      items: { type: Array, default: [] },
+      subtotal: Number,
+      vat: Number,
+      total: Number,
+      status: String,
+      seedTag: String,
+    }, { timestamps: true, strict: false });
+
     const Company = mongoose.models.Company || mongoose.model('Company', companySchema);
     const User = mongoose.models.User || mongoose.model('User', userSchema);
     const Client = mongoose.models.Client || mongoose.model('Client', clientSchema);
     const Article = mongoose.models.Article || mongoose.model('Article', articleSchema);
     const Invoice = mongoose.models.Invoice || mongoose.model('Invoice', invoiceSchema);
+    const Offer = mongoose.models.Offer || mongoose.model('Offer', offerSchema);
 
     const creator =
       (await User.findOne({ role: 'companyAdmin', companyId: { $nin: [null, ''] } }).exec())
@@ -179,6 +202,7 @@ async function bootstrap() {
       Client.deleteMany({ companyId, seedTag: DEMO_TAG }),
       Article.deleteMany({ companyId, seedTag: DEMO_TAG }),
       Invoice.deleteMany({ companyId, seedTag: DEMO_TAG }),
+      Offer.deleteMany({ companyId, seedTag: DEMO_TAG }),
     ]);
 
     const clients = await Client.insertMany([
@@ -333,13 +357,79 @@ async function bootstrap() {
       },
     ];
 
-    await Invoice.insertMany(invoices);
+    const offers = [
+      {
+        companyId,
+        createdByUserId,
+        seedTag: DEMO_TAG,
+        offerNumber: 1,
+        companyName: clients[0].companyName,
+        email: clients[0].email,
+        date: today(),
+        validUntil: addDays(20),
+        subtitle: 'Grundarbete för mindre projekt',
+        priceText: `${minimalTotals.total.toLocaleString('sv-SE')} kr inkl. moms`,
+        description: [
+          'Vi erbjuder utförande av grundarbete enligt genomgång på plats.',
+          'Arbetet inkluderar planering, etablering och utförande med en demo-rad som motsvarar den minimala fakturan.',
+        ].join('\n\n'),
+        clarifications: [
+          'Priset baseras på tillgänglighet enligt överenskommen tidsplan.',
+          'Eventuella tillkommande arbeten hanteras efter skriftligt godkännande.',
+        ].join('\n'),
+        contactPersons: [
+          { role: 'Projektledare', name: creator.name || 'Demo Admin' },
+          { role: 'Kundkontakt', name: clients[0].contactPerson },
+        ],
+        items: minimalItems,
+        subtotal: minimalTotals.subtotal,
+        vat: minimalTotals.vat,
+        total: minimalTotals.total,
+        status: 'draft',
+      },
+      {
+        companyId,
+        createdByUserId,
+        seedTag: DEMO_TAG,
+        offerNumber: 2,
+        companyName: clients[1].companyName,
+        email: clients[1].email,
+        date: today(),
+        validUntil: addDays(30),
+        subtitle: 'Entreprenadoffert med material och logistik',
+        priceText: `${largeTotals.total.toLocaleString('sv-SE')} kr inkl. moms`,
+        description: [
+          'Offerten omfattar ett större entreprenadupplägg med arbete, material och logistik.',
+          'Innehållet speglar den stora demo-fakturan och är avsett för att testa längre offerttexter i adminflödet.',
+        ].join('\n\n'),
+        clarifications: [
+          'Leverans sker enligt överenskommen projektplan.',
+          'Offerten gäller för angiven omfattning och förutsätter fri åtkomst till arbetsområdet.',
+          'Ändringar i mängder, material eller tidsplan kan påverka priset.',
+        ].join('\n'),
+        contactPersons: [
+          { role: 'Projektledare', name: creator.name || 'Demo Admin' },
+          { role: 'Beställare', name: clients[1].contactPerson },
+        ],
+        items: largeItems,
+        subtotal: largeTotals.subtotal,
+        vat: largeTotals.vat,
+        total: largeTotals.total,
+        status: 'sent',
+      },
+    ];
+
+    await Promise.all([
+      Invoice.insertMany(invoices),
+      Offer.insertMany(offers),
+    ]);
 
     logger.log(`Company: ${company.name} (${companyId})`);
     logger.log(`Created by user: ${creator.email}`);
     logger.log(`Clients: ${clients.length}`);
     logger.log(`Articles: ${articles.length}`);
     logger.log(`Invoices: ${invoices.length} (minimal #1, multi-page #2 with ${largeItems.length} rows)`);
+    logger.log(`Offers: ${offers.length} (matching invoice demo clients #1 and #2)`);
     logger.log('Done. Re-run safely: existing demo seed data is replaced.');
 
     await mongoose.disconnect();
