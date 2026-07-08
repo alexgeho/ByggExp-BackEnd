@@ -14,6 +14,7 @@ async function bootstrap() {
   const avatarUploadsDir = join(process.cwd(), 'uploads', 'user-avatars');
   const userDocumentsDir = join(process.cwd(), 'uploads', 'user-documents');
   const toolPhotosDir = join(process.cwd(), 'uploads', 'tool-photos');
+  const bugReportsDir = join(process.cwd(), 'uploads', 'bug-reports');
 
   if (!existsSync(uploadsDir)) {
     mkdirSync(uploadsDir, { recursive: true });
@@ -37,6 +38,10 @@ async function bootstrap() {
 
   if (!existsSync(toolPhotosDir)) {
     mkdirSync(toolPhotosDir, { recursive: true });
+  }
+
+  if (!existsSync(bugReportsDir)) {
+    mkdirSync(bugReportsDir, { recursive: true });
   }
 
   const logger = new Logger('Bootstrap');
