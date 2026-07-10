@@ -8,6 +8,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { UserRole } from '../users/schemas/user.schema';
 import { CreateBugReportDto } from './dto/create-bug-report.dto';
+import { UpdateBugReportDto } from './dto/update-bug-report.dto';
 import {
   BugReport,
   BugReportAttachment,
@@ -73,6 +74,59 @@ export class BugReportsService {
     status: BugReportStatus,
     user: AuthUser,
   ): Promise<BugReportDocument> {
+    const bugReport = await this.findManageableById(id, user);
+    bugReport.status = status;
+    await bugReport.save();
+
+    return bugReport;
+  }
+
+  async update(
+    id: string,
+    dto: UpdateBugReportDto,
+    user: AuthUser,
+    attachment?: BugReportAttachment | null,
+  ): Promise<BugReportDocument> {
+    const bugReport = await this.findManageableById(id, user);
+    const message =
+      dto.message !== undefined ? dto.message.trim() : bugReport.message;
+    let nextAttachment = bugReport.attachment ?? null;
+
+    if (dto.removeAttachment) {
+      nextAttachment = null;
+    }
+
+    if (attachment) {
+      nextAttachment = attachment;
+    }
+
+    if (!message && !nextAttachment) {
+      throw new BadRequestException('Add a message or attach an image');
+    }
+
+    bugReport.message = message;
+
+    if (dto.status !== undefined) {
+      bugReport.status = dto.status;
+    }
+
+    bugReport.attachment = nextAttachment;
+    await bugReport.save();
+
+    return bugReport;
+  }
+
+  async remove(id: string, user: AuthUser): Promise<BugReportDocument> {
+    const bugReport = await this.findManageableById(id, user);
+    await bugReport.deleteOne();
+
+    return bugReport;
+  }
+
+  private async findManageableById(
+    id: string,
+    user: AuthUser,
+  ): Promise<BugReportDocument> {
     const bugReport = await this.bugReportModel.findById(id).exec();
 
     if (!bugReport) {
@@ -80,8 +134,6 @@ export class BugReportsService {
     }
 
     this.assertCanManage(bugReport, user);
-    bugReport.status = status;
-    await bugReport.save();
 
     return bugReport;
   }

@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Post,
+  Put,
   Request,
   UploadedFile,
   UseGuards,
@@ -19,6 +21,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../users/schemas/user.schema';
 import { BugReportsService } from './bug-reports.service';
 import { CreateBugReportDto } from './dto/create-bug-report.dto';
+import { UpdateBugReportDto } from './dto/update-bug-report.dto';
 import { UpdateBugReportStatusDto } from './dto/update-bug-report-status.dto';
 
 const bugReportAttachmentStorage = diskStorage({
@@ -91,5 +94,34 @@ export class BugReportsController {
     @Request() req,
   ) {
     return this.bugReportsService.updateStatus(id, dto.status, req.user);
+  }
+
+  @Put(':id')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @UseInterceptors(
+    FileInterceptor('attachment', { storage: bugReportAttachmentStorage }),
+  )
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateBugReportDto,
+    @Request() req,
+    @UploadedFile() file?: UploadedBugReportFile,
+  ) {
+    const attachment = file
+      ? {
+          name: file.originalname,
+          url: `/uploads/bug-reports/${file.filename}`,
+          mimeType: file.mimetype,
+          size: file.size,
+        }
+      : null;
+
+    return this.bugReportsService.update(id, dto, req.user, attachment);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  remove(@Param('id') id: string, @Request() req) {
+    return this.bugReportsService.remove(id, req.user);
   }
 }
