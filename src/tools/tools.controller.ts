@@ -12,7 +12,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -41,8 +41,21 @@ type UploadedPhotoFile = {
 
 const MAX_TOOL_PHOTOS = 20;
 
+const toolPhotoUploadInterceptor = FileFieldsInterceptor(
+  [
+    { name: 'photos', maxCount: MAX_TOOL_PHOTOS },
+    { name: 'photo', maxCount: 1 },
+  ],
+  { storage: toolPhotoStorage },
+);
+
 const mapUploadedPhotos = (files: UploadedPhotoFile[] = []) =>
   files.map((file) => `/uploads/tool-photos/${file.filename}`);
+
+const collectUploadedPhotos = (files?: {
+  photos?: UploadedPhotoFile[];
+  photo?: UploadedPhotoFile[];
+}) => [...(files?.photos ?? []), ...(files?.photo ?? [])];
 
 const normalizeToolPhotoPayload = (
   dto: { photoUrl?: string; photoUrls?: string[] },
@@ -82,26 +95,26 @@ export class ToolsController {
 
   @Post()
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  @UseInterceptors(FilesInterceptor('photos', MAX_TOOL_PHOTOS, { storage: toolPhotoStorage }))
+  @UseInterceptors(toolPhotoUploadInterceptor)
   create(
     @Request() req,
     @Body() createToolDto: CreateToolDto,
-    @UploadedFiles() files?: UploadedPhotoFile[],
+    @UploadedFiles() files?: { photos?: UploadedPhotoFile[]; photo?: UploadedPhotoFile[] },
   ) {
-    normalizeToolPhotoPayload(createToolDto, files);
+    normalizeToolPhotoPayload(createToolDto, collectUploadedPhotos(files));
 
     return this.toolsService.create(createToolDto, req.user);
   }
 
   @Put(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  @UseInterceptors(FilesInterceptor('photos', MAX_TOOL_PHOTOS, { storage: toolPhotoStorage }))
+  @UseInterceptors(toolPhotoUploadInterceptor)
   update(
     @Param('id') id: string,
     @Body() updateToolDto: UpdateToolDto,
-    @UploadedFiles() files?: UploadedPhotoFile[],
+    @UploadedFiles() files?: { photos?: UploadedPhotoFile[]; photo?: UploadedPhotoFile[] },
   ) {
-    normalizeToolPhotoPayload(updateToolDto, files);
+    normalizeToolPhotoPayload(updateToolDto, collectUploadedPhotos(files));
 
     return this.toolsService.update(id, updateToolDto);
   }
