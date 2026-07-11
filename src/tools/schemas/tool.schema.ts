@@ -11,6 +11,9 @@ export class Tool {
   @Prop({ default: '' })
   photoUrl: string;
 
+  @Prop({ type: [String], default: [] })
+  photoUrls: string[];
+
   @Prop({ default: '' })
   notes: string;
 

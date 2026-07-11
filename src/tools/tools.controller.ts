@@ -7,12 +7,12 @@ import {
   Post,
   Put,
   Request,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -37,6 +37,24 @@ const toolPhotoStorage = diskStorage({
 
 type UploadedPhotoFile = {
   filename: string;
+};
+
+const MAX_TOOL_PHOTOS = 20;
+
+const mapUploadedPhotos = (files: UploadedPhotoFile[] = []) =>
+  files.map((file) => `/uploads/tool-photos/${file.filename}`);
+
+const normalizeToolPhotoPayload = (
+  dto: { photoUrl?: string; photoUrls?: string[] },
+  files: UploadedPhotoFile[] = [],
+) => {
+  const uploadedUrls = mapUploadedPhotos(files);
+  const existingUrls = Array.isArray(dto.photoUrls) ? dto.photoUrls.filter(Boolean) : [];
+  const legacyUrl = dto.photoUrl && !existingUrls.includes(dto.photoUrl) ? [dto.photoUrl] : [];
+  const photoUrls = [...existingUrls, ...legacyUrl, ...uploadedUrls];
+
+  dto.photoUrls = photoUrls;
+  dto.photoUrl = photoUrls[0] || '';
 };
 
 @Controller('tools')
@@ -64,30 +82,26 @@ export class ToolsController {
 
   @Post()
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  @UseInterceptors(FileInterceptor('photo', { storage: toolPhotoStorage }))
+  @UseInterceptors(FilesInterceptor('photos', MAX_TOOL_PHOTOS, { storage: toolPhotoStorage }))
   create(
     @Request() req,
     @Body() createToolDto: CreateToolDto,
-    @UploadedFile() file?: UploadedPhotoFile,
+    @UploadedFiles() files?: UploadedPhotoFile[],
   ) {
-    if (file) {
-      createToolDto.photoUrl = `/uploads/tool-photos/${file.filename}`;
-    }
+    normalizeToolPhotoPayload(createToolDto, files);
 
     return this.toolsService.create(createToolDto, req.user);
   }
 
   @Put(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  @UseInterceptors(FileInterceptor('photo', { storage: toolPhotoStorage }))
+  @UseInterceptors(FilesInterceptor('photos', MAX_TOOL_PHOTOS, { storage: toolPhotoStorage }))
   update(
     @Param('id') id: string,
     @Body() updateToolDto: UpdateToolDto,
-    @UploadedFile() file?: UploadedPhotoFile,
+    @UploadedFiles() files?: UploadedPhotoFile[],
   ) {
-    if (file) {
-      updateToolDto.photoUrl = `/uploads/tool-photos/${file.filename}`;
-    }
+    normalizeToolPhotoPayload(updateToolDto, files);
 
     return this.toolsService.update(id, updateToolDto);
   }

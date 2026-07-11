@@ -34,6 +34,12 @@ export class UpdateToolDto {
   @IsOptional()
   photoUrl?: string;
 
+  @Transform(({ value }) => parseArrayField(value))
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  photoUrls?: string[];
+
   @IsString()
   @IsOptional()
   notes?: string;

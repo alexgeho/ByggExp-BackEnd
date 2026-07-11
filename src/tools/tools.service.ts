@@ -30,6 +30,8 @@ export class ToolsService {
       projectIds: createToolDto.projectIds || [],
     };
 
+    this.syncPhotoFields(payload);
+
     if (user?.role === UserRole.CompanyAdmin && user.companyId) {
       payload.companyId = user.companyId;
     }
@@ -107,6 +109,7 @@ export class ToolsService {
     }
 
     Object.assign(tool, updateToolDto);
+    this.syncPhotoFields(tool);
     await tool.save();
 
     return tool;
@@ -156,5 +159,25 @@ export class ToolsService {
     }
 
     return {};
+  }
+
+  private syncPhotoFields(payload: { photoUrl?: string; photoUrls?: string[] }) {
+    const photoUrls = Array.isArray(payload.photoUrls)
+      ? payload.photoUrls.filter(Boolean)
+      : [];
+
+    if (photoUrls.length) {
+      payload.photoUrls = photoUrls;
+      payload.photoUrl = photoUrls[0];
+      return;
+    }
+
+    if (payload.photoUrl) {
+      payload.photoUrls = [payload.photoUrl];
+      return;
+    }
+
+    payload.photoUrls = [];
+    payload.photoUrl = '';
   }
 }
