@@ -225,6 +225,7 @@ export class ProjectsController {
   uploadDocuments(
     @Param('id') id: string,
     @UploadedFiles() files: UploadedDocumentFile[],
+    @Request() req,
   ): Promise<Project> {
     const documents = (files || []).map((file) => ({
       name: file.originalname,
@@ -234,7 +235,7 @@ export class ProjectsController {
       uploadedAt: new Date(),
     }));
 
-    return this.projectsService.uploadDocuments(id, documents);
+    return this.projectsService.uploadDocuments(id, documents, req.user.userId);
   }
 
   @Put(':id')

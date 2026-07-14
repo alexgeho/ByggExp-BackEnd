@@ -9,6 +9,8 @@ export class ProjectDocumentFile {
   mimeType?: string;
   size?: number;
   uploadedAt?: Date;
+  uploadedBy?: string;
+  uploadedByName?: string;
 }
 
 export class ProjectShiftSchedule {

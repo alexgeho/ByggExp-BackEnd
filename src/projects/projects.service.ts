@@ -460,14 +460,36 @@ export class ProjectsService {
 
   async uploadDocuments(
     id: string,
-    documents: Array<string | { name: string; url: string; mimeType?: string; size?: number; uploadedAt?: Date }>,
+    documents: Array<string | { name: string; url: string; mimeType?: string; size?: number; uploadedAt?: Date; uploadedBy?: string; uploadedByName?: string }>,
+    actorUserId?: string,
   ): Promise<Project> {
     const existingProject = await this.findOne(id);
+    let uploadedByName: string | undefined;
+
+    if (actorUserId) {
+      const actor = await this.usersService.findOne(actorUserId);
+      uploadedByName = actor?.name || actor?.email;
+    }
+
+    const enrichedDocuments = (documents || []).map((document) => (
+      typeof document === 'string'
+        ? document
+        : {
+          ...document,
+          ...(actorUserId
+            ? {
+              uploadedBy: actorUserId,
+              uploadedByName: document.uploadedByName || uploadedByName,
+            }
+            : {}),
+        }
+    ));
+
     const updatedProject = await this.projectModel
       .findByIdAndUpdate(
         id,
         {
-          documents: [...(existingProject.documents || []), ...(documents || [])],
+          documents: [...(existingProject.documents || []), ...enrichedDocuments],
         },
         { new: true },
       )
