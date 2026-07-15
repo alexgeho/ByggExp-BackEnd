@@ -20,6 +20,7 @@ import { ClientsModule } from './clients/clients.module';
 import { ArticlesModule } from './articles/articles.module';
 import { OffersModule } from './offers/offers.module';
 import { BugReportsModule } from './bug-reports/bug-reports.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { BugReportsModule } from './bug-reports/bug-reports.module';
     ClientsModule,
     ArticlesModule,
     BugReportsModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -2,6 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { Transporter } from 'nodemailer';
 
+type DemoRequestPayload = {
+  name: string;
+  email: string;
+  phone: string;
+};
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -48,6 +54,26 @@ export class MailService {
     return `http://localhost:${port}`;
   }
 
+  private getDemoRequestRecipients(): string[] {
+    return (
+      this.configService.get<string>('DEMO_REQUEST_RECIPIENTS') ||
+      this.configService.get<string>('DEMO_REQUEST_RECIPIENT') ||
+      '870717ag@gmail.com'
+    )
+      .split(',')
+      .map((recipient) => recipient.trim())
+      .filter(Boolean);
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   async sendUserInviteEmail(
     email: string,
     name: string,
@@ -91,6 +117,44 @@ export class MailService {
     await this.transporter.sendMail({
       from: this.getFromAddress(),
       to: email,
+      subject,
+      text,
+      html,
+    });
+  }
+
+  async sendDemoRequestEmail(payload: DemoRequestPayload): Promise<void> {
+    const recipients = this.getDemoRequestRecipients();
+    const subject = 'New demo request from byggexp.se/ru';
+    const text = [
+      'New demo request submitted from byggexp.se/ru.',
+      '',
+      `Name: ${payload.name}`,
+      `Email: ${payload.email}`,
+      `Phone: ${payload.phone}`,
+    ].join('\n');
+    const html = `
+      <p>New demo request submitted from <strong>byggexp.se/ru</strong>.</p>
+      <p><strong>Name:</strong> ${this.escapeHtml(payload.name)}</p>
+      <p><strong>Email:</strong> ${this.escapeHtml(payload.email)}</p>
+      <p><strong>Phone:</strong> ${this.escapeHtml(payload.phone)}</p>
+    `;
+
+    if (!this.transporter || recipients.length === 0) {
+      const reason = !this.transporter
+        ? 'SMTP is not configured'
+        : 'DEMO_REQUEST_RECIPIENTS is not configured';
+      this.logger.warn(`${reason}. Demo request email will be logged only.`);
+      this.logger.log(
+        `Demo request: ${payload.name} <${payload.email}> | phone: ${payload.phone}`,
+      );
+      return;
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to: recipients,
+      replyTo: payload.email,
       subject,
       text,
       html,
