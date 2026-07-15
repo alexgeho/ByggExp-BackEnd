@@ -125,9 +125,9 @@ export class MailService {
 
   async sendDemoRequestEmail(payload: DemoRequestPayload): Promise<void> {
     const recipients = this.getDemoRequestRecipients();
-    const subject = 'New demo request from byggexp.se/ru';
+    const subject = 'New demo request from byggexp.se';
     const text = [
-      'New demo request submitted from byggexp.se/ru.',
+      'New demo request submitted from byggexp.se/',
       '',
       `Name: ${payload.name}`,
       `Email: ${payload.email}`,
