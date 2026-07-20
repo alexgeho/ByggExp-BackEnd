@@ -7,7 +7,11 @@ export class DemoRequestsService {
   constructor(private readonly mailService: MailService) {}
 
   async create(dto: CreateDemoRequestDto): Promise<{ success: true }> {
-    await this.mailService.sendDemoRequestEmail(dto.name, dto.email, dto.phone);
+    await this.mailService.sendDemoRequestEmail({
+      name: dto.name,
+      email: dto.email,
+      phone: dto.phone,
+    });
 
     return { success: true };
   }
