@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -24,6 +25,11 @@ import { CreateBugReportDto } from './dto/create-bug-report.dto';
 import { UpdateBugReportDto } from './dto/update-bug-report.dto';
 import { UpdateBugReportStatusDto } from './dto/update-bug-report-status.dto';
 
+const MAX_BUG_REPORT_ATTACHMENT_BYTES = 100 * 1024 * 1024;
+
+const isAllowedBugReportMimeType = (mimeType?: string) =>
+  Boolean(mimeType && (mimeType.startsWith('image/') || mimeType.startsWith('video/')));
+
 const bugReportAttachmentStorage = diskStorage({
   destination: './uploads/bug-reports',
   filename: (_req, file, callback) => {
@@ -34,6 +40,22 @@ const bugReportAttachmentStorage = diskStorage({
         .slice(0, 80) || 'bug-report';
 
     callback(null, `${Date.now()}-${safeBaseName}${extname(file.originalname)}`);
+  },
+});
+
+const bugReportAttachmentInterceptor = FileInterceptor('attachment', {
+  storage: bugReportAttachmentStorage,
+  limits: { fileSize: MAX_BUG_REPORT_ATTACHMENT_BYTES },
+  fileFilter: (_req, file, callback) => {
+    if (isAllowedBugReportMimeType(file.mimetype)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(
+      new BadRequestException('Only image or video attachments are allowed') as any,
+      false,
+    );
   },
 });
 
@@ -56,9 +78,7 @@ export class BugReportsController {
     UserRole.ProjectAdmin,
     UserRole.Worker,
   )
-  @UseInterceptors(
-    FileInterceptor('attachment', { storage: bugReportAttachmentStorage }),
-  )
+  @UseInterceptors(bugReportAttachmentInterceptor)
   create(
     @Request() req,
     @Body() createBugReportDto: CreateBugReportDto,
@@ -98,9 +118,7 @@ export class BugReportsController {
 
   @Put(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  @UseInterceptors(
-    FileInterceptor('attachment', { storage: bugReportAttachmentStorage }),
-  )
+  @UseInterceptors(bugReportAttachmentInterceptor)
   update(
     @Param('id') id: string,
     @Body() dto: UpdateBugReportDto,

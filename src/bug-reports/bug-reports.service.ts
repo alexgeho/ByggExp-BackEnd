@@ -38,7 +38,7 @@ export class BugReportsService {
     const message = dto.message?.trim() || '';
 
     if (!message && !attachment) {
-      throw new BadRequestException('Add a message or attach an image');
+      throw new BadRequestException('Add a message or attach an image or video');
     }
 
     const bugReport = new this.bugReportModel({
@@ -101,7 +101,7 @@ export class BugReportsService {
     }
 
     if (!message && !nextAttachment) {
-      throw new BadRequestException('Add a message or attach an image');
+      throw new BadRequestException('Add a message or attach an image or video');
     }
 
     bugReport.message = message;
