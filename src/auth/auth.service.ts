@@ -97,9 +97,14 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
-    const user = await this.usersService.findByEmail(email);
+    const normalizedEmail = email?.trim().toLowerCase();
+    const normalizedPassword = password?.trim();
+    const user = await this.usersService.findByEmail(normalizedEmail);
 
-    const isMatch = user && await this.comparePasswords(password, user.password);
+    const isMatch =
+      user &&
+      normalizedPassword &&
+      (await this.comparePasswords(normalizedPassword, user.password));
 
     if (!user || !isMatch) {
       throw new UnauthorizedException('Invalid credentials');

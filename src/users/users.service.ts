@@ -174,6 +174,7 @@ export class UsersService {
   ) {
     return {
       ...createUserDto,
+      email: createUserDto.email?.trim().toLowerCase(),
       name: createUserDto.name?.trim() || createUserDto.email.split('@')[0] || '',
       accountStatus: createUserDto.accountStatus ?? UserAccountStatus.Active,
       ...(createUserDto.phoneAreaCode != null ? { phoneAreaCode: createUserDto.phoneAreaCode } : {}),
@@ -576,8 +577,26 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<UserDocument | null> {
+    const normalizedEmail = email?.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      return null;
+    }
+
+    // Exact lowercase match first, then case-insensitive for legacy records.
+    const exactMatch = await this.userModel
+      .findOne({ email: normalizedEmail })
+      .select('+password')
+      .exec();
+
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    const escapedEmail = normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
     return this.userModel
-      .findOne({ email })
+      .findOne({ email: { $regex: `^${escapedEmail}$`, $options: 'i' } })
       .select('+password')
       .exec();
   }
