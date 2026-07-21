@@ -53,8 +53,10 @@ export class AuthController {
 
     try {
       const result = await this.authService.verifyEmail(token.trim());
-
-      const magicUrl = `byggexp://auth/magic?code=${encodeURIComponent(result.magicLoginCode)}`;
+      const encodedCode = encodeURIComponent(result.magicLoginCode);
+      const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
+      const androidIntentUrl =
+        `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end`;
 
       res
         .status(200)
@@ -64,13 +66,15 @@ export class AuthController {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="refresh" content="0;url=${magicUrl}" />
     <title>Email confirmed</title>
     <style>
       body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
       .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
       h1 { font-size: 24px; margin: 0 0 12px; }
       p { margin: 0 0 16px; line-height: 1.5; color: #5a6b7d; }
-      a.button { display: inline-block; background: #0785f4; color: #fff; text-decoration: none; padding: 14px 20px; border-radius: 999px; font-weight: 600; }
+      a.button { display: inline-block; background: #0785f4; color: #fff; text-decoration: none; padding: 14px 20px; border-radius: 999px; font-weight: 600; margin: 4px; }
+      .hint { font-size: 14px; margin-top: 8px; }
     </style>
   </head>
   <body>
@@ -78,11 +82,19 @@ export class AuthController {
       <h1>Email confirmed</h1>
       <p>${result.message}</p>
       <a class="button" href="${magicUrl}">Open ByggExp</a>
+      <a class="button" href="${androidIntentUrl}">Open on Android</a>
+      <p class="hint">If the app does not open, install ByggExp and tap the button again. You can also sign in with your email and temporary password.</p>
     </div>
     <script>
-      window.setTimeout(function () {
-        window.location.href = ${JSON.stringify(magicUrl)};
-      }, 300);
+      (function () {
+        var magicUrl = ${JSON.stringify(magicUrl)};
+        var androidIntentUrl = ${JSON.stringify(androidIntentUrl)};
+        var isAndroid = /Android/i.test(navigator.userAgent || '');
+        window.location.href = isAndroid ? androidIntentUrl : magicUrl;
+        window.setTimeout(function () {
+          window.location.href = magicUrl;
+        }, 400);
+      })();
     </script>
   </body>
 </html>`);

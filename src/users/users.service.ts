@@ -219,6 +219,23 @@ export class UsersService {
     return savedUser;
   }
 
+  async activateInvitedUser(userId: string): Promise<UserDocument> {
+    const user = await this.userModel.findById(userId).exec();
+
+    if (!user) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+
+    if (user.accountStatus === UserAccountStatus.WaitingForApproval) {
+      user.accountStatus = UserAccountStatus.Active;
+      user.emailVerificationToken = null;
+      user.emailVerificationExpiresAt = null;
+      await user.save();
+    }
+
+    return user;
+  }
+
   async verifyEmailByToken(token: string): Promise<{
     user: UserDocument;
     magicLoginCode: string;

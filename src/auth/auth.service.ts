@@ -105,10 +105,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Invite users start as waiting_for_approval. Allow email+password login
+    // (admin/app) and activate the account on first successful password sign-in.
     if (user.accountStatus === UserAccountStatus.WaitingForApproval) {
-      throw new UnauthorizedException(
-        'Please confirm your email before logging in.',
-      );
+      await this.usersService.activateInvitedUser(user._id.toString());
+      user.accountStatus = UserAccountStatus.Active;
     }
 
     try {
