@@ -148,7 +148,15 @@ export class UsersService {
     },
   ): Promise<UserDocument> {
     const createdUser = new this.userModel(this.normalizeCreateUserInput(createUserDto));
-    return createdUser.save();
+    const savedUser = await createdUser.save();
+
+    await this.syncUserProjectAssignments(
+      savedUser._id.toString(),
+      savedUser.role,
+      savedUser.projectIds,
+    );
+
+    return savedUser;
   }
 
   private generateInvitePassword(): string {
@@ -182,6 +190,49 @@ export class UsersService {
     };
   }
 
+  private normalizeProjectIds(projectIds?: string[]): string[] {
+    return [...new Set((projectIds || []).filter(Boolean).map((projectId) => String(projectId)))];
+  }
+
+  private async syncUserProjectAssignments(
+    userId: string,
+    role: UserRole,
+    projectIds?: string[],
+  ): Promise<void> {
+    const normalizedUserId = String(userId);
+    const normalizedProjectIds = this.normalizeProjectIds(projectIds);
+
+    const desiredWorkerProjectIds =
+      role === UserRole.Worker ? normalizedProjectIds : [];
+    const desiredProjectAdminIds =
+      role === UserRole.ProjectAdmin ? normalizedProjectIds : [];
+
+    await Promise.all([
+      this.projectModel.updateMany(
+        { workers: normalizedUserId, _id: { $nin: desiredWorkerProjectIds } },
+        { $pull: { workers: normalizedUserId } },
+      ),
+      this.projectModel.updateMany(
+        { projectAdmins: normalizedUserId, _id: { $nin: desiredProjectAdminIds } },
+        { $pull: { projectAdmins: normalizedUserId } },
+      ),
+    ]);
+
+    if (desiredWorkerProjectIds.length) {
+      await this.projectModel.updateMany(
+        { _id: { $in: desiredWorkerProjectIds } },
+        { $addToSet: { workers: normalizedUserId } },
+      );
+    }
+
+    if (desiredProjectAdminIds.length) {
+      await this.projectModel.updateMany(
+        { _id: { $in: desiredProjectAdminIds } },
+        { $addToSet: { projectAdmins: normalizedUserId } },
+      );
+    }
+  }
+
   async createUserPendingApproval(
     createUserDto: CreateUserDto & { role: UserRole; companyId?: string | null },
   ): Promise<UserDocument> {
@@ -201,6 +252,12 @@ export class UsersService {
     });
 
     const savedUser = await createdUser.save();
+
+    await this.syncUserProjectAssignments(
+      savedUser._id.toString(),
+      savedUser.role,
+      savedUser.projectIds,
+    );
 
     try {
       await this.mailService.sendUserInviteEmail(
@@ -559,12 +616,30 @@ export class UsersService {
   }
 
   async update(id: string, updateUserDto: Partial<CreateUserDto>): Promise<User> {
+    const normalizedUpdate = {
+      ...updateUserDto,
+      ...(updateUserDto.email != null
+        ? { email: updateUserDto.email.trim().toLowerCase() }
+        : {}),
+      ...(updateUserDto.name != null ? { name: updateUserDto.name.trim() } : {}),
+      ...(updateUserDto.projectIds != null
+        ? { projectIds: this.normalizeProjectIds(updateUserDto.projectIds) }
+        : {}),
+    };
+
     const updatedUser = await this.userModel
-      .findByIdAndUpdate(id, updateUserDto, { new: true })
+      .findByIdAndUpdate(id, normalizedUpdate, { new: true })
       .exec();
     if (!updatedUser) {
       throw new NotFoundException(`User with ID "${id}" not found`);
     }
+
+    await this.syncUserProjectAssignments(
+      updatedUser._id.toString(),
+      updatedUser.role,
+      updatedUser.projectIds,
+    );
+
     return updatedUser;
   }
 

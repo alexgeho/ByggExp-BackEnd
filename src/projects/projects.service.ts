@@ -240,12 +240,18 @@ export class ProjectsService {
   }
 
   async findAllByUser(userId: string): Promise<Project[]> {
+    const user = await this.usersService.findOne(userId);
+    const userProjectIds = Array.isArray(user.projectIds)
+      ? user.projectIds.filter(Boolean).map((projectId) => String(projectId))
+      : [];
+
     return this.projectModel.find({
       $or: [
         { ownerId: userId },
         { projectManagerId: userId },
         { projectAdmins: userId },
         { workers: userId },
+        ...(userProjectIds.length ? [{ _id: { $in: userProjectIds } }] : []),
       ],
     }).exec();
   }
