@@ -76,6 +76,9 @@ export class Client {
   @Prop({ default: '' })
   paymentTerms: string;
 
+  @Prop({ default: '0' })
+  discount: string;
+
   @Prop({ type: Boolean, default: false })
   reverseVAT: boolean;
 }

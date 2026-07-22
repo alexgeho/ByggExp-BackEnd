@@ -92,6 +92,10 @@ export class CreateClientDto {
   paymentTerms?: string;
 
   @IsOptional()
+  @IsString()
+  discount?: string;
+
+  @IsOptional()
   @IsBoolean()
   reverseVAT?: boolean;
 }
