@@ -1,4 +1,4 @@
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 const parseArrayField = (value: unknown) => {
@@ -43,6 +43,10 @@ export class UpdateToolDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsEnum(['available', 'broken', 'in_repair', 'occupied'])
+  @IsOptional()
+  status?: string;
 
   @Transform(({ value }) => parseArrayField(value))
   @IsArray()

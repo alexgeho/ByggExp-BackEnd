@@ -17,6 +17,12 @@ export class Tool {
   @Prop({ default: '' })
   notes: string;
 
+  @Prop({
+    enum: ['available', 'broken', 'in_repair', 'occupied'],
+    default: 'available',
+  })
+  status: string;
+
   @Prop({ type: [String], default: [] })
   workerIds: string[];
 
