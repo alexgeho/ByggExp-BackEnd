@@ -114,7 +114,15 @@ export class ToolsController {
     @Body() updateToolDto: UpdateToolDto,
     @UploadedFiles() files?: { photos?: UploadedPhotoFile[]; photo?: UploadedPhotoFile[] },
   ) {
-    normalizeToolPhotoPayload(updateToolDto, collectUploadedPhotos(files));
+    const uploadedFiles = collectUploadedPhotos(files);
+    const photoFieldsTouched =
+      updateToolDto.photoUrl !== undefined ||
+      updateToolDto.photoUrls !== undefined ||
+      uploadedFiles.length > 0;
+
+    if (photoFieldsTouched) {
+      normalizeToolPhotoPayload(updateToolDto, uploadedFiles);
+    }
 
     return this.toolsService.update(id, updateToolDto);
   }

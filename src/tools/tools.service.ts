@@ -108,7 +108,11 @@ export class ToolsService {
       throw new NotFoundException(`Tool with ID "${id}" not found`);
     }
 
-    Object.assign(tool, updateToolDto);
+    const definedUpdates = Object.fromEntries(
+      Object.entries(updateToolDto).filter(([, value]) => value !== undefined),
+    );
+
+    Object.assign(tool, definedUpdates);
     this.syncPhotoFields(tool);
     await tool.save();
 
