@@ -120,24 +120,34 @@ export class ShiftsService {
     }
 
     const now = new Date();
-    const createdShift = await new this.shiftModel({
-      workerId: user.userId,
-      projectId: dto.projectId,
-      projectNameSnapshot: project.name,
-      locationSnapshot: project.location || '',
-      shiftDate,
-      startedAt: now,
-      lastResumedAt: now,
-      status: ShiftStatus.Active,
-      durationMs: 0,
-      segments: [
-        {
-          startedAt: now,
-          durationMs: 0,
-        },
-      ],
-      photos: [],
-    }).save();
+    let createdShift: ShiftDocument;
+
+    try {
+      createdShift = await new this.shiftModel({
+        workerId: user.userId,
+        projectId: dto.projectId,
+        projectNameSnapshot: project.name,
+        locationSnapshot: project.location || '',
+        shiftDate,
+        startedAt: now,
+        lastResumedAt: now,
+        status: ShiftStatus.Active,
+        durationMs: 0,
+        segments: [
+          {
+            startedAt: now,
+            durationMs: 0,
+          },
+        ],
+        photos: [],
+      }).save();
+    } catch (err) {
+      if (err?.code === 11000) {
+        throw new BadRequestException('Pause the current shift before starting a new one.');
+      }
+
+      throw err;
+    }
 
     await this.usersService.setWorkingStatus(user.userId, {
       projectId: dto.projectId,

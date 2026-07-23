@@ -96,3 +96,11 @@ export class Shift {
 export const ShiftSchema = SchemaFactory.createForClass(Shift);
 
 ShiftSchema.index({ workerId: 1, shiftDate: 1, status: 1 });
+
+// Prevents two Active shift documents for the same worker when start() is
+// called twice concurrently (double-tap, network retry) — the application-level
+// findOne-then-create check in ShiftsService.start() is not race-safe on its own.
+ShiftSchema.index(
+  { workerId: 1 },
+  { unique: true, partialFilterExpression: { status: ShiftStatus.Active } },
+);
