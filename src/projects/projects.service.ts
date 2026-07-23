@@ -410,7 +410,10 @@ export class ProjectsService {
       .populate('projectManagerId', 'name email role avatarUrl')
       .populate('companyId', 'name email')
       .populate('projectAdmins', 'name email role avatarUrl')
-      .populate('workers', 'name email role profession avatarUrl')
+      .populate(
+        'workers',
+        'name email role profession avatarUrl workStatus workStatusProjectId workStatusUpdatedAt',
+      )
       .populate('tasks', 'taskTitle taskDescription startDate dueDate documents')
       .exec();
     if (!project) {
@@ -560,7 +563,7 @@ export class ProjectsService {
       })
       .populate({
         path: 'workers',
-        select: 'name email role profession avatarUrl',
+        select: 'name email role profession avatarUrl workStatus workStatusProjectId workStatusUpdatedAt',
       })
       .lean();
   }
