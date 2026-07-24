@@ -77,6 +77,18 @@ export class Project {
   @Prop({ type: Date })
   endDate: Date;
 
+  @Prop({ type: Number })
+  budget?: number;
+
+  @Prop({ type: Number })
+  plannedHours?: number;
+
+  @Prop({ type: Number })
+  plannedMaterialsCost?: number;
+
+  @Prop({ type: Number })
+  spentMaterialsCost?: number;
+
   @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
   documents: Array<string | ProjectDocumentFile>;
 

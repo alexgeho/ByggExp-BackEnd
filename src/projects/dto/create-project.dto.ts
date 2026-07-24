@@ -137,6 +137,26 @@ export class CreateProjectDto {
   @IsOptional()
   endDate?: Date;
 
+  @Transform(({ value }) => parseOptionalNumberField(value))
+  @IsNumber()
+  @IsOptional()
+  budget?: number;
+
+  @Transform(({ value }) => parseOptionalNumberField(value))
+  @IsNumber()
+  @IsOptional()
+  plannedHours?: number;
+
+  @Transform(({ value }) => parseOptionalNumberField(value))
+  @IsNumber()
+  @IsOptional()
+  plannedMaterialsCost?: number;
+
+  @Transform(({ value }) => parseOptionalNumberField(value))
+  @IsNumber()
+  @IsOptional()
+  spentMaterialsCost?: number;
+
   @Transform(({ value }) => parseArrayField(value))
   @IsArray()
   @IsOptional()
