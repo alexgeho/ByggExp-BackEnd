@@ -84,6 +84,10 @@ export class CreateInvoiceDto {
 
   @IsOptional()
   @IsString()
+  projectId?: string | null;
+
+  @IsOptional()
+  @IsString()
   orderReference?: string;
 
   @IsOptional()
