@@ -3,8 +3,10 @@ import {
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Project, ProjectDocument } from './schemas/project.schema';
@@ -15,6 +17,9 @@ import { User, UserRole } from '../users/schemas/user.schema';
 
 @Injectable()
 export class ProjectsService {
+  private readonly logger = new Logger(ProjectsService.name);
+  private isReconcilingStatuses = false;
+
   private readonly geocoderHeaders = {
     Accept: 'application/json',
     'Accept-Language': 'en',
@@ -532,6 +537,35 @@ export class ProjectsService {
       throw new NotFoundException(`Project with ID "${id}" not found`);
     }
     return updatedProject;
+  }
+
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async reconcileProjectStatuses(): Promise<void> {
+    if (this.isReconcilingStatuses) {
+      return;
+    }
+
+    this.isReconcilingStatuses = true;
+
+    try {
+      const now = new Date();
+      const dueProjects = await this.projectModel
+        .find({ status: 'planning', beginningDate: { $lte: now } })
+        .exec();
+
+      for (const project of dueProjects) {
+        const nextStatus =
+          project.endDate && project.endDate < now ? 'completed' : 'in_progress';
+
+        await this.projectModel
+          .findByIdAndUpdate(project._id, { status: nextStatus })
+          .exec();
+      }
+    } catch (error) {
+      this.logger.error('Failed to reconcile project statuses', error);
+    } finally {
+      this.isReconcilingStatuses = false;
+    }
   }
 
   async remove(id: string): Promise<Project> {

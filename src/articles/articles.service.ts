@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -25,7 +24,8 @@ export class ArticlesService {
 
   async create(dto: CreateArticleDto, user: AuthUser): Promise<Article> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
-    const articleNumber = dto.articleNumber || await this.getNextArticleNumber(companyId);
+    const scopeFilter = companyId ? { companyId } : { createdByUserId: user.userId };
+    const articleNumber = dto.articleNumber || await this.getNextArticleNumber(scopeFilter);
 
     const article = new this.articleModel({
       ...dto,
@@ -82,8 +82,8 @@ export class ArticlesService {
     return article;
   }
 
-  async getNextArticleNumber(companyId: string): Promise<string> {
-    const articles = await this.articleModel.find({ companyId }).sort({ createdAt: -1 }).exec();
+  async getNextArticleNumber(filter: { companyId?: string; createdByUserId?: string }): Promise<string> {
+    const articles = await this.articleModel.find(filter).sort({ createdAt: -1 }).exec();
 
     if (!articles.length) {
       return '1';
@@ -105,17 +105,17 @@ export class ArticlesService {
     companyId?: string,
   ): Promise<{ nextNumber: string }> {
     const resolvedCompanyId = this.resolveCompanyId(companyId, user);
-    const nextNumber = await this.getNextArticleNumber(resolvedCompanyId);
+    const scopeFilter = resolvedCompanyId
+      ? { companyId: resolvedCompanyId }
+      : { createdByUserId: user.userId };
+    const nextNumber = await this.getNextArticleNumber(scopeFilter);
 
     return { nextNumber };
   }
 
-  private resolveCompanyId(companyId: string | undefined, user: AuthUser): string {
+  private resolveCompanyId(companyId: string | undefined, user: AuthUser): string | undefined {
     if (user.role === UserRole.SuperAdmin) {
-      if (!companyId) {
-        throw new BadRequestException('companyId is required for superadmin article operations');
-      }
-      return companyId;
+      return companyId || undefined;
     }
 
     if (!user.companyId) {

@@ -13,6 +13,30 @@ export class CreateCompanyDto {
   @IsNotEmpty()
   email: string;
 
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
+  phone?: string;
+
+  @IsString()
+  @IsOptional()
+  website?: string;
+
+  @IsString()
+  @IsOptional()
+  orgNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  vatNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  vatStatus?: string;
+
   @IsArray()
   @IsString({ each: true })
   @IsOptional()

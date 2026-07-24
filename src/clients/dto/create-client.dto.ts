@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsEnum,
   IsOptional,
@@ -98,4 +99,33 @@ export class CreateClientDto {
   @IsOptional()
   @IsBoolean()
   reverseVAT?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @IsString()
+  gln?: string;
+
+  @IsOptional()
+  @IsString()
+  documentLanguage?: string;
+
+  @IsOptional()
+  @IsString()
+  secretCopyEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryTerms?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryMethod?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  customerGroups?: string[];
 }

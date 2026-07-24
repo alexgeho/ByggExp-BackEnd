@@ -14,6 +14,24 @@ export class Company {
   @Prop({ required: true, unique: true })
   email: string;
 
+  @Prop({ default: '' })
+  city: string;
+
+  @Prop({ default: '' })
+  phone: string;
+
+  @Prop({ default: '' })
+  website: string;
+
+  @Prop({ default: '' })
+  orgNumber: string;
+
+  @Prop({ default: '' })
+  vatNumber: string;
+
+  @Prop({ default: '' })
+  vatStatus: string;
+
   @Prop({ type: [String], ref: 'User', default: [] })
   companyAdmins: string[];
 

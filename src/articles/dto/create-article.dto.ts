@@ -1,4 +1,12 @@
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
+import { HouseworkType } from '../schemas/article.schema';
 
 export class CreateArticleDto {
   @IsOptional()
@@ -24,4 +32,33 @@ export class CreateArticleDto {
   @IsOptional()
   @IsNumber()
   priceExclMoms?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @IsString()
+  nameEnglish?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsString()
+  unit?: string;
+
+  @IsOptional()
+  @IsNumber()
+  purchasePriceExclMoms?: number;
+
+  @IsOptional()
+  @IsEnum(HouseworkType)
+  houseworkType?: HouseworkType;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  articleGroups?: string[];
 }

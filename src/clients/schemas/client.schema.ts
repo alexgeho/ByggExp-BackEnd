@@ -81,6 +81,27 @@ export class Client {
 
   @Prop({ type: Boolean, default: false })
   reverseVAT: boolean;
+
+  @Prop({ type: Boolean, default: true })
+  active: boolean;
+
+  @Prop({ default: '' })
+  gln: string;
+
+  @Prop({ default: 'Svenska' })
+  documentLanguage: string;
+
+  @Prop({ default: '' })
+  secretCopyEmail: string;
+
+  @Prop({ default: '' })
+  deliveryTerms: string;
+
+  @Prop({ default: '' })
+  deliveryMethod: string;
+
+  @Prop({ type: [String], default: [] })
+  customerGroups: string[];
 }
 
 export const ClientSchema = SchemaFactory.createForClass(Client);
