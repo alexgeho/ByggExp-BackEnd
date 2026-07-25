@@ -36,7 +36,7 @@ export class BugReport {
   @Prop({ default: '' })
   reporterEmail: string;
 
-  @Prop({ enum: UserRole })
+  @Prop({ type: String, enum: UserRole })
   reporterRole: UserRole;
 
   @Prop({ type: String, ref: 'Company', default: null, index: true })
