@@ -536,6 +536,32 @@ export class ProjectsService {
     if (!updatedProject) {
       throw new NotFoundException(`Project with ID "${id}" not found`);
     }
+
+    if (updateProjectDto.workers) {
+      const previousWorkerIds = (existingProject.workers || []).map((worker) =>
+        this.getEntityId(worker),
+      );
+      const nextWorkerIds = updateProjectDto.workers.map((worker) =>
+        this.getEntityId(worker),
+      );
+
+      const addedWorkerIds = nextWorkerIds.filter(
+        (workerId) => !previousWorkerIds.includes(workerId),
+      );
+      const removedWorkerIds = previousWorkerIds.filter(
+        (workerId) => !nextWorkerIds.includes(workerId),
+      );
+
+      await Promise.all([
+        ...addedWorkerIds.map((workerId) =>
+          this.usersService.addUserToProject(workerId, id),
+        ),
+        ...removedWorkerIds.map((workerId) =>
+          this.usersService.removeUserFromProject(workerId, id),
+        ),
+      ]);
+    }
+
     return updatedProject;
   }
 

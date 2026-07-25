@@ -26,7 +26,8 @@
     "seed:invoicing-demo": "ts-node scripts/seed-invoicing-demo.ts",
     "check:superadmin": "ts-node scripts/check-superadmin.ts",
     "fix:passwords": "ts-node scripts/fix-passwords.ts",
-    "check:all-passwords": "ts-node scripts/check-all-passwords.ts"
+    "check:all-passwords": "ts-node scripts/check-all-passwords.ts",
+    "backfill:project-worker-ids": "ts-node scripts/backfill-project-worker-ids.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
