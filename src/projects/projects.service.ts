@@ -11,6 +11,7 @@ import { cronsDisabled } from '../common/cron.util';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Project, ProjectDocument } from './schemas/project.schema';
+import { Client, ClientDocument } from '../clients/schemas/client.schema';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UsersService } from '../users/users.service';
 import { CompanyService } from '../company/company.service';
@@ -37,9 +38,31 @@ export class ProjectsService {
 
   constructor(
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    @InjectModel(Client.name) private clientModel: Model<ClientDocument>,
     private usersService: UsersService,
     private companyService: CompanyService,
   ) {}
+
+  // Resolves an optional clientId ("заказчик") against the project's own
+  // company. Returns null when unset, or throws if the client is missing or
+  // belongs to a different company (prevents cross-tenant references).
+  private async resolveClientId(
+    clientId: string | null | undefined,
+    companyId: string,
+  ): Promise<string | null> {
+    if (!clientId) {
+      return null;
+    }
+
+    const client = await this.clientModel.findById(clientId).exec();
+    if (!client || String(client.companyId) !== String(companyId)) {
+      throw new BadRequestException(
+        'Selected client does not belong to this company',
+      );
+    }
+
+    return String(clientId);
+  }
 
   private getEntityId(value: unknown): string {
     if (!value) {
@@ -276,9 +299,15 @@ export class ProjectsService {
       );
     }
 
+    const clientId = await this.resolveClientId(
+      createProjectDto.clientId,
+      companyId,
+    );
+
     return {
       ...createProjectDto,
       companyId,
+      clientId,
       ownerId,
       projectManagerId,
     };
@@ -496,6 +525,7 @@ export class ProjectsService {
       .populate('ownerId', 'name email role avatarUrl')
       .populate('projectManagerId', 'name email role avatarUrl')
       .populate('companyId', 'name email')
+      .populate('clientId', 'clientType companyName firstName lastName contactPerson email phone')
       .populate('projectAdmins', 'name email role avatarUrl')
       .populate(
         'workers',
@@ -608,11 +638,25 @@ export class ProjectsService {
         ? [...(existingProject.documents || []), ...updateProjectDto.documents]
         : existingProject.documents;
 
+    // Validate the customer ("заказчик") belongs to the project's company only
+    // when the caller actually sends the field, so unrelated updates are left
+    // untouched. An explicit null clears the reference.
+    const clientPatch =
+      'clientId' in updateProjectDto
+        ? {
+            clientId: await this.resolveClientId(
+              updateProjectDto.clientId,
+              String(existingProject.companyId),
+            ),
+          }
+        : {};
+
     const updatedProject = await this.projectModel
       .findByIdAndUpdate(
         id,
         {
           ...updateProjectDto,
+          ...clientPatch,
           documents: nextDocuments,
         },
         { new: true },
@@ -713,6 +757,10 @@ export class ProjectsService {
       .populate({
         path: 'companyId',
         select: 'name email',
+      })
+      .populate({
+        path: 'clientId',
+        select: 'clientType companyName firstName lastName contactPerson email phone',
       })
       .populate({
         path: 'projectAdmins',

@@ -5,10 +5,14 @@ import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 import { UsersModule } from '../users/users.module';
 import { CompanyModule } from '../company/company.module';
+import { Client, ClientSchema } from '../clients/schemas/client.schema';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Project.name, schema: ProjectSchema }]),
+    MongooseModule.forFeature([
+      { name: Project.name, schema: ProjectSchema },
+      { name: Client.name, schema: ClientSchema },
+    ]),
     UsersModule,
     CompanyModule,
   ],
