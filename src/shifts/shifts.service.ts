@@ -2,8 +2,10 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import ExcelJS from 'exceljs';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -81,8 +83,15 @@ type ShiftExportResult = {
   mimeType: string;
 };
 
+// Hard cap for how long a single active shift may run before it is treated as
+// "stuck" (e.g. the worker's phone died without ending the shift) and closed.
+const MAX_SHIFT_DURATION_MS = 16 * 60 * 60 * 1000;
+
 @Injectable()
 export class ShiftsService {
+  private readonly logger = new Logger(ShiftsService.name);
+  private isClosingStuckShifts = false;
+
   constructor(
     @InjectModel(Shift.name) private readonly shiftModel: Model<ShiftDocument>,
     @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
@@ -632,6 +641,83 @@ export class ShiftsService {
   private async finalizeStaleShifts(userId: string) {
     await this.finalizeExpiredOpenShifts(userId);
     await this.finalizeShiftsPastScheduleDeadline(userId);
+  }
+
+  /**
+   * Globally closes shifts that were left open — the per-user finalizers above
+   * only run when that user hits the API, so a worker whose phone died would
+   * otherwise stay "At work" indefinitely. This runs for every worker with an
+   * open shift, reusing the vetted finalizers for prior-day / past-schedule
+   * cases, then hard-caps any active shift running longer than
+   * MAX_SHIFT_DURATION_MS (e.g. same-day shifts on schedule-less projects).
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async closeStuckShifts(): Promise<void> {
+    if (this.isClosingStuckShifts) {
+      return;
+    }
+
+    this.isClosingStuckShifts = true;
+
+    try {
+      const workerIds: string[] = await this.shiftModel.distinct('workerId', {
+        status: { $in: [ShiftStatus.Active, ShiftStatus.Paused] },
+      });
+
+      for (const workerId of workerIds) {
+        await this.finalizeStaleShifts(workerId);
+      }
+
+      const closedByCap = await this.closeOverrunningActiveShifts();
+
+      if (closedByCap > 0) {
+        this.logger.warn(
+          `Auto-closed ${closedByCap} shift(s) exceeding ${MAX_SHIFT_DURATION_MS / 3600000}h`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Failed to close stuck shifts', error);
+    } finally {
+      this.isClosingStuckShifts = false;
+    }
+  }
+
+  private async closeOverrunningActiveShifts(): Promise<number> {
+    const activeShifts = await this.shiftModel
+      .find({ status: ShiftStatus.Active })
+      .exec();
+
+    let closed = 0;
+
+    for (const shift of activeShifts) {
+      if (this.getEffectiveDuration(shift) <= MAX_SHIFT_DURATION_MS) {
+        continue;
+      }
+
+      const startedAt = new Date(shift.startedAt);
+      const closeAt = new Date(startedAt.getTime() + MAX_SHIFT_DURATION_MS);
+
+      this.closeOpenSegment(shift, closeAt);
+      shift.durationMs = this.sumSegmentDurations(shift.segments);
+      shift.lastResumedAt = null;
+      shift.endedAt =
+        shift.endedAt ||
+        shift.segments[shift.segments.length - 1]?.endedAt ||
+        closeAt;
+      shift.status = ShiftStatus.Completed;
+      shift.completionReason = shift.completionReason || 'auto_closed_stuck';
+      shift.completionSource = shift.completionSource || 'system';
+      await shift.save();
+
+      await this.usersService.setOffDutyStatus(shift.workerId, {
+        reason: 'auto_closed_stuck',
+        updatedAt: closeAt,
+      });
+
+      closed += 1;
+    }
+
+    return closed;
   }
 
   private assertCanStartShift(project: ProjectDocument) {
