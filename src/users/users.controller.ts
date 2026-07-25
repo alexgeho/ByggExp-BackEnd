@@ -284,7 +284,7 @@ export class UsersController {
     @Request() req,
   ): Promise<User> {
     return this.usersService.assertCanEditUser(req.user, id).then(() => {
-      return this.usersService.update(id, updateUserDto);
+      return this.usersService.update(id, updateUserDto, req.user);
     });
   }
 

@@ -606,9 +606,21 @@ export class ProjectsService {
     return deletedProject;
   }
 
-  async findAllPopulated() {
+  async findAllPopulated(actor?: {
+    role?: UserRole;
+    companyId?: string | null;
+  }) {
+    // Tenant isolation: only superadmin may see every company's projects.
+    // Everyone else is scoped to their own company (empty result if unattached).
+    const filter =
+      !actor || actor.role === UserRole.SuperAdmin
+        ? {}
+        : actor.companyId
+          ? { companyId: actor.companyId }
+          : { _id: null };
+
     return this.projectModel
-      .find()
+      .find(filter)
       .populate({
         path: 'ownerId',
         select: 'name email role avatarUrl',

@@ -31,7 +31,19 @@ export class AuthService {
 
   // Регистрация нового пользователя
   async register(createUserDto: CreateUserDto) {
-    const { email, password, ...userData } = createUserDto;
+    // Public self-registration: NEVER trust caller-supplied privileged fields.
+    // A self-registered account is always a company-less Worker; role, company
+    // and project membership are assigned later by an admin via authenticated
+    // endpoints (POST /users). Stripping these closes a full-takeover hole where
+    // an unauthenticated request could create a superadmin or join any company.
+    const {
+      email,
+      password,
+      role: _ignoredRole,
+      companyId: _ignoredCompanyId,
+      projectIds: _ignoredProjectIds,
+      ...userData
+    } = createUserDto;
 
     if (!password) {
       throw new ConflictException('Password is required');
@@ -46,6 +58,9 @@ export class AuthService {
       ...userData,
       email,
       password: hashedPassword,
+      role: UserRole.Worker,
+      companyId: null,
+      projectIds: [],
     });
 
     return this.generateTokens(user);

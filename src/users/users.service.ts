@@ -944,18 +944,72 @@ export class UsersService {
     return user;
   }
 
-  async update(id: string, updateUserDto: Partial<CreateUserDto>): Promise<User> {
+  // Strip privileged fields (role / companyId / projectIds) a given actor is not
+  // allowed to set, so a user cannot escalate their own role or move themselves
+  // into another tenant via PUT /users/:id. `assertCanEditUser` already decided
+  // WHETHER the actor may edit this target; this decides WHICH fields.
+  private sanitizePrivilegedUserFields(
+    dto: Partial<CreateUserDto>,
+    actor: AuthUser,
+    targetId: string,
+  ): Partial<CreateUserDto> {
+    const cleaned: Partial<CreateUserDto> = { ...dto };
+    const isSuper = actor.role === UserRole.SuperAdmin;
+    const isCompanyAdmin = actor.role === UserRole.CompanyAdmin;
+    const editingSelf = !!actor.userId && String(actor.userId) === String(targetId);
+
+    // Tenant membership: only superadmin may change companyId.
+    if (!isSuper && 'companyId' in cleaned) {
+      delete cleaned.companyId;
+    }
+
+    // Role: superadmin → any; companyAdmin → may set worker/projectAdmin for
+    // OTHER users only (never self, never companyAdmin/superadmin); anyone else
+    // (incl. a user editing self) cannot change role at all.
+    if ('role' in cleaned) {
+      const requested = cleaned.role;
+      const companyAdminMayAssign =
+        isCompanyAdmin &&
+        !editingSelf &&
+        (requested === UserRole.Worker || requested === UserRole.ProjectAdmin);
+      if (!isSuper && !companyAdminMayAssign) {
+        delete cleaned.role;
+      }
+    }
+
+    // Project membership is an admin-only assignment; a worker cannot add
+    // themselves to arbitrary projects through self-update.
+    if ('projectIds' in cleaned) {
+      const mayAssignProjects =
+        isSuper || isCompanyAdmin || actor.role === UserRole.ProjectAdmin;
+      if (!mayAssignProjects) {
+        delete cleaned.projectIds;
+      }
+    }
+
+    return cleaned;
+  }
+
+  async update(
+    id: string,
+    updateUserDto: Partial<CreateUserDto>,
+    actor?: AuthUser,
+  ): Promise<User> {
+    const safeDto = actor
+      ? this.sanitizePrivilegedUserFields(updateUserDto, actor, id)
+      : updateUserDto;
+
     const normalizedUpdate = {
-      ...updateUserDto,
-      ...(updateUserDto.email != null
-        ? { email: updateUserDto.email.trim().toLowerCase() }
+      ...safeDto,
+      ...(safeDto.email != null
+        ? { email: safeDto.email.trim().toLowerCase() }
         : {}),
-      ...(updateUserDto.name != null ? { name: updateUserDto.name.trim() } : {}),
-      ...(updateUserDto.profession != null
-        ? { profession: updateUserDto.profession.trim() }
+      ...(safeDto.name != null ? { name: safeDto.name.trim() } : {}),
+      ...(safeDto.profession != null
+        ? { profession: safeDto.profession.trim() }
         : {}),
-      ...(updateUserDto.projectIds != null
-        ? { projectIds: this.normalizeProjectIds(updateUserDto.projectIds) }
+      ...(safeDto.projectIds != null
+        ? { projectIds: this.normalizeProjectIds(safeDto.projectIds) }
         : {}),
     };
 

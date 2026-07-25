@@ -173,8 +173,8 @@ export class ProjectsController {
 
   @Get('populated')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  async findAllPopulated() {
-    return this.projectsService.findAllPopulated();
+  async findAllPopulated(@Request() req) {
+    return this.projectsService.findAllPopulated(req.user);
   }
 
   @Get(':id/populated')
