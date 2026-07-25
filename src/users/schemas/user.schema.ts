@@ -132,6 +132,12 @@ export class User {
   @Prop({ type: Date, default: null })
   workStatusUpdatedAt?: Date | null;
 
+  // Last time the worker's device was seen (heartbeat from the mobile app while
+  // a shift is active). Used to flag "offline / last seen Xm" and to auto-close
+  // shifts left running after the phone went silent.
+  @Prop({ type: Date, default: null })
+  lastSeenAt?: Date | null;
+
   @Prop({
     type: Object,
     default: () => ({ ...DEFAULT_USER_NOTIFICATION_PREFERENCES }),

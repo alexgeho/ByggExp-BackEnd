@@ -1147,6 +1147,16 @@ export class UsersService {
     });
   }
 
+  /**
+   * Records a device heartbeat (the mobile app polling while a shift is active),
+   * without touching work status. Used to detect offline workers.
+   */
+  async touchLastSeen(userId: string, at: Date = new Date()): Promise<void> {
+    await this.userModel
+      .updateOne({ _id: userId }, { $set: { lastSeenAt: at } })
+      .exec();
+  }
+
   async appendAdditionalDocuments(id: string, documentUrls: string[]): Promise<User> {
     const user = await this.userModel.findById(id).exec();
 

@@ -88,6 +88,10 @@ type ShiftExportResult = {
 // "stuck" (e.g. the worker's phone died without ending the shift) and closed.
 const MAX_SHIFT_DURATION_MS = 16 * 60 * 60 * 1000;
 
+// How long a worker's device may be silent (no heartbeat) before an active
+// shift is considered abandoned and auto-closed at the last-seen time.
+const OFFLINE_CLOSE_MS = 30 * 60 * 1000;
+
 @Injectable()
 export class ShiftsService {
   private readonly logger = new Logger(ShiftsService.name);
@@ -166,6 +170,7 @@ export class ShiftsService {
       reason: 'shift_started',
       updatedAt: now,
     });
+    await this.usersService.touchLastSeen(user.userId, now);
 
     return this.serializeShift(createdShift);
   }
@@ -241,6 +246,7 @@ export class ShiftsService {
       reason: 'shift_resumed',
       updatedAt: now,
     });
+    await this.usersService.touchLastSeen(user.userId, now);
 
     return this.serializeShift(shift);
   }
@@ -360,6 +366,13 @@ export class ShiftsService {
       })
       .sort({ updatedAt: -1, createdAt: -1 })
       .exec();
+
+    // The mobile app polls this endpoint every few seconds while a shift is
+    // active — treat each call as a device heartbeat so we can detect when a
+    // worker's phone goes offline mid-shift.
+    if (shift && shift.status === ShiftStatus.Active) {
+      await this.usersService.touchLastSeen(user.userId);
+    }
 
     return shift ? this.serializeShift(shift) : null;
   }
@@ -669,8 +682,14 @@ export class ShiftsService {
         await this.finalizeStaleShifts(workerId);
       }
 
+      const closedOffline = await this.closeOfflineShifts();
       const closedByCap = await this.closeOverrunningActiveShifts();
 
+      if (closedOffline > 0) {
+        this.logger.warn(
+          `Auto-closed ${closedOffline} offline shift(s) (no heartbeat for ${OFFLINE_CLOSE_MS / 60000}m)`,
+        );
+      }
       if (closedByCap > 0) {
         this.logger.warn(
           `Auto-closed ${closedByCap} shift(s) exceeding ${MAX_SHIFT_DURATION_MS / 3600000}h`,
@@ -681,6 +700,64 @@ export class ShiftsService {
     } finally {
       this.isClosingStuckShifts = false;
     }
+  }
+
+  private async closeOfflineShifts(): Promise<number> {
+    const activeShifts = await this.shiftModel
+      .find({ status: ShiftStatus.Active })
+      .exec();
+
+    if (!activeShifts.length) {
+      return 0;
+    }
+
+    const workerIds = [...new Set(activeShifts.map((shift) => shift.workerId))];
+    const users = await this.userModel
+      .find({ _id: { $in: workerIds } })
+      .select('lastSeenAt')
+      .lean()
+      .exec();
+    const lastSeenByWorker = new Map(
+      users.map((user) => [String(user._id), user.lastSeenAt]),
+    );
+
+    const now = Date.now();
+    let closed = 0;
+
+    for (const shift of activeShifts) {
+      const lastSeen = lastSeenByWorker.get(String(shift.workerId));
+
+      // No heartbeat recorded yet — leave it for the hard-duration backstop.
+      if (!lastSeen) {
+        continue;
+      }
+
+      const lastSeenAt = new Date(lastSeen);
+      if (now - lastSeenAt.getTime() <= OFFLINE_CLOSE_MS) {
+        continue;
+      }
+
+      this.closeOpenSegment(shift, lastSeenAt);
+      shift.durationMs = this.sumSegmentDurations(shift.segments);
+      shift.lastResumedAt = null;
+      shift.endedAt =
+        shift.endedAt ||
+        shift.segments[shift.segments.length - 1]?.endedAt ||
+        lastSeenAt;
+      shift.status = ShiftStatus.Completed;
+      shift.completionReason = shift.completionReason || 'auto_closed_offline';
+      shift.completionSource = shift.completionSource || 'system';
+      await shift.save();
+
+      await this.usersService.setOffDutyStatus(shift.workerId, {
+        reason: 'auto_closed_offline',
+        updatedAt: lastSeenAt,
+      });
+
+      closed += 1;
+    }
+
+    return closed;
   }
 
   private async closeOverrunningActiveShifts(): Promise<number> {
