@@ -84,18 +84,14 @@ type ShiftExportResult = {
   mimeType: string;
 };
 
-// Hard cap for how long a single active shift may run before it is treated as
-// "stuck" (e.g. the worker's phone died without ending the shift) and closed.
-const MAX_SHIFT_DURATION_MS = 16 * 60 * 60 * 1000;
-
 // How long a worker's device may be silent (no heartbeat) before an active
-// shift is considered abandoned and auto-closed at the last-seen time.
-const OFFLINE_CLOSE_MS = 30 * 60 * 1000;
+// shift is auto-paused at the last-seen time.
+const OFFLINE_PAUSE_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class ShiftsService {
   private readonly logger = new Logger(ShiftsService.name);
-  private isClosingStuckShifts = false;
+  private isReconcilingOpenShifts = false;
 
   constructor(
     @InjectModel(Shift.name) private readonly shiftModel: Model<ShiftDocument>,
@@ -185,11 +181,7 @@ export class ShiftsService {
     }
 
     const now = new Date();
-    this.closeOpenSegment(shift, now);
-    shift.durationMs = this.sumSegmentDurations(shift.segments);
-    shift.lastResumedAt = null;
-    shift.endedAt = now;
-    shift.status = ShiftStatus.Paused;
+    this.pauseShiftDocument(shift, now, '');
     await shift.save();
 
     await this.usersService.setOffDutyStatus(user.userId, {
@@ -230,13 +222,7 @@ export class ShiftsService {
     }
 
     const now = new Date();
-    shift.status = ShiftStatus.Active;
-    shift.lastResumedAt = now;
-    shift.endedAt = undefined;
-    shift.segments.push({
-      startedAt: now,
-      durationMs: 0,
-    });
+    this.resumeShiftDocument(shift, now);
     await shift.save();
 
     await this.usersService.setWorkingStatus(user.userId, {
@@ -275,20 +261,16 @@ export class ShiftsService {
 
     const now = new Date();
 
-    if (shift.status === ShiftStatus.Active) {
-      this.closeOpenSegment(shift, now);
-      shift.durationMs = this.sumSegmentDurations(shift.segments);
-      shift.lastResumedAt = null;
-    }
-
-    shift.endedAt = now;
-    shift.status = ShiftStatus.Completed;
-    shift.completionReason = completionReason;
-    shift.completionSource = completionSource;
-    shift.completionNotifiedAt = null;
-    await shift.save();
-
+    // Leaving the project area pauses the shift (keeping the accrued hours) so
+    // it can resume when the worker returns — it does not end the shift.
     if (completionReason === 'outside_project_area') {
+      if (shift.status === ShiftStatus.Active) {
+        this.pauseShiftDocument(shift, now, 'outside_project_area');
+      } else {
+        shift.autoPausedReason = 'outside_project_area';
+      }
+      await shift.save();
+
       let notificationResult: {
         attempted: number;
         sent: number;
@@ -321,9 +303,9 @@ export class ShiftsService {
 
       await this.usersService.logActivity(user.userId, {
         category: 'attendance',
-        type: 'shift_auto_completed_outside_project_area',
+        type: 'shift_auto_paused_outside_project_area',
         level: UserActivityLogLevel.Warning,
-        message: 'Shift was ended automatically because the user left the project area.',
+        message: 'Shift was paused automatically because the user left the project area.',
         source: completionSource,
         details: {
           shiftId,
@@ -333,12 +315,27 @@ export class ShiftsService {
           notificationResult,
         },
       });
-    } else {
-      await this.usersService.setOffDutyStatus(user.userId, {
-        reason: completionReason === 'manual' ? 'shift_completed' : completionReason,
-        updatedAt: now,
-      });
+
+      return this.serializeShift(shift);
     }
+
+    if (shift.status === ShiftStatus.Active) {
+      this.closeOpenSegment(shift, now);
+      shift.durationMs = this.sumSegmentDurations(shift.segments);
+      shift.lastResumedAt = null;
+    }
+
+    shift.endedAt = now;
+    shift.status = ShiftStatus.Completed;
+    shift.completionReason = completionReason;
+    shift.completionSource = completionSource;
+    shift.completionNotifiedAt = null;
+    await shift.save();
+
+    await this.usersService.setOffDutyStatus(user.userId, {
+      reason: completionReason === 'manual' ? 'shift_completed' : completionReason,
+      updatedAt: now,
+    });
 
     return this.serializeShift(shift);
   }
@@ -367,11 +364,28 @@ export class ShiftsService {
       .sort({ updatedAt: -1, createdAt: -1 })
       .exec();
 
-    // The mobile app polls this endpoint every few seconds while a shift is
-    // active — treat each call as a device heartbeat so we can detect when a
-    // worker's phone goes offline mid-shift.
-    if (shift && shift.status === ShiftStatus.Active) {
-      await this.usersService.touchLastSeen(user.userId);
+    // The mobile app polls this endpoint every few seconds (including in the
+    // background) while a shift is active — treat each call as a device
+    // heartbeat. If the shift was auto-paused because the device went silent,
+    // the device is now back, so resume it automatically.
+    if (shift) {
+      const now = new Date();
+
+      if (shift.status === ShiftStatus.Paused && shift.autoPausedReason === 'offline') {
+        this.resumeShiftDocument(shift, now);
+        await shift.save();
+        await this.usersService.setWorkingStatus(user.userId, {
+          projectId: shift.projectId,
+          projectName: shift.projectNameSnapshot,
+          shiftId: shift._id.toString(),
+          reason: 'shift_auto_resumed',
+          updatedAt: now,
+        });
+      }
+
+      if (shift.status === ShiftStatus.Active) {
+        await this.usersService.touchLastSeen(user.userId, now);
+      }
     }
 
     return shift ? this.serializeShift(shift) : null;
@@ -658,20 +672,21 @@ export class ShiftsService {
   }
 
   /**
-   * Globally closes shifts that were left open — the per-user finalizers above
-   * only run when that user hits the API, so a worker whose phone died would
-   * otherwise stay "At work" indefinitely. This runs for every worker with an
-   * open shift, reusing the vetted finalizers for prior-day / past-schedule
-   * cases, then hard-caps any active shift running longer than
-   * MAX_SHIFT_DURATION_MS (e.g. same-day shifts on schedule-less projects).
+   * Reconciles open shifts globally — the per-user finalizers above only run
+   * when that user hits the API, so a worker whose phone/app went silent would
+   * otherwise stay "At work" forever. For every worker with an open shift it
+   * runs the vetted prior-day / past-schedule finalizers, then pauses any active
+   * shift whose device has been silent past OFFLINE_PAUSE_MS. Pausing (not
+   * completing) keeps the accrued hours and lets the shift auto-resume once the
+   * device is seen again.
    */
   @Cron(CronExpression.EVERY_10_MINUTES)
-  async closeStuckShifts(): Promise<void> {
-    if (cronsDisabled() || this.isClosingStuckShifts) {
+  async reconcileOpenShifts(): Promise<void> {
+    if (cronsDisabled() || this.isReconcilingOpenShifts) {
       return;
     }
 
-    this.isClosingStuckShifts = true;
+    this.isReconcilingOpenShifts = true;
 
     try {
       const workerIds: string[] = await this.shiftModel.distinct('workerId', {
@@ -682,27 +697,21 @@ export class ShiftsService {
         await this.finalizeStaleShifts(workerId);
       }
 
-      const closedOffline = await this.closeOfflineShifts();
-      const closedByCap = await this.closeOverrunningActiveShifts();
+      const pausedOffline = await this.pauseOfflineShifts();
 
-      if (closedOffline > 0) {
+      if (pausedOffline > 0) {
         this.logger.warn(
-          `Auto-closed ${closedOffline} offline shift(s) (no heartbeat for ${OFFLINE_CLOSE_MS / 60000}m)`,
-        );
-      }
-      if (closedByCap > 0) {
-        this.logger.warn(
-          `Auto-closed ${closedByCap} shift(s) exceeding ${MAX_SHIFT_DURATION_MS / 3600000}h`,
+          `Auto-paused ${pausedOffline} offline shift(s) (no heartbeat for ${OFFLINE_PAUSE_MS / 60000}m)`,
         );
       }
     } catch (error) {
-      this.logger.error('Failed to close stuck shifts', error);
+      this.logger.error('Failed to reconcile open shifts', error);
     } finally {
-      this.isClosingStuckShifts = false;
+      this.isReconcilingOpenShifts = false;
     }
   }
 
-  private async closeOfflineShifts(): Promise<number> {
+  private async pauseOfflineShifts(): Promise<number> {
     const activeShifts = await this.shiftModel
       .find({ status: ShiftStatus.Active })
       .exec();
@@ -720,84 +729,70 @@ export class ShiftsService {
     const activityByWorker = new Map(
       users.map((user) => [
         String(user._id),
-        // Prefer the device heartbeat; fall back to when the shift/status was
-        // last set, so shifts with no heartbeat (phone off before the app ever
-        // pinged) are still detected as offline instead of running forever.
+        // Prefer the device heartbeat; fall back to when the status was last set
+        // so shifts with no heartbeat (phone off before the app ever pinged) are
+        // still detected as offline.
         user.lastSeenAt || user.workStatusUpdatedAt,
       ]),
     );
 
     const now = Date.now();
-    let closed = 0;
+    let paused = 0;
 
     for (const shift of activeShifts) {
       const lastActivity =
         activityByWorker.get(String(shift.workerId)) || shift.startedAt;
 
       const lastSeenAt = new Date(lastActivity);
-      if (now - lastSeenAt.getTime() <= OFFLINE_CLOSE_MS) {
+      if (now - lastSeenAt.getTime() <= OFFLINE_PAUSE_MS) {
         continue;
       }
 
-      this.closeOpenSegment(shift, lastSeenAt);
-      shift.durationMs = this.sumSegmentDurations(shift.segments);
-      shift.lastResumedAt = null;
-      shift.endedAt =
-        shift.endedAt ||
-        shift.segments[shift.segments.length - 1]?.endedAt ||
-        lastSeenAt;
-      shift.status = ShiftStatus.Completed;
-      shift.completionReason = shift.completionReason || 'auto_closed_offline';
-      shift.completionSource = shift.completionSource || 'system';
+      // Pause at the last-seen time so the recorded hours stop where the device
+      // went silent instead of running on.
+      this.pauseShiftDocument(shift, lastSeenAt, 'offline');
       await shift.save();
 
       await this.usersService.setOffDutyStatus(shift.workerId, {
-        reason: 'auto_closed_offline',
+        reason: 'offline',
         updatedAt: lastSeenAt,
       });
 
-      closed += 1;
+      paused += 1;
     }
 
-    return closed;
+    return paused;
   }
 
-  private async closeOverrunningActiveShifts(): Promise<number> {
-    const activeShifts = await this.shiftModel
-      .find({ status: ShiftStatus.Active })
-      .exec();
+  /**
+   * Pauses a shift document in place: closes the open segment at `at`, banks the
+   * accrued duration and marks it Paused. `autoPausedReason` distinguishes an
+   * automatic pause (offline / left area — eligible for auto-resume) from a
+   * deliberate manual pause (empty string).
+   */
+  private pauseShiftDocument(
+    shift: ShiftDocument,
+    at: Date,
+    autoPausedReason = '',
+  ) {
+    this.closeOpenSegment(shift, at);
+    shift.durationMs = this.sumSegmentDurations(shift.segments);
+    shift.lastResumedAt = null;
+    shift.endedAt = at;
+    shift.status = ShiftStatus.Paused;
+    shift.autoPausedReason = autoPausedReason;
+  }
 
-    let closed = 0;
-
-    for (const shift of activeShifts) {
-      if (this.getEffectiveDuration(shift) <= MAX_SHIFT_DURATION_MS) {
-        continue;
-      }
-
-      const startedAt = new Date(shift.startedAt);
-      const closeAt = new Date(startedAt.getTime() + MAX_SHIFT_DURATION_MS);
-
-      this.closeOpenSegment(shift, closeAt);
-      shift.durationMs = this.sumSegmentDurations(shift.segments);
-      shift.lastResumedAt = null;
-      shift.endedAt =
-        shift.endedAt ||
-        shift.segments[shift.segments.length - 1]?.endedAt ||
-        closeAt;
-      shift.status = ShiftStatus.Completed;
-      shift.completionReason = shift.completionReason || 'auto_closed_stuck';
-      shift.completionSource = shift.completionSource || 'system';
-      await shift.save();
-
-      await this.usersService.setOffDutyStatus(shift.workerId, {
-        reason: 'auto_closed_stuck',
-        updatedAt: closeAt,
-      });
-
-      closed += 1;
-    }
-
-    return closed;
+  /**
+   * Resumes a paused shift document in place: opens a fresh segment, marks it
+   * Active and clears any auto-pause marker.
+   */
+  private resumeShiftDocument(shift: ShiftDocument, at: Date) {
+    shift.status = ShiftStatus.Active;
+    shift.lastResumedAt = at;
+    shift.endedAt = undefined;
+    shift.autoPausedReason = '';
+    shift.segments.push({ startedAt: at, durationMs: 0 });
   }
 
   private assertCanStartShift(project: ProjectDocument) {

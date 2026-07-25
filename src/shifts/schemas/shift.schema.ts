@@ -52,6 +52,13 @@ export class Shift {
   @Prop({ required: true, enum: ShiftStatus, default: ShiftStatus.Active, index: true })
   status: ShiftStatus;
 
+  // Why a shift was paused automatically ('offline' | 'outside_project_area').
+  // Empty when the shift is active or the worker paused it manually. Used to
+  // auto-resume the shift once the device is seen again, without resuming a
+  // deliberate manual pause.
+  @Prop({ default: '' })
+  autoPausedReason?: string;
+
   @Prop({
     type: [
       {
