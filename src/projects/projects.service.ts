@@ -419,7 +419,10 @@ export class ProjectsService {
         'workers',
         'name email role profession avatarUrl workStatus workStatusProjectId workStatusUpdatedAt',
       )
-      .populate('tasks', 'taskTitle taskDescription startDate dueDate documents')
+      .populate(
+        'tasks',
+        'taskTitle taskDescription startDate dueDate documents status completedAt completedByUserId assigneeUserId assigneeUserName',
+      )
       .exec();
     if (!project) {
       throw new NotFoundException(`Project with ID "${id}" not found`);

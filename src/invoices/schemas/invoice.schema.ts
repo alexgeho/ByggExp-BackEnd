@@ -74,7 +74,7 @@ export class Invoice {
   @Prop({ ref: 'Company', required: true, index: true })
   companyId: string;
 
-  @Prop({ ref: 'Project', index: true, default: null })
+  @Prop({ type: String, ref: 'Project', index: true, default: null })
   projectId?: string | null;
 
   @Prop({ ref: 'User', required: true })

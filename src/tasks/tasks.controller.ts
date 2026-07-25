@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -53,7 +54,7 @@ export class TasksController {
   }
 
   @Post()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
   @UseInterceptors(FilesInterceptor('documents', 10, { storage: taskDocumentsStorage }))
   create(
     @Request() req,
@@ -68,7 +69,20 @@ export class TasksController {
       }));
     }
 
-    return this.tasksService.create(createTaskDto, req.user.userId);
+    if (req.user.role === UserRole.Worker) {
+      if (
+        createTaskDto.assigneeUserId &&
+        String(createTaskDto.assigneeUserId) !== String(req.user.userId)
+      ) {
+        throw new ForbiddenException(
+          'Workers can only create tasks assigned to themselves.',
+        );
+      }
+
+      createTaskDto.assigneeUserId = String(req.user.userId);
+    }
+
+    return this.tasksService.create(createTaskDto, req.user);
   }
 
   @Get('project/:projectId')

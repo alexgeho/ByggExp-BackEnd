@@ -23,6 +23,11 @@ type TaskNotificationSource = {
   taskTitle: string;
 };
 
+type TaskActorContext = {
+  userId?: string;
+  role?: UserRole;
+};
+
 @Injectable()
 export class TasksService {
   private readonly logger = new Logger(TasksService.name);
@@ -35,15 +40,17 @@ export class TasksService {
     private readonly taskRemindersService: TaskRemindersService,
   ) {}
 
-  async create(createTaskDto: CreateTaskDto, actorUserId?: string): Promise<Task> {
+  async create(createTaskDto: CreateTaskDto, actor?: TaskActorContext): Promise<Task> {
+    const actorUserId = actor?.userId;
+    const actorRole = actor?.role;
     const hasProject = Boolean(createTaskDto.projectId);
     const hasAssignee = Boolean(createTaskDto.assigneeUserId);
 
-    if (hasProject === hasAssignee) {
-      throw new BadRequestException('Task must be assigned to either a project or one user.');
+    if (!hasProject && !hasAssignee) {
+      throw new BadRequestException('Task must be assigned to a project or one user.');
     }
 
-    if (hasAssignee) {
+    if (!hasProject && hasAssignee) {
       return this.createPersonalTask(createTaskDto, actorUserId);
     }
 
@@ -54,8 +61,31 @@ export class TasksService {
       throw new NotFoundException(`Project with ID "${projectId}" not found`);
     }
 
+    if (actorRole === UserRole.Worker && actorUserId) {
+      const workerIds = (project.workers || []).map((value) => value.toString());
+      if (!workerIds.includes(String(actorUserId))) {
+        throw new BadRequestException('Workers can only create tasks in their own projects.');
+      }
+    }
+
+    let assigneeUserId: string | null = null;
+    let assigneeUserName = '';
+
+    if (createTaskDto.assigneeUserId) {
+      const assignee = await this.userModel.findById(createTaskDto.assigneeUserId).exec();
+
+      if (!assignee) {
+        throw new NotFoundException(`User with ID "${createTaskDto.assigneeUserId}" not found`);
+      }
+
+      assigneeUserId = assignee._id.toString();
+      assigneeUserName = assignee.name || assignee.email || 'User';
+    }
+
     const createdTask = await new this.taskModel({
       ...createTaskDto,
+      assigneeUserId,
+      assigneeUserName,
       createdByUserId: actorUserId || null,
     }).save();
 
