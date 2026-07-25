@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { cronsDisabled } from '../common/cron.util';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Project, ProjectDocument } from './schemas/project.schema';
@@ -570,7 +571,7 @@ export class ProjectsService {
 
   @Cron(CronExpression.EVERY_10_MINUTES)
   async reconcileProjectStatuses(): Promise<void> {
-    if (this.isReconcilingStatuses) {
+    if (cronsDisabled() || this.isReconcilingStatuses) {
       return;
     }
 

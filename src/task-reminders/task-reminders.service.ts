@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { cronsDisabled } from '../common/cron.util';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -119,7 +120,7 @@ export class TaskRemindersService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async processDueReminders() {
-    if (this.isProcessingDueReminders) {
+    if (cronsDisabled() || this.isProcessingDueReminders) {
       return;
     }
 
