@@ -5,10 +5,10 @@ export type CompanyDocument = Company & Document;
 
 @Schema({ timestamps: true })
 export class Company {
-  @Prop({ required: true })
+  @Prop({ default: '' })
   name: string;
 
-  @Prop({ required: true })
+  @Prop({ default: '' })
   address: string;
 
   @Prop({ required: true, unique: true })

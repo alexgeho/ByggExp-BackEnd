@@ -33,10 +33,14 @@ export class CompanyController {
     return this.companyService.registerCompanyWithAdmin(dto);
   }
 
+  // Create a company + its first Company Admin (login = company email,
+  // auto-generated password emailed to that address). Only email is required.
   @Post()
   @Roles(UserRole.SuperAdmin)
-  create(@Body() createCompanyDto: CreateCompanyDto): Promise<Company> {
-    return this.companyService.create(createCompanyDto);
+  create(
+    @Body() createCompanyDto: CreateCompanyDto,
+  ): Promise<{ company: Company; admin: any }> {
+    return this.companyService.createWithAdmin(createCompanyDto);
   }
 
   @Get()

@@ -20,6 +20,58 @@ export class CompanyService {
     return createdCompany.save();
   }
 
+  /**
+   * Superadmin onboarding: create a company and provision its first Company Admin
+   * from the company email. The password is auto-generated (never seen/typed by
+   * the superadmin) and emailed to that address together with a confirmation link.
+   * The company can then sign in with email + the emailed password.
+   */
+  async createWithAdmin(
+    createCompanyDto: CreateCompanyDto,
+  ): Promise<{ company: Company; admin: any }> {
+    const email = createCompanyDto.email?.trim().toLowerCase();
+
+    const existingCompany = await this.companyModel.findOne({ email }).exec();
+    if (existingCompany) {
+      throw new ConflictException('Company with this email already exists');
+    }
+
+    const existingUser = await this.usersService.findByEmail(email);
+    if (existingUser) {
+      throw new ConflictException('A user with this email already exists');
+    }
+
+    const company = await this.create({
+      ...createCompanyDto,
+      email,
+      companyAdmins: [],
+      projects: [],
+    });
+
+    // Provision the first Company Admin: auto-generated password + invite email.
+    const admin = await this.usersService.createUserPendingApproval({
+      email,
+      name: createCompanyDto.name?.trim() || undefined,
+      role: UserRole.CompanyAdmin,
+      companyId: company._id.toString(),
+      projectIds: [],
+    });
+
+    await this.companyModel.findByIdAndUpdate(company._id, {
+      $push: { companyAdmins: admin._id.toString() },
+    });
+
+    const populated = await this.companyModel.findById(company._id).exec();
+
+    // Never leak the (hashed) password or verification token to the caller.
+    const adminObj: any = admin.toObject();
+    delete adminObj.password;
+    delete adminObj.emailVerificationToken;
+    delete adminObj.emailVerificationExpiresAt;
+
+    return { company: (populated ?? company).toObject(), admin: adminObj };
+  }
+
   async registerCompanyWithAdmin(dto: RegisterCompanyWithAdminDto): Promise<{ company: Company; admin: any }> {
     // Проверяем существование компании
     const existingCompany = await this.companyModel.findOne({ email: dto.email }).exec();

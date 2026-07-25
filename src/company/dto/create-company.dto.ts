@@ -1,13 +1,15 @@
 import { IsString, IsEmail, IsNotEmpty, IsOptional, IsArray } from 'class-validator';
 
 export class CreateCompanyDto {
+  // Only email is required — it becomes the login of the company's first admin.
+  // Everything else is optional and can be filled in later by the company.
   @IsString()
-  @IsNotEmpty()
-  name: string;
+  @IsOptional()
+  name?: string;
 
   @IsString()
-  @IsNotEmpty()
-  address: string;
+  @IsOptional()
+  address?: string;
 
   @IsEmail()
   @IsNotEmpty()
