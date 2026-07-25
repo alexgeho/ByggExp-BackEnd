@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   Controller,
-  ForbiddenException,
   Get,
   Post,
   Put,
@@ -18,6 +17,7 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { CreateWorkerNoteDto } from './dto/create-worker-note.dto';
 import { User, UserAccountStatus, UserRole } from './schemas/user.schema';
 import { UserActivityLogLevel } from './schemas/user-activity-log.schema';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -153,7 +153,8 @@ export class UsersController {
 
   @Get('info/:id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  async findUserById(@Param('id') id: string) {
+  async findUserById(@Param('id') id: string, @Request() req) {
+    await this.usersService.assertCanViewUser(req.user, id);
     const user = await this.usersService.findUserById(id);
     if (!user) {
       throw new NotFoundException(`User with ID "${id}" not found`);
@@ -164,21 +165,8 @@ export class UsersController {
   @Get(':id/detail')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
   async findDetailedUser(@Param('id') id: string, @Request() req) {
-    const user = await this.usersService.findOne(id);
-
-    if (req.user.role === UserRole.Worker && req.user.userId !== id) {
-      throw new ForbiddenException('Access denied');
-    }
-
-    if (req.user.role === UserRole.CompanyAdmin && req.user.companyId !== user.companyId) {
-      throw new ForbiddenException('Access denied');
-    }
-
-    if (req.user.role === UserRole.ProjectAdmin && req.user.userId !== id) {
-      throw new ForbiddenException('Access denied');
-    }
-
-    const detailedUser = await this.usersService.findDetailedUserById(id);
+    await this.usersService.assertCanViewUser(req.user, id);
+    const detailedUser = await this.usersService.findDetailedUserById(id, req.user);
     if (!detailedUser) {
       throw new NotFoundException(`User with ID "${id}" not found`);
     }
@@ -226,19 +214,7 @@ export class UsersController {
     @Query('category') category?: string,
     @Query('level') level?: string,
   ) {
-    const user = await this.usersService.findOne(id);
-
-    if (req.user.role === UserRole.Worker && req.user.userId !== id) {
-      throw new ForbiddenException('Access denied');
-    }
-
-    if (req.user.role === UserRole.CompanyAdmin && req.user.companyId !== user.companyId) {
-      throw new ForbiddenException('Access denied');
-    }
-
-    if (req.user.role === UserRole.ProjectAdmin && req.user.userId !== id) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.usersService.assertCanViewUser(req.user, id);
 
     return this.usersService.findActivityLogsByUserId(id, {
       page: Number(page),
@@ -246,6 +222,36 @@ export class UsersController {
       category,
       level,
     });
+  }
+
+  @Get(':id/notes')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  async listWorkerNotes(@Param('id') id: string, @Request() req) {
+    await this.usersService.assertCanViewUser(req.user, id);
+    return this.usersService.listWorkerNotes(id);
+  }
+
+  @Post(':id/notes')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  async createWorkerNote(
+    @Param('id') id: string,
+    @Body() body: CreateWorkerNoteDto,
+    @Request() req,
+  ) {
+    await this.usersService.assertCanCommentOnWorker(req.user, id);
+    return this.usersService.createWorkerNote(id, req.user, body.text);
+  }
+
+  @Delete(':id/notes/:noteId')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  async deleteWorkerNote(
+    @Param('id') id: string,
+    @Param('noteId') noteId: string,
+    @Request() req,
+  ) {
+    await this.usersService.assertCanCommentOnWorker(req.user, id);
+    await this.usersService.removeWorkerNote(id, noteId);
+    return { deleted: true };
   }
 
   @Post('by-ids')
@@ -265,11 +271,9 @@ export class UsersController {
   @Get(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
   findOne(@Param('id') id: string, @Request() req): Promise<User> {
-    // Пользователь может смотреть только свой профиль или профили в своей компании/проекте
-    if (req.user.role === UserRole.Worker && req.user.userId !== id) {
-      throw new Error('Access denied');
-    }
-    return this.usersService.findOne(id);
+    return this.usersService.assertCanViewUser(req.user, id).then(() => {
+      return this.usersService.findOne(id);
+    });
   }
 
   @Put(':id')
@@ -279,11 +283,9 @@ export class UsersController {
     @Body() updateUserDto: Partial<CreateUserDto>,
     @Request() req,
   ): Promise<User> {
-    // Пользователь может редактировать только свой профиль (кроме SuperAdmin)
-    if (req.user.role !== UserRole.SuperAdmin && req.user.userId !== id) {
-      throw new Error('Access denied');
-    }
-    return this.usersService.update(id, updateUserDto);
+    return this.usersService.assertCanEditUser(req.user, id).then(() => {
+      return this.usersService.update(id, updateUserDto);
+    });
   }
 
   @Post(':id/avatar')
@@ -294,13 +296,11 @@ export class UsersController {
     @UploadedFile() file: UploadedAvatarFile,
     @Request() req,
   ): Promise<User> {
-    if (req.user.role !== UserRole.SuperAdmin && req.user.userId !== id) {
-      throw new Error('Access denied');
-    }
-
-    return this.usersService.update(id, {
-      avatarUrl: file ? `/uploads/user-avatars/${file.filename}` : '',
-    });
+    return this.usersService.assertCanEditUser(req.user, id).then(() =>
+      this.usersService.update(id, {
+        avatarUrl: file ? `/uploads/user-avatars/${file.filename}` : '',
+      }),
+    );
   }
 
   @Post(':id/documents')
@@ -311,23 +311,23 @@ export class UsersController {
     @UploadedFiles() files: UploadedDocumentFile[],
     @Request() req,
   ): Promise<User> {
-    if (req.user.role !== UserRole.SuperAdmin && req.user.userId !== id) {
-      throw new Error('Access denied');
-    }
-
     if (!files?.length) {
       throw new BadRequestException('No documents uploaded');
     }
 
-    return this.usersService.appendAdditionalDocuments(
-      id,
-      files.map((file) => `/uploads/user-documents/${file.filename}`),
+    return this.usersService.assertCanEditUser(req.user, id).then(() =>
+      this.usersService.appendAdditionalDocuments(
+        id,
+        files.map((file) => `/uploads/user-documents/${file.filename}`),
+      ),
     );
   }
 
   @Delete(':id')
-  @Roles(UserRole.SuperAdmin)
-  remove(@Param('id') id: string): Promise<User> {
-    return this.usersService.remove(id);
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  remove(@Param('id') id: string, @Request() req): Promise<User> {
+    return this.usersService.assertCanDeleteUser(req.user, id).then(() => {
+      return this.usersService.remove(id);
+    });
   }
 }

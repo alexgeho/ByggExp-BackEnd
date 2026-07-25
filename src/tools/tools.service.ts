@@ -142,6 +142,19 @@ export class ToolsService {
     );
   }
 
+  async replaceWorkerAssignments(workerId: string, toolIds: string[]): Promise<void> {
+    await this.toolModel.updateMany({ workerIds: workerId }, { $pull: { workerIds: workerId } });
+
+    if (!toolIds.length) {
+      return;
+    }
+
+    await this.toolModel.updateMany(
+      { _id: { $in: toolIds } },
+      { $addToSet: { workerIds: workerId } },
+    );
+  }
+
   async attachToProject(projectId: string, toolIds: string[]): Promise<void> {
     if (!toolIds.length) {
       return;

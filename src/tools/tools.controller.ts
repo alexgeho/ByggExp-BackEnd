@@ -87,6 +87,15 @@ export class ToolsController {
     return this.toolsService.attachToWorker(dto.workerId, dto.toolIds);
   }
 
+  @Put('worker/:workerId/assignments')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  replaceWorkerAssignments(
+    @Param('workerId') workerId: string,
+    @Body() dto: AttachToolsToWorkerDto,
+  ) {
+    return this.toolsService.replaceWorkerAssignments(workerId, dto.toolIds);
+  }
+
   @Post('attach-to-project')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   attachToProject(@Body() dto: AttachToolsToProjectDto) {

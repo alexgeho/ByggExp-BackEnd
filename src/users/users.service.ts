@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
@@ -21,8 +27,22 @@ import {
   UserActivityLogDocument,
   UserActivityLogLevel,
 } from './schemas/user-activity-log.schema';
+import { WorkerNote, WorkerNoteDocument } from './schemas/worker-note.schema';
+import { Tool, ToolDocument } from '../tools/schemas/tool.schema';
 
 type UserDetailProjectRole = 'owner' | 'projectManager' | 'projectAdmin' | 'worker';
+
+type AuthUser = {
+  userId?: string;
+  role?: UserRole;
+  companyId?: string | null;
+};
+
+type AccessTargetUser = {
+  _id: unknown;
+  role: UserRole;
+  companyId?: string | null;
+};
 
 type UserActivityLogListResponse = {
   items: Array<{
@@ -79,6 +99,18 @@ type UserDetailResponse = {
     location: string;
     roles: UserDetailProjectRole[];
   }>;
+  tools: Array<{
+    id: string;
+    name: string;
+    status: string;
+    notes: string;
+    photoUrl: string;
+  }>;
+  permissions: {
+    canEdit: boolean;
+    canDelete: boolean;
+    canComment: boolean;
+  };
   activePushTokens: Array<{
     id: string;
     installationId: string;
@@ -110,6 +142,17 @@ type UserDetailResponse = {
   updatedAt: Date | null;
 };
 
+type WorkerNoteResponse = {
+  id: string;
+  workerId: string;
+  authorUserId: string;
+  authorName: string;
+  authorRole: string;
+  text: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -118,9 +161,12 @@ export class UsersService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    @InjectModel(Tool.name) private toolModel: Model<ToolDocument>,
     @InjectModel(DeviceToken.name) private deviceTokenModel: Model<DeviceTokenDocument>,
     @InjectModel(UserActivityLog.name)
     private userActivityLogModel: Model<UserActivityLogDocument>,
+    @InjectModel(WorkerNote.name)
+    private workerNoteModel: Model<WorkerNoteDocument>,
     private readonly mailService: MailService,
   ) {}
 
@@ -188,6 +234,193 @@ export class UsersService {
       ...(createUserDto.phoneAreaCode != null ? { phoneAreaCode: createUserDto.phoneAreaCode } : {}),
       ...(createUserDto.phoneNumber != null ? { phoneNumber: createUserDto.phoneNumber } : {}),
     };
+  }
+
+  private normalizeId(value: unknown) {
+    return value ? String(value) : '';
+  }
+
+  private async canProjectAdminManageWorker(
+    projectAdminUserId: string,
+    workerUserId: string,
+  ): Promise<boolean> {
+    const managedProjectsCount = await this.projectModel.countDocuments({
+      projectAdmins: projectAdminUserId,
+      workers: workerUserId,
+    });
+
+    return managedProjectsCount > 0;
+  }
+
+  private async canViewUser(actor: AuthUser, targetUser: AccessTargetUser): Promise<boolean> {
+    const actorUserId = this.normalizeId(actor.userId);
+    const targetUserId = this.normalizeId(targetUser._id);
+
+    if (!actor.role || !actorUserId) {
+      return false;
+    }
+
+    if (actor.role === UserRole.SuperAdmin) {
+      return true;
+    }
+
+    if (actorUserId === targetUserId) {
+      return true;
+    }
+
+    if (actor.role === UserRole.Worker) {
+      return false;
+    }
+
+    if (actor.role === UserRole.CompanyAdmin) {
+      return Boolean(
+        actor.companyId &&
+          targetUser.companyId &&
+          String(actor.companyId) === String(targetUser.companyId),
+      );
+    }
+
+    if (actor.role === UserRole.ProjectAdmin && targetUser.role === UserRole.Worker) {
+      return this.canProjectAdminManageWorker(actorUserId, targetUserId);
+    }
+
+    return false;
+  }
+
+  private async canEditUser(actor: AuthUser, targetUser: AccessTargetUser): Promise<boolean> {
+    const actorUserId = this.normalizeId(actor.userId);
+    const targetUserId = this.normalizeId(targetUser._id);
+
+    if (!actor.role || !actorUserId) {
+      return false;
+    }
+
+    if (actor.role === UserRole.SuperAdmin) {
+      return true;
+    }
+
+    if (actorUserId === targetUserId) {
+      return true;
+    }
+
+    if (targetUser.role !== UserRole.Worker) {
+      return false;
+    }
+
+    if (actor.role === UserRole.CompanyAdmin) {
+      return Boolean(
+        actor.companyId &&
+          targetUser.companyId &&
+          String(actor.companyId) === String(targetUser.companyId),
+      );
+    }
+
+    if (actor.role === UserRole.ProjectAdmin) {
+      return this.canProjectAdminManageWorker(actorUserId, targetUserId);
+    }
+
+    return false;
+  }
+
+  private async canDeleteUser(actor: AuthUser, targetUser: AccessTargetUser): Promise<boolean> {
+    const actorUserId = this.normalizeId(actor.userId);
+    const targetUserId = this.normalizeId(targetUser._id);
+
+    if (!actor.role || !actorUserId || actorUserId === targetUserId) {
+      return false;
+    }
+
+    if (actor.role === UserRole.SuperAdmin) {
+      return true;
+    }
+
+    if (targetUser.role !== UserRole.Worker) {
+      return false;
+    }
+
+    if (actor.role === UserRole.CompanyAdmin) {
+      return Boolean(
+        actor.companyId &&
+          targetUser.companyId &&
+          String(actor.companyId) === String(targetUser.companyId),
+      );
+    }
+
+    if (actor.role === UserRole.ProjectAdmin) {
+      return this.canProjectAdminManageWorker(actorUserId, targetUserId);
+    }
+
+    return false;
+  }
+
+  private async canCommentOnWorker(actor: AuthUser, targetUser: AccessTargetUser): Promise<boolean> {
+    if (targetUser.role !== UserRole.Worker) {
+      return false;
+    }
+
+    const actorUserId = this.normalizeId(actor.userId);
+
+    if (!actor.role || !actorUserId) {
+      return false;
+    }
+
+    if (actor.role === UserRole.SuperAdmin) {
+      return true;
+    }
+
+    if (actor.role === UserRole.CompanyAdmin) {
+      return Boolean(
+        actor.companyId &&
+          targetUser.companyId &&
+          String(actor.companyId) === String(targetUser.companyId),
+      );
+    }
+
+    if (actor.role === UserRole.ProjectAdmin) {
+      return this.canProjectAdminManageWorker(actorUserId, this.normalizeId(targetUser._id));
+    }
+
+    return false;
+  }
+
+  async assertCanViewUser(actor: AuthUser, targetUserId: string): Promise<UserDocument> {
+    const targetUser = await this.findOne(targetUserId);
+
+    if (!(await this.canViewUser(actor, targetUser))) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return targetUser;
+  }
+
+  async assertCanEditUser(actor: AuthUser, targetUserId: string): Promise<UserDocument> {
+    const targetUser = await this.findOne(targetUserId);
+
+    if (!(await this.canEditUser(actor, targetUser))) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return targetUser;
+  }
+
+  async assertCanDeleteUser(actor: AuthUser, targetUserId: string): Promise<UserDocument> {
+    const targetUser = await this.findOne(targetUserId);
+
+    if (!(await this.canDeleteUser(actor, targetUser))) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return targetUser;
+  }
+
+  async assertCanCommentOnWorker(actor: AuthUser, targetUserId: string): Promise<UserDocument> {
+    const targetUser = await this.findOne(targetUserId);
+
+    if (!(await this.canCommentOnWorker(actor, targetUser))) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return targetUser;
   }
 
   private normalizeProjectIds(projectIds?: string[]): string[] {
@@ -408,7 +641,7 @@ export class UsersService {
     };
   }
 
-  async findDetailedUserById(id: string): Promise<UserDetailResponse | null> {
+  async findDetailedUserById(id: string, actor?: AuthUser): Promise<UserDetailResponse | null> {
     const user = await this.userModel.findById(id).lean().exec();
     if (!user) {
       return null;
@@ -416,54 +649,73 @@ export class UsersService {
 
     const companyId = user.companyId || null;
     const projectIds = Array.isArray(user.projectIds) ? user.projectIds : [];
+    const normalizedUserId = this.normalizeId(user._id);
+    const projectMembershipFilter = {
+      $or: [
+        { _id: { $in: projectIds } },
+        { ownerId: normalizedUserId },
+        { projectManagerId: normalizedUserId },
+        { projectAdmins: normalizedUserId },
+        { workers: normalizedUserId },
+      ],
+    };
 
-    const [company, projects, activePushTokens, activityLogs, activityLogCount] = await Promise.all([
-      companyId
-        ? this.companyModel.findById(companyId).select('name email address').lean().exec()
-        : null,
-      projectIds.length
-        ? this.projectModel
-            .find({ _id: { $in: projectIds } })
-            .select('name status location ownerId projectManagerId projectAdmins workers')
-            .sort({ name: 1 })
-            .lean()
-            .exec()
-        : [],
-      this.deviceTokenModel
-        .find({ userId: id, enabled: true })
-        .sort({ lastSeenAt: -1, updatedAt: -1 })
-        .lean()
-        .exec(),
-      this.userActivityLogModel
-        .find({ userId: id })
-        .sort({ createdAt: -1 })
-        .limit(50)
-        .lean()
-        .exec(),
-      this.userActivityLogModel.countDocuments({ userId: id }).exec(),
-    ]);
-
-    const normalizeId = (value: unknown) => (value ? String(value) : '');
+    const [company, projects, tools, activePushTokens, activityLogs, activityLogCount] =
+      await Promise.all([
+        companyId
+          ? this.companyModel.findById(companyId).select('name email address').lean().exec()
+          : null,
+        this.projectModel
+          .find(projectMembershipFilter)
+          .select('name status location ownerId projectManagerId projectAdmins workers')
+          .sort({ name: 1 })
+          .lean()
+          .exec(),
+        this.toolModel
+          .find({ workerIds: normalizedUserId })
+          .select('name status notes photoUrl')
+          .sort({ name: 1 })
+          .lean()
+          .exec(),
+        this.deviceTokenModel
+          .find({ userId: id, enabled: true })
+          .sort({ lastSeenAt: -1, updatedAt: -1 })
+          .lean()
+          .exec(),
+        this.userActivityLogModel
+          .find({ userId: id })
+          .sort({ createdAt: -1 })
+          .limit(50)
+          .lean()
+          .exec(),
+        this.userActivityLogModel.countDocuments({ userId: id }).exec(),
+      ]);
 
     const detailedProjects = projects.map((project) => {
       const roles: UserDetailProjectRole[] = [];
-      const userId = normalizeId(user._id);
+      const userId = this.normalizeId(user._id);
 
-      if (normalizeId(project.ownerId) === userId) {
+      if (this.normalizeId(project.ownerId) === userId) {
         roles.push('owner');
       }
-      if (normalizeId(project.projectManagerId) === userId) {
+      if (this.normalizeId(project.projectManagerId) === userId) {
         roles.push('projectManager');
       }
-      if (Array.isArray(project.projectAdmins) && project.projectAdmins.some((entry) => normalizeId(entry) === userId)) {
+      if (
+        Array.isArray(project.projectAdmins) &&
+        project.projectAdmins.some((entry) => this.normalizeId(entry) === userId)
+      ) {
         roles.push('projectAdmin');
       }
-      if (Array.isArray(project.workers) && project.workers.some((entry) => normalizeId(entry) === userId)) {
+      if (
+        Array.isArray(project.workers) &&
+        project.workers.some((entry) => this.normalizeId(entry) === userId)
+      ) {
         roles.push('worker');
       }
 
       return {
-        id: normalizeId(project._id),
+        id: this.normalizeId(project._id),
         name: project.name,
         status: project.status,
         location: project.location || '',
@@ -471,8 +723,21 @@ export class UsersService {
       };
     });
 
+    const permissions =
+      actor && actor.userId && actor.role
+        ? {
+            canEdit: await this.canEditUser(actor, user as AccessTargetUser),
+            canDelete: await this.canDeleteUser(actor, user as AccessTargetUser),
+            canComment: await this.canCommentOnWorker(actor, user as AccessTargetUser),
+          }
+        : {
+            canEdit: false,
+            canDelete: false,
+            canComment: false,
+          };
+
     return {
-      id: normalizeId(user._id),
+      id: this.normalizeId(user._id),
       email: user.email,
       name: user.name,
       profession: user.profession || '',
@@ -493,15 +758,23 @@ export class UsersService {
       },
       company: company
         ? {
-            id: normalizeId(company._id),
+            id: this.normalizeId(company._id),
             name: company.name,
             email: company.email,
             address: company.address,
           }
         : null,
       projects: detailedProjects,
+      tools: tools.map((tool) => ({
+        id: this.normalizeId(tool._id),
+        name: tool.name,
+        status: tool.status,
+        notes: tool.notes || '',
+        photoUrl: tool.photoUrl || '',
+      })),
+      permissions,
       activePushTokens: activePushTokens.map((token) => ({
-        id: normalizeId(token._id),
+        id: this.normalizeId(token._id),
         installationId: token.installationId,
         expoPushToken: token.expoPushToken,
         platform: token.platform,
@@ -511,7 +784,7 @@ export class UsersService {
         updatedAt: (token as { updatedAt?: Date }).updatedAt || null,
       })),
       activityLogs: activityLogs.map((log) => ({
-        id: normalizeId(log._id),
+        id: this.normalizeId(log._id),
         category: log.category,
         type: log.type,
         level: log.level,
@@ -605,6 +878,62 @@ export class UsersService {
     };
   }
 
+  async listWorkerNotes(workerId: string): Promise<WorkerNoteResponse[]> {
+    const notes = await this.workerNoteModel
+      .find({ workerId })
+      .sort({ createdAt: -1, updatedAt: -1 })
+      .lean()
+      .exec();
+
+    return notes.map((note) => ({
+      id: this.normalizeId(note._id),
+      workerId: note.workerId,
+      authorUserId: note.authorUserId,
+      authorName: note.authorName || '',
+      authorRole: note.authorRole || '',
+      text: note.text,
+      createdAt: (note as { createdAt?: Date }).createdAt || null,
+      updatedAt: (note as { updatedAt?: Date }).updatedAt || null,
+    }));
+  }
+
+  async createWorkerNote(
+    workerId: string,
+    actor: AuthUser,
+    text: string,
+  ): Promise<WorkerNoteResponse> {
+    const author = actor.userId ? await this.findOne(actor.userId) : null;
+    const note = await this.workerNoteModel.create({
+      workerId,
+      authorUserId: this.normalizeId(actor.userId),
+      authorName: author?.name || author?.email || 'User',
+      authorRole: actor.role || '',
+      companyId: actor.companyId || '',
+      text: text.trim(),
+    });
+
+    return {
+      id: note._id.toString(),
+      workerId: note.workerId,
+      authorUserId: note.authorUserId,
+      authorName: note.authorName || '',
+      authorRole: note.authorRole || '',
+      text: note.text,
+      createdAt: (note as unknown as { createdAt?: Date }).createdAt || null,
+      updatedAt: (note as unknown as { updatedAt?: Date }).updatedAt || null,
+    };
+  }
+
+  async removeWorkerNote(workerId: string, noteId: string): Promise<void> {
+    const deletedNote = await this.workerNoteModel
+      .findOneAndDelete({ _id: noteId, workerId })
+      .exec();
+
+    if (!deletedNote) {
+      throw new NotFoundException(`Worker note with ID "${noteId}" not found`);
+    }
+  }
+
   async findAllByRole(role: UserRole): Promise<User[]> {
     return this.userModel.find({ role }).exec();
   }
@@ -622,6 +951,9 @@ export class UsersService {
         ? { email: updateUserDto.email.trim().toLowerCase() }
         : {}),
       ...(updateUserDto.name != null ? { name: updateUserDto.name.trim() } : {}),
+      ...(updateUserDto.profession != null
+        ? { profession: updateUserDto.profession.trim() }
+        : {}),
       ...(updateUserDto.projectIds != null
         ? { projectIds: this.normalizeProjectIds(updateUserDto.projectIds) }
         : {}),
@@ -640,6 +972,10 @@ export class UsersService {
       updatedUser.projectIds,
     );
 
+    if (updatedUser.role !== UserRole.Worker) {
+      await this.toolModel.updateMany({}, { $pull: { workerIds: updatedUser._id.toString() } });
+    }
+
     return updatedUser;
   }
 
@@ -648,6 +984,20 @@ export class UsersService {
     if (!deletedUser) {
       throw new NotFoundException(`User with ID "${id}" not found`);
     }
+
+    const deletedUserId = deletedUser._id.toString();
+
+    await Promise.all([
+      this.projectModel.updateMany(
+        {},
+        { $pull: { workers: deletedUserId, projectAdmins: deletedUserId } },
+      ),
+      this.toolModel.updateMany({}, { $pull: { workerIds: deletedUserId } }),
+      this.workerNoteModel.deleteMany({
+        $or: [{ workerId: deletedUserId }, { authorUserId: deletedUserId }],
+      }),
+    ]);
+
     return deletedUser;
   }
 
