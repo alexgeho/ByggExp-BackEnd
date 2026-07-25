@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { cronsDisabled } from '../common/cron.util';
 import ExcelJS from 'exceljs';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -653,7 +654,7 @@ export class ShiftsService {
    */
   @Cron(CronExpression.EVERY_10_MINUTES)
   async closeStuckShifts(): Promise<void> {
-    if (this.isClosingStuckShifts) {
+    if (cronsDisabled() || this.isClosingStuckShifts) {
       return;
     }
 
