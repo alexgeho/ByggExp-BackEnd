@@ -714,25 +714,27 @@ export class ShiftsService {
     const workerIds = [...new Set(activeShifts.map((shift) => shift.workerId))];
     const users = await this.userModel
       .find({ _id: { $in: workerIds } })
-      .select('lastSeenAt')
+      .select('lastSeenAt workStatusUpdatedAt')
       .lean()
       .exec();
-    const lastSeenByWorker = new Map(
-      users.map((user) => [String(user._id), user.lastSeenAt]),
+    const activityByWorker = new Map(
+      users.map((user) => [
+        String(user._id),
+        // Prefer the device heartbeat; fall back to when the shift/status was
+        // last set, so shifts with no heartbeat (phone off before the app ever
+        // pinged) are still detected as offline instead of running forever.
+        user.lastSeenAt || user.workStatusUpdatedAt,
+      ]),
     );
 
     const now = Date.now();
     let closed = 0;
 
     for (const shift of activeShifts) {
-      const lastSeen = lastSeenByWorker.get(String(shift.workerId));
+      const lastActivity =
+        activityByWorker.get(String(shift.workerId)) || shift.startedAt;
 
-      // No heartbeat recorded yet — leave it for the hard-duration backstop.
-      if (!lastSeen) {
-        continue;
-      }
-
-      const lastSeenAt = new Date(lastSeen);
+      const lastSeenAt = new Date(lastActivity);
       if (now - lastSeenAt.getTime() <= OFFLINE_CLOSE_MS) {
         continue;
       }
