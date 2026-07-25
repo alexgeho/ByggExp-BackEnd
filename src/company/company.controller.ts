@@ -9,6 +9,7 @@ import {
   UseGuards,
   Request,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { CompanyService } from './company.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -53,9 +54,20 @@ export class CompanyController {
     return this.companyService.findOne(req.user.companyId);
   }
 
+  // A non-superadmin may only ever look at their own company.
+  private assertOwnCompany(id: string, req: { user: { role?: UserRole; companyId?: string | null } }) {
+    if (
+      req.user.role !== UserRole.SuperAdmin &&
+      String(req.user.companyId) !== String(id)
+    ) {
+      throw new ForbiddenException('You do not have access to this company');
+    }
+  }
+
   @Get('info/:id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  async findCompanyById(@Param('id') id: string) {
+  async findCompanyById(@Param('id') id: string, @Request() req) {
+    this.assertOwnCompany(id, req);
     const company = await this.companyService.findCompanyById(id);
     if (!company) {
       throw new NotFoundException(`Company with ID "${id}" not found`);
@@ -65,8 +77,13 @@ export class CompanyController {
 
   @Post('by-ids')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  async findByIds(@Body() dto: { ids: string[] }) {
-    const companies = await this.companyService.findByIds(dto.ids);
+  async findByIds(@Body() dto: { ids: string[] }, @Request() req) {
+    // Non-superadmin can only ever resolve their own company.
+    const ids =
+      req.user.role === UserRole.SuperAdmin
+        ? dto.ids
+        : dto.ids.filter((id) => String(id) === String(req.user.companyId));
+    const companies = await this.companyService.findByIds(ids);
     return companies.map(company => ({
       id: (company as any)._id.toString(),
       name: company.name,
@@ -77,7 +94,8 @@ export class CompanyController {
 
   @Get(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  findOne(@Param('id') id: string): Promise<Company> {
+  findOne(@Param('id') id: string, @Request() req): Promise<Company> {
+    this.assertOwnCompany(id, req);
     return this.companyService.findOne(id);
   }
 

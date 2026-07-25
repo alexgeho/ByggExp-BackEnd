@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Tool, ToolDocument } from './schemas/tool.schema';
@@ -32,11 +32,47 @@ export class ToolsService {
 
     this.syncPhotoFields(payload);
 
-    if (user?.role === UserRole.CompanyAdmin && user.companyId) {
+    // Non-superadmin tools always belong to the caller's own company; any
+    // companyId supplied in the body is ignored (anti cross-tenant tampering).
+    if (user && user.role !== UserRole.SuperAdmin) {
+      if (!user.companyId) {
+        throw new ForbiddenException('Your account is not attached to a company');
+      }
       payload.companyId = user.companyId;
     }
 
     return new this.toolModel(payload).save();
+  }
+
+  // ---- Tenant access control ----
+
+  async assertToolAccessById(id: string, user: AuthUser): Promise<ToolDocument> {
+    const tool = await this.toolModel.findById(id).exec();
+    if (!tool) {
+      throw new NotFoundException(`Tool with ID "${id}" not found`);
+    }
+    if (user.role === UserRole.SuperAdmin) {
+      return tool;
+    }
+    if (!user.companyId || String(tool.companyId) !== String(user.companyId)) {
+      throw new ForbiddenException('You do not have access to this tool');
+    }
+    return tool;
+  }
+
+  async assertToolsInCompany(toolIds: string[], user: AuthUser): Promise<void> {
+    if (user.role === UserRole.SuperAdmin || !toolIds?.length) {
+      return;
+    }
+    if (!user.companyId) {
+      throw new ForbiddenException('Your account is not attached to a company');
+    }
+    const owned = await this.toolModel
+      .countDocuments({ _id: { $in: toolIds }, companyId: user.companyId })
+      .exec();
+    if (owned !== new Set(toolIds).size) {
+      throw new ForbiddenException('One or more tools are outside your company');
+    }
   }
 
   async findAccessible(user: AuthUser): Promise<Tool[]> {

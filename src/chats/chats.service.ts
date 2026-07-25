@@ -57,12 +57,22 @@ export class ChatsService {
 
     const participant = await this.userModel
       .findById(participantId)
-      .select('_id name email profession avatarUrl')
+      .select('_id name email profession avatarUrl companyId')
       .lean()
       .exec();
 
     if (!participant) {
       throw new NotFoundException(`User with ID "${participantId}" not found`);
+    }
+
+    // Tenant isolation: you can only start a direct chat with someone in your
+    // own company (superadmin is exempt).
+    if (
+      user.role !== UserRole.SuperAdmin &&
+      String((participant as { companyId?: unknown }).companyId ?? '') !==
+        String(user.companyId ?? '')
+    ) {
+      throw new ForbiddenException('You cannot message users outside your company');
     }
 
     const members = [...new Set([

@@ -83,22 +83,26 @@ export class ToolsController {
 
   @Post('attach-to-worker')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  attachToWorker(@Body() dto: AttachToolsToWorkerDto) {
+  async attachToWorker(@Body() dto: AttachToolsToWorkerDto, @Request() req) {
+    await this.toolsService.assertToolsInCompany(dto.toolIds, req.user);
     return this.toolsService.attachToWorker(dto.workerId, dto.toolIds);
   }
 
   @Put('worker/:workerId/assignments')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  replaceWorkerAssignments(
+  async replaceWorkerAssignments(
     @Param('workerId') workerId: string,
     @Body() dto: AttachToolsToWorkerDto,
+    @Request() req,
   ) {
+    await this.toolsService.assertToolsInCompany(dto.toolIds, req.user);
     return this.toolsService.replaceWorkerAssignments(workerId, dto.toolIds);
   }
 
   @Post('attach-to-project')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  attachToProject(@Body() dto: AttachToolsToProjectDto) {
+  async attachToProject(@Body() dto: AttachToolsToProjectDto, @Request() req) {
+    await this.toolsService.assertToolsInCompany(dto.toolIds, req.user);
     return this.toolsService.attachToProject(dto.projectId, dto.toolIds);
   }
 
@@ -118,11 +122,19 @@ export class ToolsController {
   @Put(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   @UseInterceptors(toolPhotoUploadInterceptor)
-  update(
+  async update(
     @Param('id') id: string,
     @Body() updateToolDto: UpdateToolDto,
+    @Request() req,
     @UploadedFiles() files?: { photos?: UploadedPhotoFile[]; photo?: UploadedPhotoFile[] },
   ) {
+    await this.toolsService.assertToolAccessById(id, req.user);
+
+    // Non-superadmin can never move a tool to another company.
+    if (req.user.role !== UserRole.SuperAdmin) {
+      delete (updateToolDto as { companyId?: string }).companyId;
+    }
+
     const uploadedFiles = collectUploadedPhotos(files);
     const photoFieldsTouched =
       updateToolDto.photoUrl !== undefined ||
@@ -138,13 +150,14 @@ export class ToolsController {
 
   @Delete(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @Request() req) {
+    await this.toolsService.assertToolAccessById(id, req.user);
     return this.toolsService.remove(id);
   }
 
   @Get(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  findOne(@Param('id') id: string) {
-    return this.toolsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.toolsService.assertToolAccessById(id, req.user);
   }
 }

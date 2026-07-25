@@ -87,31 +87,35 @@ export class TasksController {
 
   @Get('project/:projectId')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  findByProject(@Param('projectId') projectId: string) {
-    return this.tasksService.findByProject(projectId);
+  findByProject(@Param('projectId') projectId: string, @Request() req) {
+    return this.tasksService.findByProject(projectId, req.user);
   }
 
   @Put(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  update(@Request() req, @Param('id') id: string, @Body() updateTaskDto: UpdateTaskDto) {
+  async update(@Request() req, @Param('id') id: string, @Body() updateTaskDto: UpdateTaskDto) {
+    await this.tasksService.assertTaskAccessById(id, req.user);
     return this.tasksService.update(id, updateTaskDto, req.user.userId);
   }
 
   @Patch(':id/complete')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  complete(@Request() req, @Param('id') id: string) {
+  async complete(@Request() req, @Param('id') id: string) {
+    await this.tasksService.assertTaskAccessById(id, req.user);
     return this.tasksService.complete(id, req.user.userId);
   }
 
   @Patch(':id/reopen')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  reopen(@Request() req, @Param('id') id: string) {
+  async reopen(@Request() req, @Param('id') id: string) {
+    await this.tasksService.assertTaskAccessById(id, req.user);
     return this.tasksService.reopen(id, req.user.userId);
   }
 
   @Delete(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @Request() req) {
+    await this.tasksService.assertTaskAccessById(id, req.user);
     return this.tasksService.remove(id);
   }
 }

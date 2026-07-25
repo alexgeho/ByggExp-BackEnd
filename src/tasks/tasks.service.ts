@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Task, TaskDocument, TaskStatus } from './schemas/task.schema';
@@ -8,6 +8,12 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TaskRemindersService } from '../task-reminders/task-reminders.service';
+
+type TaskAuthUser = {
+  role?: UserRole;
+  companyId?: string | null;
+  userId?: string;
+};
 
 type ProjectNotificationSource = {
   _id: { toString(): string };
@@ -223,7 +229,75 @@ export class TasksService {
       .exec();
   }
 
-  async findByProject(projectId: string): Promise<Task[]> {
+  // ---- Tenant / project-scope access control for single tasks ----
+
+  private async assertProjectAccessForTasks(
+    projectId: string,
+    user: TaskAuthUser,
+  ): Promise<void> {
+    if (user.role === UserRole.SuperAdmin) {
+      return;
+    }
+    const project = await this.projectModel
+      .findById(projectId)
+      .select('companyId projectAdmins workers ownerId projectManagerId')
+      .lean()
+      .exec();
+    if (!project) {
+      throw new NotFoundException(`Project with ID "${projectId}" not found`);
+    }
+    const sameCompany =
+      !!user.companyId && String(project.companyId) === String(user.companyId);
+    if (!sameCompany) {
+      throw new ForbiddenException('You do not have access to this project');
+    }
+    if (user.role === UserRole.ProjectAdmin || user.role === UserRole.Worker) {
+      const uid = user.userId ? String(user.userId) : '';
+      const members = [
+        String((project as { ownerId?: unknown }).ownerId ?? ''),
+        String((project as { projectManagerId?: unknown }).projectManagerId ?? ''),
+        ...((project as { projectAdmins?: unknown[] }).projectAdmins ?? []).map(String),
+        ...((project as { workers?: unknown[] }).workers ?? []).map(String),
+      ];
+      if (!uid || !members.includes(uid)) {
+        throw new ForbiddenException('You do not have access to this project');
+      }
+    }
+  }
+
+  async assertTaskAccessById(
+    id: string,
+    user: TaskAuthUser,
+  ): Promise<TaskDocument> {
+    const task = await this.taskModel.findById(id).exec();
+    if (!task) {
+      throw new NotFoundException(`Task with ID "${id}" not found`);
+    }
+    if (user.role === UserRole.SuperAdmin) {
+      return task;
+    }
+
+    if (task.projectId) {
+      await this.assertProjectAccessForTasks(String(task.projectId), user);
+      return task;
+    }
+
+    // Personal task (no project): only its assignee/creator (or superadmin) may touch it.
+    const uid = user.userId ? String(user.userId) : '';
+    const isStakeholder =
+      !!uid &&
+      (String((task as { assigneeUserId?: unknown }).assigneeUserId ?? '') === uid ||
+        String((task as { createdByUserId?: unknown }).createdByUserId ?? '') === uid);
+    if (!isStakeholder) {
+      throw new ForbiddenException('You do not have access to this task');
+    }
+    return task;
+  }
+
+  async findByProject(projectId: string, user?: TaskAuthUser): Promise<Task[]> {
+    if (user) {
+      await this.assertProjectAccessForTasks(projectId, user);
+    }
     return this.taskModel
       .find({ projectId })
       .sort({ dueDate: 1, createdAt: -1 })

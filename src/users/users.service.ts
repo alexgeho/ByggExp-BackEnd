@@ -599,12 +599,23 @@ export class UsersService {
     return this.userModel.find({ companyId }).exec();
   }
 
-  async findAllByProject(projectId: string): Promise<User[]> {
-    return this.userModel.find({ projectIds: projectId }).exec();
+  async findAllByProject(
+    projectId: string,
+    scopeCompanyId?: string | null,
+  ): Promise<User[]> {
+    const query: Record<string, unknown> = { projectIds: projectId };
+    if (scopeCompanyId) {
+      query.companyId = scopeCompanyId;
+    }
+    return this.userModel.find(query).exec();
   }
 
-  async findByIds(ids: string[]): Promise<User[]> {
-    return this.userModel.find({ _id: { $in: ids } })
+  async findByIds(ids: string[], scopeCompanyId?: string | null): Promise<User[]> {
+    const query: Record<string, unknown> = { _id: { $in: ids } };
+    if (scopeCompanyId) {
+      query.companyId = scopeCompanyId;
+    }
+    return this.userModel.find(query)
       .select('email name profession role companyId projectIds')
       .exec();
   }
@@ -1080,8 +1091,15 @@ export class UsersService {
       .exec();
   }
 
-  async findOneIdByEmail(email: string): Promise<{ id: string } | null> {
-    const user = await this.userModel.findOne({ email }).select('_id').exec();
+  async findOneIdByEmail(
+    email: string,
+    scopeCompanyId?: string | null,
+  ): Promise<{ id: string } | null> {
+    const query: Record<string, unknown> = { email };
+    if (scopeCompanyId) {
+      query.companyId = scopeCompanyId;
+    }
+    const user = await this.userModel.findOne(query).select('_id').exec();
     return user ? { id: user._id.toString() } : null;
   }
 

@@ -82,10 +82,12 @@ export class UsersController {
       ) {
         createUserDto.role = UserRole.Worker;
       }
-      // Добавляем companyId автоматически
-      if (!createUserDto.companyId) {
-        createUserDto.companyId = req.user.companyId;
-      }
+    }
+
+    // Tenant isolation: any non-superadmin ALWAYS creates users inside their own
+    // company; a companyId supplied in the body is ignored (anti cross-tenant).
+    if (req.user.role !== UserRole.SuperAdmin) {
+      createUserDto.companyId = req.user.companyId;
     }
 
     const role = createUserDto.role ?? UserRole.Worker;
@@ -115,8 +117,14 @@ export class UsersController {
 
   @Get('company/:companyId')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  findAllByCompany(@Param('companyId') companyId: string): Promise<User[]> {
-    return this.usersService.findAllByCompany(companyId);
+  findAllByCompany(
+    @Param('companyId') companyId: string,
+    @Request() req,
+  ): Promise<User[]> {
+    // Non-superadmin can only ever list their own company, regardless of param.
+    const scopedCompanyId =
+      req.user.role === UserRole.SuperAdmin ? companyId : req.user.companyId;
+    return this.usersService.findAllByCompany(scopedCompanyId);
   }
 
   @Get('my-company')
@@ -135,8 +143,14 @@ export class UsersController {
 
   @Get('project/:projectId')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  findAllByProject(@Param('projectId') projectId: string): Promise<User[]> {
-    return this.usersService.findAllByProject(projectId);
+  findAllByProject(
+    @Param('projectId') projectId: string,
+    @Request() req,
+  ): Promise<User[]> {
+    // Non-superadmin only ever sees users from their own company on a project.
+    const scopeCompanyId =
+      req.user.role === UserRole.SuperAdmin ? undefined : req.user.companyId;
+    return this.usersService.findAllByProject(projectId, scopeCompanyId);
   }
 
   @Get('role/:role')
@@ -147,8 +161,14 @@ export class UsersController {
 
   @Get('by-email')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  findOneIdByEmail(@Query('email') email: string): Promise<{ id: string } | null> {
-    return this.usersService.findOneIdByEmail(email);
+  findOneIdByEmail(
+    @Query('email') email: string,
+    @Request() req,
+  ): Promise<{ id: string } | null> {
+    // Non-superadmin can only resolve emails within their own company.
+    const scopeCompanyId =
+      req.user.role === UserRole.SuperAdmin ? undefined : req.user.companyId;
+    return this.usersService.findOneIdByEmail(email, scopeCompanyId);
   }
 
   @Get('info/:id')
@@ -256,8 +276,11 @@ export class UsersController {
 
   @Post('by-ids')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  async findByIds(@Body() dto: { ids: string[] }) {
-    const users = await this.usersService.findByIds(dto.ids);
+  async findByIds(@Body() dto: { ids: string[] }, @Request() req) {
+    // Non-superadmin only ever resolves users from their own company.
+    const scopeCompanyId =
+      req.user.role === UserRole.SuperAdmin ? undefined : req.user.companyId;
+    const users = await this.usersService.findByIds(dto.ids, scopeCompanyId);
     return users.map(user => ({
       id: (user as any)._id.toString(),
       email: user.email,

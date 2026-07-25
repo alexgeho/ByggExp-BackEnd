@@ -140,7 +140,8 @@ export class ProjectsController {
 
   @Get('info/:id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  async findProjectById(@Param('id') id: string) {
+  async findProjectById(@Param('id') id: string, @Request() req) {
+    await this.projectsService.assertProjectAccessById(id, req.user);
     const project = await this.projectsService.findProjectById(id);
     if (!project) {
       throw new NotFoundException(`Project with ID "${id}" not found`);
@@ -150,8 +151,8 @@ export class ProjectsController {
 
   @Post('by-ids')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  async findByIds(@Body() dto: { ids: string[] }) {
-    const projects = await this.projectsService.findByIds(dto.ids);
+  async findByIds(@Body() dto: { ids: string[] }, @Request() req) {
+    const projects = await this.projectsService.findByIds(dto.ids, req.user);
     return projects.map(project => ({
       id: (project as any)._id.toString(),
       name: project.name,
@@ -167,8 +168,14 @@ export class ProjectsController {
 
   @Get('company/:companyId')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  findAllByCompany(@Param('companyId') companyId: string): Promise<Project[]> {
-    return this.projectsService.findAllByCompany(companyId);
+  findAllByCompany(
+    @Param('companyId') companyId: string,
+    @Request() req,
+  ): Promise<Project[]> {
+    // Non-superadmin can only ever list their own company, regardless of param.
+    const scopedCompanyId =
+      req.user.role === UserRole.SuperAdmin ? companyId : req.user.companyId;
+    return this.projectsService.findAllByCompany(scopedCompanyId);
   }
 
   @Get('populated')
@@ -179,54 +186,66 @@ export class ProjectsController {
 
   @Get(':id/populated')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  findOnePopulated(@Param('id', ObjectIdPipe) id: string): Promise<Project> {
+  async findOnePopulated(
+    @Param('id', ObjectIdPipe) id: string,
+    @Request() req,
+  ): Promise<Project> {
+    await this.projectsService.assertProjectAccessById(id, req.user);
     return this.projectsService.findOneWithPopulated(id);
   }
 
   @Get(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  findOne(@Param('id', ObjectIdPipe) id: string): Promise<Project> {
-    return this.projectsService.findOne(id);
+  async findOne(
+    @Param('id', ObjectIdPipe) id: string,
+    @Request() req,
+  ): Promise<Project> {
+    return this.projectsService.assertProjectAccessById(id, req.user);
   }
 
   @Post(':id/workers')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  addWorkers(
+  async addWorkers(
     @Param('id') id: string,
     @Body() addWorkersDto: AddWorkersToProjectDto,
     @Request() req,
   ): Promise<Project> {
-    if (req.user.role === UserRole.ProjectAdmin) {
-    }
+    await this.projectsService.assertProjectAccessById(id, req.user);
     return this.projectsService.addWorkers(id, addWorkersDto.workerIds);
   }
 
   @Delete(':id/workers/:workerId')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  removeWorker(
+  async removeWorker(
     @Param('id') id: string,
     @Param('workerId') workerId: string,
+    @Request() req,
   ): Promise<Project> {
+    await this.projectsService.assertProjectAccessById(id, req.user);
     return this.projectsService.removeWorker(id, workerId);
   }
 
   @Post(':id/admins/:userId')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  addProjectAdmin(
+  async addProjectAdmin(
     @Param('id') id: string,
     @Param('userId') userId: string,
+    @Request() req,
   ): Promise<Project> {
+    await this.projectsService.assertProjectAccessById(id, req.user);
     return this.projectsService.addProjectAdmin(id, userId);
   }
 
   @Post(':id/documents')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   @UseInterceptors(FilesInterceptor('documents', 10, { storage: documentsStorage }))
-  uploadDocuments(
+  async uploadDocuments(
     @Param('id') id: string,
     @UploadedFiles() files: UploadedDocumentFile[],
     @Request() req,
   ): Promise<Project> {
+    await this.projectsService.assertProjectAccessById(id, req.user);
+
     const documents = (files || []).map((file) => ({
       name: file.originalname,
       url: `/uploads/project-documents/${file.filename}`,
@@ -241,13 +260,18 @@ export class ProjectsController {
   @Put(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   @UseInterceptors(FilesInterceptor('documents', 10, { storage: documentsStorage }))
-  update(
+  async update(
     @Param('id') id: string,
     @Body() updateProjectDto: Partial<CreateProjectDto>,
     @UploadedFiles() files: UploadedDocumentFile[],
     @Request() req,
   ): Promise<Project> {
-    if (req.user.role === UserRole.ProjectAdmin) {
+    await this.projectsService.assertProjectAccessById(id, req.user);
+
+    // Non-superadmin can never move a project to another company via update.
+    if (req.user.role !== UserRole.SuperAdmin) {
+      delete updateProjectDto.companyId;
+      delete (updateProjectDto as { clientCompanyId?: string }).clientCompanyId;
     }
 
     if (files?.length) {
@@ -265,7 +289,8 @@ export class ProjectsController {
 
   @Delete(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  remove(@Param('id') id: string): Promise<Project> {
+  async remove(@Param('id') id: string, @Request() req): Promise<Project> {
+    await this.projectsService.assertProjectAccessById(id, req.user);
     return this.projectsService.remove(id);
   }
 }

@@ -16,6 +16,12 @@ import { UsersService } from '../users/users.service';
 import { CompanyService } from '../company/company.service';
 import { User, UserRole } from '../users/schemas/user.schema';
 
+type ProjectAuthUser = {
+  userId?: string;
+  role?: UserRole;
+  companyId?: string | null;
+};
+
 @Injectable()
 export class ProjectsService {
   private readonly logger = new Logger(ProjectsService.name);
@@ -58,6 +64,69 @@ export class ProjectsService {
     }
 
     return '';
+  }
+
+  // ---- Tenant / project-scope access control ----
+  // Mirrors the pattern used by invoices/shifts: companyId is derived from the
+  // authenticated user, and every by-id access is checked against it.
+
+  private resolveCompanyId(
+    companyId: string | undefined | null,
+    user: ProjectAuthUser,
+  ): string {
+    if (user.role === UserRole.SuperAdmin) {
+      if (!companyId) {
+        throw new BadRequestException('companyId is required for superadmin');
+      }
+      return String(companyId);
+    }
+    if (!user.companyId) {
+      throw new ForbiddenException('Your account is not attached to a company');
+    }
+    return String(user.companyId);
+  }
+
+  private isProjectMember(project: Project, userId?: string): boolean {
+    if (!userId) {
+      return false;
+    }
+    const uid = String(userId);
+    const inList = (list?: unknown) =>
+      Array.isArray(list) && list.some((m) => this.getEntityId(m) === uid);
+    return (
+      this.getEntityId(project.ownerId) === uid ||
+      this.getEntityId(project.projectManagerId) === uid ||
+      inList(project.projectAdmins) ||
+      inList(project.workers)
+    );
+  }
+
+  private assertCanAccessProject(project: Project, user: ProjectAuthUser): void {
+    if (user.role === UserRole.SuperAdmin) {
+      return;
+    }
+    if (!user.companyId || String(project.companyId) !== String(user.companyId)) {
+      throw new ForbiddenException('You do not have access to this project');
+    }
+    // ProjectAdmin / Worker are further limited to projects they belong to.
+    if (
+      (user.role === UserRole.ProjectAdmin || user.role === UserRole.Worker) &&
+      !this.isProjectMember(project, user.userId)
+    ) {
+      throw new ForbiddenException('You do not have access to this project');
+    }
+  }
+
+  async assertProjectAccessById(
+    id: string,
+    user: ProjectAuthUser,
+  ): Promise<ProjectDocument> {
+    const project = await this.projectModel.findById(id).exec();
+    if (!project) {
+      throw new NotFoundException(`Project with ID "${id}" not found`);
+    }
+    this.assertCanAccessProject(project, user);
+    return project;
   }
 
   private async fetchGeocoderJson(
@@ -142,15 +211,22 @@ export class ProjectsService {
     createProjectDto: CreateProjectDto,
     currentUser?: { userId?: string; role?: UserRole; companyId?: string | null },
   ): Promise<CreateProjectDto> {
-    let companyId =
-      createProjectDto.companyId ||
-      createProjectDto.clientCompanyId ||
-      currentUser?.companyId ||
-      '';
+    let companyId: string;
+    if (currentUser?.role === UserRole.SuperAdmin) {
+      companyId =
+        createProjectDto.companyId ||
+        createProjectDto.clientCompanyId ||
+        currentUser?.companyId ||
+        '';
 
-    if (!companyId) {
-      const companies = await this.companyService.findAll();
-      companyId = this.getEntityId(companies[0]);
+      if (!companyId) {
+        const companies = await this.companyService.findAll();
+        companyId = this.getEntityId(companies[0]);
+      }
+    } else {
+      // Non-superadmin: the project ALWAYS belongs to the caller's own company;
+      // any companyId/clientCompanyId sent in the body is ignored (anti-tamper).
+      companyId = currentUser?.companyId || '';
     }
 
     if (!companyId) {
@@ -262,8 +338,13 @@ export class ProjectsService {
     }).exec();
   }
 
-  async findByIds(ids: string[]): Promise<Project[]> {
-    return this.projectModel.find({ _id: { $in: ids } })
+  async findByIds(ids: string[], user?: ProjectAuthUser): Promise<Project[]> {
+    const query: Record<string, unknown> = { _id: { $in: ids } };
+    // Non-superadmin callers only ever get projects from their own company.
+    if (user && user.role !== UserRole.SuperAdmin) {
+      query.companyId = user.companyId || '__no_company__';
+    }
+    return this.projectModel.find(query)
       .select(
         'companyId ownerId projectManagerId name status location locationLatitude locationLongitude locationRadiusMeters shiftSchedule',
       )
