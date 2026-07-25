@@ -116,4 +116,38 @@ describe('Company create + auto admin (e2e)', () => {
       .send({ email: `noauth-${uniq}@e2e.local` });
     expect(res.status).toBe(401);
   });
+
+  it('cascade-deletes the admin user when the company is deleted (recreate works)', async () => {
+    const email = `cascade-${uniq}@e2e.local`;
+
+    // create → company + admin user
+    const created = await request(http)
+      .post('/company')
+      .set('Authorization', `Bearer ${superToken}`)
+      .send({ email });
+    const companyId = created.body.company._id ?? created.body.company.id;
+
+    // the admin user must exist now (recreating the same email is blocked)
+    const dup = await request(http)
+      .post('/company')
+      .set('Authorization', `Bearer ${superToken}`)
+      .send({ email });
+    expect(dup.status).toBe(409);
+
+    // delete the company → must cascade-remove its admin user
+    const del = await request(http)
+      .delete(`/company/${companyId}`)
+      .set('Authorization', `Bearer ${superToken}`);
+    expect(del.status).toBeGreaterThanOrEqual(200);
+    expect(del.status).toBeLessThan(300);
+
+    // now the same email is free again (no orphaned user left behind)
+    const recreated = await request(http)
+      .post('/company')
+      .set('Authorization', `Bearer ${superToken}`)
+      .send({ email });
+    expect(recreated.status).toBeGreaterThanOrEqual(200);
+    expect(recreated.status).toBeLessThan(300);
+    expect(recreated.body.admin.email).toBe(email);
+  });
 });

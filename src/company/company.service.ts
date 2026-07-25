@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { InjectModel, InjectConnection } from '@nestjs/mongoose';
+import { Model, Connection } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { Company, CompanyDocument } from './schemas/company.schema';
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -12,6 +12,7 @@ import { UserRole } from '../users/schemas/user.schema';
 export class CompanyService {
   constructor(
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
+    @InjectConnection() private readonly connection: Connection,
     private usersService: UsersService,
   ) {}
 
@@ -191,12 +192,55 @@ export class CompanyService {
     return updatedCompany;
   }
 
+  /**
+   * Delete a company and cascade-delete its entire tenant footprint: every user
+   * (all roles), every record scoped directly by companyId (projects, tools,
+   * invoices, clients, offers, articles, worker-notes, bug-reports…), and the
+   * project-scoped records that carry only a projectId (tasks, shifts, chats).
+   */
   async remove(id: string): Promise<Company> {
-    const deletedCompany = await this.companyModel.findByIdAndDelete(id).exec();
-    if (!deletedCompany) {
+    const company = await this.companyModel.findById(id).exec();
+    if (!company) {
       throw new NotFoundException(`Company with ID "${id}" not found`);
     }
-    return deletedCompany;
+    const companyId = String(id);
+
+    // 1) Collect this company's project ids BEFORE deleting projects, so we can
+    //    cascade the records that are scoped by projectId (not companyId).
+    const projectModel = this.connection.models['Project'];
+    let projectIds: string[] = [];
+    if (projectModel) {
+      const projects = await projectModel
+        .find({ companyId })
+        .select('_id')
+        .lean()
+        .exec();
+      projectIds = projects.map((p: { _id: unknown }) => String(p._id));
+    }
+
+    // 2) Delete project-scoped data (tasks, shifts, chats).
+    if (projectIds.length) {
+      for (const name of ['Task', 'Shift', 'Chat']) {
+        const model = this.connection.models[name];
+        if (model && model.schema.path('projectId')) {
+          await model.deleteMany({ projectId: { $in: projectIds } });
+        }
+      }
+    }
+
+    // 3) Delete everything scoped directly by companyId across every collection
+    //    that carries a companyId (users, projects, tools, invoices, clients,
+    //    offers, articles, worker-notes, bug-reports, …).
+    for (const model of Object.values(this.connection.models)) {
+      if (model.modelName === Company.name) continue;
+      if (model.schema.path('companyId')) {
+        await model.deleteMany({ companyId });
+      }
+    }
+
+    // 4) Delete the company itself.
+    await this.companyModel.findByIdAndDelete(id).exec();
+    return company;
   }
 
   async findByName(name: string): Promise<CompanyDocument | null> {
