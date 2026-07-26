@@ -76,6 +76,11 @@ export class Project {
   @Prop()
   contractNumber: string;
 
+  // Littera / customer order reference (e.g. "100014"); flows to the invoice's
+  // order reference and into hour-invoice descriptions.
+  @Prop({ default: '' })
+  littera: string;
+
   @Prop({ type: Date })
   beginningDate: Date;
 

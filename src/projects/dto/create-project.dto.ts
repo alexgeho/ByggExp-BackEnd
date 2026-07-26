@@ -137,6 +137,10 @@ export class CreateProjectDto {
   @IsOptional()
   contractNumber?: string;
 
+  @IsString()
+  @IsOptional()
+  littera?: string;
+
   @IsDateString()
   @IsOptional()
   beginningDate?: Date;
