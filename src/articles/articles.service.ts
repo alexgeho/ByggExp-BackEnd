@@ -38,10 +38,8 @@ export class ArticlesService {
   }
 
   async findAccessible(user: AuthUser): Promise<Article[]> {
-    if (user.role === UserRole.SuperAdmin) {
-      return this.articleModel.find().sort({ createdAt: -1 }).exec();
-    }
-
+    // Superadmin is scoped to its own company like any tenant admin — it must
+    // never list another company's articles.
     if (!user.companyId) {
       return [];
     }
@@ -113,11 +111,8 @@ export class ArticlesService {
     return { nextNumber };
   }
 
-  private resolveCompanyId(companyId: string | undefined, user: AuthUser): string | undefined {
-    if (user.role === UserRole.SuperAdmin) {
-      return companyId || undefined;
-    }
-
+  private resolveCompanyId(_companyId: string | undefined, user: AuthUser): string {
+    // Every actor (superadmin included) creates only within its own company.
     if (!user.companyId) {
       throw new ForbiddenException('Your account is not attached to a company');
     }
@@ -126,10 +121,6 @@ export class ArticlesService {
   }
 
   private assertCanAccess(article: Article, user: AuthUser): void {
-    if (user.role === UserRole.SuperAdmin) {
-      return;
-    }
-
     if (!user.companyId || String(article.companyId) !== String(user.companyId)) {
       throw new ForbiddenException('You do not have access to this article');
     }

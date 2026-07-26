@@ -123,8 +123,12 @@ export class ProjectsController {
 
   @Get()
   @Roles(UserRole.SuperAdmin)
-  findAll(): Promise<Project[]> {
-    return this.projectsService.findAll();
+  findAll(@Request() req): Promise<Project[]> {
+    // Superadmin is a tenant too — its project list is scoped to its own
+    // company, never another company's projects.
+    return req.user?.companyId
+      ? this.projectsService.findAllByCompany(req.user.companyId)
+      : this.projectsService.findAll();
   }
 
   @Get('my')

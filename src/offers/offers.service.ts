@@ -47,10 +47,8 @@ export class OffersService {
   }
 
   async findAccessible(user: AuthUser): Promise<Offer[]> {
-    if (user.role === UserRole.SuperAdmin) {
-      return this.offerModel.find().sort({ createdAt: -1 }).exec();
-    }
-
+    // Superadmin is scoped to its own company like any tenant admin — it must
+    // never list another company's offers.
     if (!user.companyId) {
       return [];
     }
@@ -138,15 +136,8 @@ export class OffersService {
     return { offerNumber };
   }
 
-  private resolveCompanyId(companyId: string | undefined, user: AuthUser): string {
-    if (user.role === UserRole.SuperAdmin) {
-      if (!companyId) {
-        throw new BadRequestException('companyId is required for superadmin offer creation');
-      }
-
-      return companyId;
-    }
-
+  private resolveCompanyId(_companyId: string | undefined, user: AuthUser): string {
+    // Every actor (superadmin included) creates only within its own company.
     if (!user.companyId) {
       throw new ForbiddenException('Your account is not attached to a company');
     }
@@ -155,10 +146,6 @@ export class OffersService {
   }
 
   private assertCanAccess(offer: Offer, user: AuthUser): void {
-    if (user.role === UserRole.SuperAdmin) {
-      return;
-    }
-
     if (!user.companyId || String(offer.companyId) !== String(user.companyId)) {
       throw new ForbiddenException('You do not have access to this offer');
     }

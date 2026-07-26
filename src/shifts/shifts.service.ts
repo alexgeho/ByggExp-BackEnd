@@ -505,11 +505,7 @@ export class ShiftsService {
       throw new NotFoundException(`Project with ID "${projectId}" not found`);
     }
 
-    if (user.role === UserRole.SuperAdmin) {
-      return project;
-    }
-
-    if (user.role === UserRole.CompanyAdmin) {
+    if (user.role === UserRole.CompanyAdmin || user.role === UserRole.SuperAdmin) {
       if (project.companyId !== user.companyId) {
         throw new ForbiddenException('You do not have access to this project.');
       }
@@ -591,19 +587,8 @@ export class ShiftsService {
   private async buildAccessibleShiftFilter(user: AuthenticatedUser, query: ListShiftsDto) {
     const filter: Record<string, unknown> = {};
 
-    if (user.role === UserRole.SuperAdmin) {
-      if (query.workerId) {
-        filter.workerId = query.workerId;
-      }
-
-      if (query.projectId) {
-        filter.projectId = query.projectId;
-      }
-
-      return filter;
-    }
-
-    if (user.role === UserRole.CompanyAdmin) {
+    // Superadmin is scoped to its own company like a company admin.
+    if (user.role === UserRole.CompanyAdmin || user.role === UserRole.SuperAdmin) {
       const projectFilter: Record<string, unknown> = {
         companyId: user.companyId,
       };

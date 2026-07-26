@@ -64,10 +64,8 @@ export class InvoicesService {
   }
 
   async findAccessible(user: AuthUser): Promise<Invoice[]> {
-    if (user.role === UserRole.SuperAdmin) {
-      return this.invoiceModel.find().sort({ createdAt: -1 }).exec();
-    }
-
+    // Superadmin is scoped to its own company like any tenant admin — it must
+    // never list another company's invoices.
     if (!user.companyId) {
       return [];
     }
@@ -190,14 +188,8 @@ export class InvoicesService {
     }
   }
 
-  private resolveCompanyId(companyId: string | undefined, user: AuthUser): string {
-    if (user.role === UserRole.SuperAdmin) {
-      if (!companyId) {
-        throw new BadRequestException('companyId is required for superadmin invoice creation');
-      }
-      return companyId;
-    }
-
+  private resolveCompanyId(_companyId: string | undefined, user: AuthUser): string {
+    // Every actor (superadmin included) creates only within its own company.
     if (!user.companyId) {
       throw new ForbiddenException('Your account is not attached to a company');
     }
@@ -206,10 +198,6 @@ export class InvoicesService {
   }
 
   private assertCanAccess(invoice: Invoice, user: AuthUser): void {
-    if (user.role === UserRole.SuperAdmin) {
-      return;
-    }
-
     if (!user.companyId || String(invoice.companyId) !== String(user.companyId)) {
       throw new ForbiddenException('You do not have access to this invoice');
     }

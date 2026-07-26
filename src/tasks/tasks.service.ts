@@ -186,16 +186,13 @@ export class TasksService {
   }
 
   async findAccessible(user: { role: UserRole; companyId?: string; userId?: string }): Promise<Task[]> {
-    if (user.role === UserRole.SuperAdmin) {
-      return this.taskModel
-        .find()
-        .sort({ dueDate: 1, createdAt: -1 })
-        .exec();
-    }
-
     let projectFilter = {};
 
-    if (user.role === UserRole.CompanyAdmin && user.companyId) {
+    // Superadmin is scoped to its own company like a company admin.
+    if (
+      (user.role === UserRole.CompanyAdmin || user.role === UserRole.SuperAdmin) &&
+      user.companyId
+    ) {
       projectFilter = { companyId: user.companyId };
     } else if (user.role === UserRole.ProjectAdmin && user.userId) {
       projectFilter = { projectAdmins: user.userId };
@@ -235,9 +232,6 @@ export class TasksService {
     projectId: string,
     user: TaskAuthUser,
   ): Promise<void> {
-    if (user.role === UserRole.SuperAdmin) {
-      return;
-    }
     const project = await this.projectModel
       .findById(projectId)
       .select('companyId projectAdmins workers ownerId projectManagerId')
@@ -273,16 +267,12 @@ export class TasksService {
     if (!task) {
       throw new NotFoundException(`Task with ID "${id}" not found`);
     }
-    if (user.role === UserRole.SuperAdmin) {
-      return task;
-    }
-
     if (task.projectId) {
       await this.assertProjectAccessForTasks(String(task.projectId), user);
       return task;
     }
 
-    // Personal task (no project): only its assignee/creator (or superadmin) may touch it.
+    // Personal task (no project): only its assignee/creator may touch it.
     const uid = user.userId ? String(user.userId) : '';
     const isStakeholder =
       !!uid &&

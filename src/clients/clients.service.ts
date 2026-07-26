@@ -38,10 +38,8 @@ export class ClientsService {
   }
 
   async findAccessible(user: AuthUser): Promise<Client[]> {
-    if (user.role === UserRole.SuperAdmin) {
-      return this.clientModel.find().sort({ createdAt: -1 }).exec();
-    }
-
+    // Superadmin is scoped to its own company like any tenant admin — it must
+    // never list another company's clients.
     if (!user.companyId) {
       return [];
     }
@@ -110,14 +108,8 @@ export class ClientsService {
     return { nextNumber };
   }
 
-  private resolveCompanyId(companyId: string | undefined, user: AuthUser): string {
-    if (user.role === UserRole.SuperAdmin) {
-      if (!companyId) {
-        throw new BadRequestException('companyId is required for superadmin client operations');
-      }
-      return companyId;
-    }
-
+  private resolveCompanyId(_companyId: string | undefined, user: AuthUser): string {
+    // Every actor (superadmin included) creates only within its own company.
     if (!user.companyId) {
       throw new ForbiddenException('Your account is not attached to a company');
     }
@@ -126,10 +118,6 @@ export class ClientsService {
   }
 
   private assertCanAccess(client: Client, user: AuthUser): void {
-    if (user.role === UserRole.SuperAdmin) {
-      return;
-    }
-
     if (!user.companyId || String(client.companyId) !== String(user.companyId)) {
       throw new ForbiddenException('You do not have access to this client');
     }

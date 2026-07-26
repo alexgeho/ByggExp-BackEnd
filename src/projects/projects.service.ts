@@ -94,15 +94,10 @@ export class ProjectsService {
   // authenticated user, and every by-id access is checked against it.
 
   private resolveCompanyId(
-    companyId: string | undefined | null,
+    _companyId: string | undefined | null,
     user: ProjectAuthUser,
   ): string {
-    if (user.role === UserRole.SuperAdmin) {
-      if (!companyId) {
-        throw new BadRequestException('companyId is required for superadmin');
-      }
-      return String(companyId);
-    }
+    // Every actor (superadmin included) is scoped to its own company.
     if (!user.companyId) {
       throw new ForbiddenException('Your account is not attached to a company');
     }
@@ -125,9 +120,6 @@ export class ProjectsService {
   }
 
   private assertCanAccessProject(project: Project, user: ProjectAuthUser): void {
-    if (user.role === UserRole.SuperAdmin) {
-      return;
-    }
     if (!user.companyId || String(project.companyId) !== String(user.companyId)) {
       throw new ForbiddenException('You do not have access to this project');
     }
@@ -234,23 +226,9 @@ export class ProjectsService {
     createProjectDto: CreateProjectDto,
     currentUser?: { userId?: string; role?: UserRole; companyId?: string | null },
   ): Promise<CreateProjectDto> {
-    let companyId: string;
-    if (currentUser?.role === UserRole.SuperAdmin) {
-      companyId =
-        createProjectDto.companyId ||
-        createProjectDto.clientCompanyId ||
-        currentUser?.companyId ||
-        '';
-
-      if (!companyId) {
-        const companies = await this.companyService.findAll();
-        companyId = this.getEntityId(companies[0]);
-      }
-    } else {
-      // Non-superadmin: the project ALWAYS belongs to the caller's own company;
-      // any companyId/clientCompanyId sent in the body is ignored (anti-tamper).
-      companyId = currentUser?.companyId || '';
-    }
+    // Every actor (superadmin included) creates projects only in its own
+    // company; any companyId/clientCompanyId in the body is ignored (anti-tamper).
+    const companyId: string = currentUser?.companyId || '';
 
     if (!companyId) {
       throw new BadRequestException('No company available for project creation');
@@ -370,7 +348,8 @@ export class ProjectsService {
   async findByIds(ids: string[], user?: ProjectAuthUser): Promise<Project[]> {
     const query: Record<string, unknown> = { _id: { $in: ids } };
     // Non-superadmin callers only ever get projects from their own company.
-    if (user && user.role !== UserRole.SuperAdmin) {
+    // Superadmin is scoped to its own company like any other actor.
+    if (user) {
       query.companyId = user.companyId || '__no_company__';
     }
     return this.projectModel.find(query)
@@ -737,12 +716,13 @@ export class ProjectsService {
   }) {
     // Tenant isolation: only superadmin may see every company's projects.
     // Everyone else is scoped to their own company (empty result if unattached).
-    const filter =
-      !actor || actor.role === UserRole.SuperAdmin
-        ? {}
-        : actor.companyId
-          ? { companyId: actor.companyId }
-          : { _id: null };
+    // Superadmin is scoped to its own company; only internal (no-actor) calls
+    // are allowed to span every company.
+    const filter = !actor
+      ? {}
+      : actor.companyId
+        ? { companyId: actor.companyId }
+        : { _id: null };
 
     return this.projectModel
       .find(filter)

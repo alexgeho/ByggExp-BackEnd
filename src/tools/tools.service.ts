@@ -34,7 +34,7 @@ export class ToolsService {
 
     // Non-superadmin tools always belong to the caller's own company; any
     // companyId supplied in the body is ignored (anti cross-tenant tampering).
-    if (user && user.role !== UserRole.SuperAdmin) {
+    if (user) {
       if (!user.companyId) {
         throw new ForbiddenException('Your account is not attached to a company');
       }
@@ -51,9 +51,6 @@ export class ToolsService {
     if (!tool) {
       throw new NotFoundException(`Tool with ID "${id}" not found`);
     }
-    if (user.role === UserRole.SuperAdmin) {
-      return tool;
-    }
     if (!user.companyId || String(tool.companyId) !== String(user.companyId)) {
       throw new ForbiddenException('You do not have access to this tool');
     }
@@ -61,7 +58,7 @@ export class ToolsService {
   }
 
   async assertToolsInCompany(toolIds: string[], user: AuthUser): Promise<void> {
-    if (user.role === UserRole.SuperAdmin || !toolIds?.length) {
+    if (!toolIds?.length) {
       return;
     }
     if (!user.companyId) {
@@ -76,11 +73,11 @@ export class ToolsService {
   }
 
   async findAccessible(user: AuthUser): Promise<Tool[]> {
-    if (user.role === UserRole.SuperAdmin) {
-      return this.toolModel.find().sort({ createdAt: -1 }).exec();
-    }
-
-    if (user.role === UserRole.CompanyAdmin && user.companyId) {
+    // Superadmin is scoped to its own company like a company admin.
+    if (
+      (user.role === UserRole.CompanyAdmin || user.role === UserRole.SuperAdmin) &&
+      user.companyId
+    ) {
       const companyProjects = await this.projectModel
         .find({ companyId: user.companyId })
         .select('_id')
