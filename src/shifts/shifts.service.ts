@@ -84,10 +84,6 @@ type ShiftExportResult = {
   mimeType: string;
 };
 
-// How long a worker's device may be silent (no heartbeat) before an active
-// shift is auto-paused at the last-seen time.
-const OFFLINE_PAUSE_MS = 5 * 60 * 1000;
-
 @Injectable()
 export class ShiftsService {
   private readonly logger = new Logger(ShiftsService.name);
@@ -658,12 +654,12 @@ export class ShiftsService {
 
   /**
    * Reconciles open shifts globally — the per-user finalizers above only run
-   * when that user hits the API, so a worker whose phone/app went silent would
-   * otherwise stay "At work" forever. For every worker with an open shift it
-   * runs the vetted prior-day / past-schedule finalizers, then pauses any active
-   * shift whose device has been silent past OFFLINE_PAUSE_MS. Pausing (not
-   * completing) keeps the accrued hours and lets the shift auto-resume once the
-   * device is seen again.
+   * when that user hits the API. For every worker with an open shift it runs the
+   * vetted prior-day / past-schedule finalizers, which bound a shift to its
+   * scheduled end and the day rollover. A silent device (phone asleep, app
+   * backgrounded) does NOT pause an active shift: the worker stays "At work"
+   * until they stop manually, leave the project area, or those finalizers close
+   * the shift.
    */
   @Cron(CronExpression.EVERY_10_MINUTES)
   async reconcileOpenShifts(): Promise<void> {
@@ -681,72 +677,11 @@ export class ShiftsService {
       for (const workerId of workerIds) {
         await this.finalizeStaleShifts(workerId);
       }
-
-      const pausedOffline = await this.pauseOfflineShifts();
-
-      if (pausedOffline > 0) {
-        this.logger.warn(
-          `Auto-paused ${pausedOffline} offline shift(s) (no heartbeat for ${OFFLINE_PAUSE_MS / 60000}m)`,
-        );
-      }
     } catch (error) {
       this.logger.error('Failed to reconcile open shifts', error);
     } finally {
       this.isReconcilingOpenShifts = false;
     }
-  }
-
-  private async pauseOfflineShifts(): Promise<number> {
-    const activeShifts = await this.shiftModel
-      .find({ status: ShiftStatus.Active })
-      .exec();
-
-    if (!activeShifts.length) {
-      return 0;
-    }
-
-    const workerIds = [...new Set(activeShifts.map((shift) => shift.workerId))];
-    const users = await this.userModel
-      .find({ _id: { $in: workerIds } })
-      .select('lastSeenAt workStatusUpdatedAt')
-      .lean()
-      .exec();
-    const activityByWorker = new Map(
-      users.map((user) => [
-        String(user._id),
-        // Prefer the device heartbeat; fall back to when the status was last set
-        // so shifts with no heartbeat (phone off before the app ever pinged) are
-        // still detected as offline.
-        user.lastSeenAt || user.workStatusUpdatedAt,
-      ]),
-    );
-
-    const now = Date.now();
-    let paused = 0;
-
-    for (const shift of activeShifts) {
-      const lastActivity =
-        activityByWorker.get(String(shift.workerId)) || shift.startedAt;
-
-      const lastSeenAt = new Date(lastActivity);
-      if (now - lastSeenAt.getTime() <= OFFLINE_PAUSE_MS) {
-        continue;
-      }
-
-      // Pause at the last-seen time so the recorded hours stop where the device
-      // went silent instead of running on.
-      this.pauseShiftDocument(shift, lastSeenAt, 'offline');
-      await shift.save();
-
-      await this.usersService.setOffDutyStatus(shift.workerId, {
-        reason: 'offline',
-        updatedAt: lastSeenAt,
-      });
-
-      paused += 1;
-    }
-
-    return paused;
   }
 
   /**
