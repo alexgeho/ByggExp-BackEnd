@@ -111,8 +111,12 @@ export class UsersController {
 
   @Get()
   @Roles(UserRole.SuperAdmin)
-  findAll(): Promise<User[]> {
-    return this.usersService.findAll();
+  findAll(@Request() req): Promise<User[]> {
+    // Superadmin is a tenant too — only ever sees its own company's users,
+    // never users created by other companies.
+    return req.user?.companyId
+      ? this.usersService.findAllByCompany(req.user.companyId)
+      : this.usersService.findAll();
   }
 
   @Get('company/:companyId')
