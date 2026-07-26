@@ -62,11 +62,12 @@ export class HoursService {
   ): Promise<ProjectDocument[]> {
     const filter: Record<string, unknown> = {};
 
-    if (user.role === UserRole.SuperAdmin) {
-      // superadmin must scope to a project to avoid loading every tenant
-      if (!projectId) return [];
-      filter._id = projectId;
-    } else if (user.role === UserRole.CompanyAdmin) {
+    if (
+      user.role === UserRole.SuperAdmin ||
+      user.role === UserRole.CompanyAdmin
+    ) {
+      // Superadmin behaves like a company admin here — scoped to its own
+      // company, never across tenants (empty until it has a companyId).
       if (!user.companyId) return [];
       filter.companyId = user.companyId;
       if (projectId) filter._id = projectId;
@@ -201,7 +202,7 @@ export class HoursService {
       throw new BadRequestException('Project has no company');
     }
     if (
-      user.role === UserRole.CompanyAdmin &&
+      (user.role === UserRole.CompanyAdmin || user.role === UserRole.SuperAdmin) &&
       String(user.companyId) !== String(companyId)
     ) {
       throw new ForbiddenException('Project belongs to another company');
