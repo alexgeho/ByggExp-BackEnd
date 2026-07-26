@@ -14,6 +14,7 @@ import { ChatsModule } from './chats/chats.module';
 import { MessagesModule } from './messages/messages.module';
 import { AuthModule } from './auth/auth.module';
 import { ShiftsModule } from './shifts/shifts.module';
+import { HoursModule } from './hours/hours.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { TaskRemindersModule } from './task-reminders/task-reminders.module';
 import { ToolsModule } from './tools/tools.module';
@@ -39,6 +40,7 @@ import { MailModule } from './mail/mail.module';
     MessagesModule,
     AuthModule,
     ShiftsModule,
+    HoursModule,
     NotificationsModule,
     TaskRemindersModule,
     ToolsModule,
