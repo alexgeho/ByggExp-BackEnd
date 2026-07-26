@@ -54,6 +54,56 @@ export class MailService {
     return `http://localhost:${port}`;
   }
 
+  // Public URL of the admin web app (where the invite acceptance page lives).
+  private getWebAppUrl(): string {
+    const configured =
+      this.configService.get<string>('WEB_APP_URL') ||
+      this.configService.get<string>('ADMIN_APP_URL');
+    if (configured) {
+      return configured.replace(/\/$/, '');
+    }
+    return 'http://localhost:5173';
+  }
+
+  // Invite the recipient to set up a company's admin account. No password —
+  // they create their own on the acceptance page; no User exists until then.
+  async sendCompanyInviteEmail(
+    email: string,
+    companyName: string,
+    token: string,
+  ): Promise<void> {
+    const acceptUrl = `${this.getWebAppUrl()}/invite?token=${encodeURIComponent(token)}`;
+    const name = this.escapeHtml(companyName || 'your company');
+    const subject = 'You are invited to ByggExp';
+    const text = [
+      `You have been invited to set up ${companyName || 'your company'} on ByggExp.`,
+      '',
+      'Open the link below to create your admin account (name + password):',
+      acceptUrl,
+      '',
+      'This invitation expires in 7 days.',
+    ].join('\n');
+    const html = `
+      <p>You have been invited to set up <strong>${name}</strong> on <strong>ByggExp</strong>.</p>
+      <p>Open the link below to create your admin account:</p>
+      <p><a href="${acceptUrl}">Accept invitation and create account</a></p>
+      <p>This invitation expires in 7 days.</p>
+    `;
+
+    if (!this.transporter) {
+      this.logger.log(`Company invite for ${email} (${companyName}): ${acceptUrl}`);
+      return;
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to: email,
+      subject,
+      text,
+      html,
+    });
+  }
+
   private getDemoRequestRecipients(): string[] {
     return (
       this.configService.get<string>('DEMO_REQUEST_RECIPIENTS') ||

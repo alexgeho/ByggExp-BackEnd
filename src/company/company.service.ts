@@ -1,19 +1,36 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  GoneException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection } from 'mongoose';
+import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Company, CompanyDocument } from './schemas/company.schema';
+import { CompanyInvite, CompanyInviteDocument } from './schemas/company-invite.schema';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { RegisterCompanyWithAdminDto } from './dto/register-company-with-admin.dto';
+import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { UsersService } from '../users/users.service';
-import { UserRole } from '../users/schemas/user.schema';
+import { MailService } from '../mail/mail.service';
+import { UserAccountStatus, UserRole } from '../users/schemas/user.schema';
+
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class CompanyService {
+  private readonly logger = new Logger(CompanyService.name);
+
   constructor(
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
+    @InjectModel(CompanyInvite.name) private inviteModel: Model<CompanyInviteDocument>,
     @InjectConnection() private readonly connection: Connection,
     private usersService: UsersService,
+    private mailService: MailService,
   ) {}
 
   async create(createCompanyDto: CreateCompanyDto): Promise<CompanyDocument> {
@@ -22,15 +39,17 @@ export class CompanyService {
   }
 
   /**
-   * Superadmin onboarding: create a company and provision its first Company Admin
-   * from the company email. The password is auto-generated (never seen/typed by
-   * the superadmin) and emailed to that address together with a confirmation link.
-   * The company can then sign in with email + the emailed password.
+   * Superadmin onboarding: create the company only and email an invitation to the
+   * company address. NO user account is created here — the invitee creates their
+   * own admin account (name + password) by accepting the invite.
    */
-  async createWithAdmin(
+  async createWithInvite(
     createCompanyDto: CreateCompanyDto,
-  ): Promise<{ company: Company; admin: any }> {
+  ): Promise<{ company: Company; invited: boolean }> {
     const email = createCompanyDto.email?.trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException('Company email is required');
+    }
 
     const existingCompany = await this.companyModel.findOne({ email }).exec();
     if (existingCompany) {
@@ -49,28 +68,88 @@ export class CompanyService {
       projects: [],
     });
 
-    // Provision the first Company Admin: auto-generated password + invite email.
-    const admin = await this.usersService.createUserPendingApproval({
-      email,
-      name: createCompanyDto.name?.trim() || undefined,
-      role: UserRole.CompanyAdmin,
+    // Pending invite — the admin User is only created on acceptance.
+    const token = randomBytes(32).toString('hex');
+    await this.inviteModel.create({
       companyId: company._id.toString(),
+      email,
+      name: createCompanyDto.name?.trim() || '',
+      role: UserRole.CompanyAdmin,
+      token,
+      expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+    });
+
+    try {
+      await this.mailService.sendCompanyInviteEmail(
+        email,
+        createCompanyDto.name?.trim() || '',
+        token,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send company invite to ${email}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+
+    return { company: company.toObject(), invited: true };
+  }
+
+  private async findLiveInvite(token: string): Promise<CompanyInviteDocument> {
+    const invite = await this.inviteModel.findOne({ token }).exec();
+    if (!invite) {
+      throw new NotFoundException('Invitation not found');
+    }
+    if (invite.acceptedAt) {
+      throw new ConflictException('Invitation already accepted');
+    }
+    if (invite.expiresAt.getTime() < Date.now()) {
+      throw new GoneException('Invitation has expired');
+    }
+    return invite;
+  }
+
+  // Public: details for the acceptance page.
+  async getInvite(token: string) {
+    const invite = await this.findLiveInvite(token);
+    const company = await this.companyModel.findById(invite.companyId).exec();
+    return {
+      email: invite.email,
+      name: invite.name,
+      role: invite.role,
+      companyId: invite.companyId,
+      companyName: company?.name || '',
+    };
+  }
+
+  // Public: create the company's admin account from a valid invite.
+  async acceptInvite(token: string, dto: AcceptInviteDto): Promise<{ email: string }> {
+    const invite = await this.findLiveInvite(token);
+
+    const existingUser = await this.usersService.findByEmail(invite.email);
+    if (existingUser) {
+      throw new ConflictException('A user with this email already exists');
+    }
+
+    const hashedPassword = await this.usersService.hashPassword(dto.password);
+    const user = await this.usersService.create({
+      email: invite.email,
+      name: dto.name?.trim() || invite.name || invite.email,
+      password: hashedPassword,
+      role: UserRole.CompanyAdmin,
+      companyId: invite.companyId,
       projectIds: [],
+      accountStatus: UserAccountStatus.Active,
+    } as never);
+
+    await this.companyModel.findByIdAndUpdate(invite.companyId, {
+      $push: { companyAdmins: user._id.toString() },
     });
 
-    await this.companyModel.findByIdAndUpdate(company._id, {
-      $push: { companyAdmins: admin._id.toString() },
-    });
+    invite.acceptedAt = new Date();
+    await invite.save();
 
-    const populated = await this.companyModel.findById(company._id).exec();
-
-    // Never leak the (hashed) password or verification token to the caller.
-    const adminObj: any = admin.toObject();
-    delete adminObj.password;
-    delete adminObj.emailVerificationToken;
-    delete adminObj.emailVerificationExpiresAt;
-
-    return { company: (populated ?? company).toObject(), admin: adminObj };
+    return { email: invite.email };
   }
 
   async registerCompanyWithAdmin(dto: RegisterCompanyWithAdminDto): Promise<{ company: Company; admin: any }> {
