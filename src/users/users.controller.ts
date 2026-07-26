@@ -122,26 +122,24 @@ export class UsersController {
   @Get('company/:companyId')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   findAllByCompany(
-    @Param('companyId') companyId: string,
+    @Param('companyId') _companyId: string,
     @Request() req,
   ): Promise<User[]> {
-    // Non-superadmin can only ever list their own company, regardless of param.
-    const scopedCompanyId =
-      req.user.role === UserRole.SuperAdmin ? companyId : req.user.companyId;
-    return this.usersService.findAllByCompany(scopedCompanyId);
+    // Everyone — superadmin included — only ever lists their own company; the
+    // path param is never used to reach another tenant.
+    if (!req.user.companyId) {
+      return Promise.resolve([]);
+    }
+    return this.usersService.findAllByCompany(req.user.companyId);
   }
 
   @Get('my-company')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   findAllByMyCompany(@Request() req): Promise<User[]> {
-    if (req.user.role === UserRole.SuperAdmin && !req.user.companyId) {
-      return this.usersService.findAll();
-    }
-
+    // Scoped to the caller's own company for every role (superadmin included).
     if (!req.user.companyId) {
-      throw new Error('User is not associated with any company');
+      return Promise.resolve([]);
     }
-
     return this.usersService.findAllByCompany(req.user.companyId);
   }
 
@@ -151,16 +149,23 @@ export class UsersController {
     @Param('projectId') projectId: string,
     @Request() req,
   ): Promise<User[]> {
-    // Non-superadmin only ever sees users from their own company on a project.
-    const scopeCompanyId =
-      req.user.role === UserRole.SuperAdmin ? undefined : req.user.companyId;
-    return this.usersService.findAllByProject(projectId, scopeCompanyId);
+    // Every role (superadmin included) only sees project members from its own
+    // company, so a foreign tenant's project returns nothing.
+    if (!req.user.companyId) {
+      return Promise.resolve([]);
+    }
+    return this.usersService.findAllByProject(projectId, req.user.companyId);
   }
 
   @Get('role/:role')
   @Roles(UserRole.SuperAdmin)
-  findAllByRole(@Param('role') role: UserRole): Promise<User[]> {
-    return this.usersService.findAllByRole(role);
+  findAllByRole(@Param('role') role: UserRole, @Request() req): Promise<User[]> {
+    // Superadmin is scoped to its own company — never lists another tenant's
+    // users by role.
+    if (!req.user.companyId) {
+      return Promise.resolve([]);
+    }
+    return this.usersService.findAllByRole(role, req.user.companyId);
   }
 
   @Get('by-email')
@@ -169,10 +174,11 @@ export class UsersController {
     @Query('email') email: string,
     @Request() req,
   ): Promise<{ id: string } | null> {
-    // Non-superadmin can only resolve emails within their own company.
-    const scopeCompanyId =
-      req.user.role === UserRole.SuperAdmin ? undefined : req.user.companyId;
-    return this.usersService.findOneIdByEmail(email, scopeCompanyId);
+    // Every role (superadmin included) resolves emails only within its own company.
+    if (!req.user.companyId) {
+      return Promise.resolve(null);
+    }
+    return this.usersService.findOneIdByEmail(email, req.user.companyId);
   }
 
   @Get('info/:id')
@@ -281,10 +287,10 @@ export class UsersController {
   @Post('by-ids')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async findByIds(@Body() dto: { ids: string[] }, @Request() req) {
-    // Non-superadmin only ever resolves users from their own company.
-    const scopeCompanyId =
-      req.user.role === UserRole.SuperAdmin ? undefined : req.user.companyId;
-    const users = await this.usersService.findByIds(dto.ids, scopeCompanyId);
+    // Every role (superadmin included) only resolves users from its own company.
+    const users = req.user.companyId
+      ? await this.usersService.findByIds(dto.ids, req.user.companyId)
+      : [];
     return users.map(user => ({
       id: (user as any)._id.toString(),
       email: user.email,

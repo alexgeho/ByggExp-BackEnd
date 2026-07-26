@@ -260,10 +260,6 @@ export class UsersService {
       return false;
     }
 
-    if (actor.role === UserRole.SuperAdmin) {
-      return true;
-    }
-
     if (actorUserId === targetUserId) {
       return true;
     }
@@ -272,7 +268,12 @@ export class UsersService {
       return false;
     }
 
-    if (actor.role === UserRole.CompanyAdmin) {
+    // Superadmin is scoped to its own company, exactly like a company admin —
+    // it may never view a user that belongs to another tenant.
+    if (
+      actor.role === UserRole.CompanyAdmin ||
+      actor.role === UserRole.SuperAdmin
+    ) {
       return Boolean(
         actor.companyId &&
           targetUser.companyId &&
@@ -295,10 +296,6 @@ export class UsersService {
       return false;
     }
 
-    if (actor.role === UserRole.SuperAdmin) {
-      return true;
-    }
-
     if (actorUserId === targetUserId) {
       return true;
     }
@@ -307,7 +304,11 @@ export class UsersService {
       return false;
     }
 
-    if (actor.role === UserRole.CompanyAdmin) {
+    // Superadmin is scoped to its own company, exactly like a company admin.
+    if (
+      actor.role === UserRole.CompanyAdmin ||
+      actor.role === UserRole.SuperAdmin
+    ) {
       return Boolean(
         actor.companyId &&
           targetUser.companyId &&
@@ -330,15 +331,15 @@ export class UsersService {
       return false;
     }
 
-    if (actor.role === UserRole.SuperAdmin) {
-      return true;
-    }
-
     if (targetUser.role !== UserRole.Worker) {
       return false;
     }
 
-    if (actor.role === UserRole.CompanyAdmin) {
+    // Superadmin is scoped to its own company, exactly like a company admin.
+    if (
+      actor.role === UserRole.CompanyAdmin ||
+      actor.role === UserRole.SuperAdmin
+    ) {
       return Boolean(
         actor.companyId &&
           targetUser.companyId &&
@@ -945,8 +946,12 @@ export class UsersService {
     }
   }
 
-  async findAllByRole(role: UserRole): Promise<User[]> {
-    return this.userModel.find({ role }).exec();
+  async findAllByRole(role: UserRole, companyId?: string): Promise<User[]> {
+    const query: Record<string, unknown> = { role };
+    if (companyId) {
+      query.companyId = companyId;
+    }
+    return this.userModel.find(query).exec();
   }
 
   async findOne(id: string) {
