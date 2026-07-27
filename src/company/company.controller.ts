@@ -13,42 +13,42 @@ import {
   BadRequestException,
   UseInterceptors,
   UploadedFile,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import * as fs from 'fs';
-import { CompanyService } from './company.service';
-import { CreateCompanyDto } from './dto/create-company.dto';
-import { RegisterCompanyWithAdminDto } from './dto/register-company-with-admin.dto';
-import { Company } from './schemas/company.schema';
-import { Roles } from '../common/decorators/roles.decorator';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { AuthGuard } from '@nestjs/passport';
-import { UserRole } from '../users/schemas/user.schema';
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { diskStorage } from "multer";
+import { extname } from "path";
+import * as fs from "fs";
+import { CompanyService } from "./company.service";
+import { CreateCompanyDto } from "./dto/create-company.dto";
+import { RegisterCompanyWithAdminDto } from "./dto/register-company-with-admin.dto";
+import { Company } from "./schemas/company.schema";
+import { Roles } from "../common/decorators/roles.decorator";
+import { RolesGuard } from "../common/guards/roles.guard";
+import { AuthGuard } from "@nestjs/passport";
+import { UserRole } from "../users/schemas/user.schema";
 
 const companyLogoStorage = diskStorage({
   destination: (_req, _file, cb) => {
-    const dir = './uploads/company-logos';
+    const dir = "./uploads/company-logos";
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
   filename: (_req, file, cb) => {
     const base =
-      (file.originalname || 'logo')
-        .replace(/\.[^.]+$/, '')
-        .replace(/[^a-zA-Z0-9-_]/g, '-')
-        .slice(0, 60) || 'logo';
-    cb(null, `${base}-${Date.now()}${extname(file.originalname) || '.png'}`);
+      (file.originalname || "logo")
+        .replace(/\.[^.]+$/, "")
+        .replace(/[^a-zA-Z0-9-_]/g, "-")
+        .slice(0, 60) || "logo";
+    cb(null, `${base}-${Date.now()}${extname(file.originalname) || ".png"}`);
   },
 });
 
-@Controller('company')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Controller("company")
+@UseGuards(AuthGuard("jwt"), RolesGuard)
 export class CompanyController {
   constructor(private readonly companyService: CompanyService) {}
 
-  @Post('register')
+  @Post("register")
   @Roles(UserRole.SuperAdmin)
   async registerCompanyWithAdmin(
     @Body() dto: RegisterCompanyWithAdminDto,
@@ -72,28 +72,41 @@ export class CompanyController {
     return this.companyService.findAll();
   }
 
-  @Get('my')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  @Get("my")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
   findOneByUser(@Request() req): Promise<Company> {
     if (!req.user.companyId) {
-      throw new Error('User is not associated with any company');
+      throw new Error("User is not associated with any company");
     }
     return this.companyService.findOne(req.user.companyId);
   }
 
   // A non-superadmin may only ever look at their own company.
-  private assertOwnCompany(id: string, req: { user: { role?: UserRole; companyId?: string | null } }) {
+  private assertOwnCompany(
+    id: string,
+    req: { user: { role?: UserRole; companyId?: string | null } },
+  ) {
     if (
       req.user.role !== UserRole.SuperAdmin &&
       String(req.user.companyId) !== String(id)
     ) {
-      throw new ForbiddenException('You do not have access to this company');
+      throw new ForbiddenException("You do not have access to this company");
     }
   }
 
-  @Get('info/:id')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  async findCompanyById(@Param('id') id: string, @Request() req) {
+  @Get("info/:id")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  async findCompanyById(@Param("id") id: string, @Request() req) {
     this.assertOwnCompany(id, req);
     const company = await this.companyService.findCompanyById(id);
     if (!company) {
@@ -102,7 +115,7 @@ export class CompanyController {
     return company;
   }
 
-  @Post('by-ids')
+  @Post("by-ids")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async findByIds(@Body() dto: { ids: string[] }, @Request() req) {
     // Non-superadmin can only ever resolve their own company.
@@ -111,7 +124,7 @@ export class CompanyController {
         ? dto.ids
         : dto.ids.filter((id) => String(id) === String(req.user.companyId));
     const companies = await this.companyService.findByIds(ids);
-    return companies.map(company => ({
+    return companies.map((company) => ({
       id: (company as any)._id.toString(),
       name: company.name,
       email: company.email,
@@ -119,31 +132,36 @@ export class CompanyController {
     }));
   }
 
-  @Get(':id')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  findOne(@Param('id') id: string, @Request() req): Promise<Company> {
+  @Get(":id")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  findOne(@Param("id") id: string, @Request() req): Promise<Company> {
     this.assertOwnCompany(id, req);
     return this.companyService.findOne(id);
   }
 
-  @Put(':id')
+  @Put(":id")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   update(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() updateCompanyDto: Partial<CreateCompanyDto>,
     @Request() req,
   ): Promise<Company> {
     // CompanyAdmin может редактировать только свою компанию
     if (req.user.role === UserRole.CompanyAdmin && req.user.companyId !== id) {
-      throw new Error('Access denied');
+      throw new Error("Access denied");
     }
     return this.companyService.update(id, updateCompanyDto);
   }
 
-  @Post(':id/logo')
+  @Post(":id/logo")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   @UseInterceptors(
-    FileInterceptor('logo', {
+    FileInterceptor("logo", {
       storage: companyLogoStorage,
       limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: (_req, file, cb) => {
@@ -152,25 +170,25 @@ export class CompanyController {
     }),
   )
   async uploadLogo(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @UploadedFile() file: { filename: string } | undefined,
     @Request() req,
   ): Promise<Company> {
     // CompanyAdmin can only touch its own company.
     if (req.user.role === UserRole.CompanyAdmin && req.user.companyId !== id) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException("Access denied");
     }
     if (!file) {
-      throw new BadRequestException('No image file uploaded');
+      throw new BadRequestException("No image file uploaded");
     }
     return this.companyService.update(id, {
       logoUrl: `/uploads/company-logos/${file.filename}`,
     });
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @Roles(UserRole.SuperAdmin)
-  remove(@Param('id') id: string): Promise<Company> {
+  remove(@Param("id") id: string): Promise<Company> {
     return this.companyService.remove(id);
   }
 }

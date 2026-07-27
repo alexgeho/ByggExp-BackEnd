@@ -1,7 +1,7 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { AuthGuard } from '@nestjs/passport';
-import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { ExecutionContext, Injectable } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { AuthGuard } from "@nestjs/passport";
+import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
 
 /**
  * Global JWT authentication guard: every route requires a valid token by
@@ -13,7 +13,7 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
  * RolesGuard and the service-level assertCanAccess checks.
  */
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('jwt') {
+export class JwtAuthGuard extends AuthGuard("jwt") {
   constructor(private readonly reflector: Reflector) {
     super();
   }

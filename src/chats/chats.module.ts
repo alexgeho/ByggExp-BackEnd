@@ -1,11 +1,11 @@
-import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { Chat, ChatSchema } from './schemas/chat.schema';
-import { ChatsController } from './chats.controller';
-import { ChatsService } from './chats.service';
-import { User, UserSchema } from '../users/schemas/user.schema';
-import { Project, ProjectSchema } from '../projects/schemas/project.schema';
-import { Message, MessageSchema } from '../messages/schemas/message.schema';
+import { Module } from "@nestjs/common";
+import { MongooseModule } from "@nestjs/mongoose";
+import { Chat, ChatSchema } from "./schemas/chat.schema";
+import { ChatsController } from "./chats.controller";
+import { ChatsService } from "./chats.service";
+import { User, UserSchema } from "../users/schemas/user.schema";
+import { Project, ProjectSchema } from "../projects/schemas/project.schema";
+import { Message, MessageSchema } from "../messages/schemas/message.schema";
 
 @Module({
   imports: [

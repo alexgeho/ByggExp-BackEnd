@@ -1,5 +1,5 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Schema as MongooseSchema } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document, Schema as MongooseSchema } from "mongoose";
 
 export type ProjectDocument = Project & Document;
 
@@ -24,27 +24,30 @@ export class ProjectShiftSchedule {
 
 @Schema({ timestamps: true })
 export class Project {
-  @Prop({ required: true, ref: 'Company' })
+  @Prop({ required: true, ref: "Company" })
   companyId: string;
 
   // Optional customer ("заказчик") the project is carried out for. Belongs to
   // the same company (tenant) as the project. Not required to create a project.
-  @Prop({ type: String, ref: 'Client', default: null })
+  @Prop({ type: String, ref: "Client", default: null })
   clientId?: string | null;
 
-  @Prop({ required: true, ref: 'User' })
+  @Prop({ required: true, ref: "User" })
   ownerId: string;
 
-  @Prop({ required: true, ref: 'User' })
+  @Prop({ required: true, ref: "User" })
   projectManagerId: string;
 
-  @Prop({ type: [String], ref: 'User', default: [] })
+  @Prop({ type: [String], ref: "User", default: [] })
   projectAdmins: string[];
 
   @Prop({ required: true })
   name: string;
 
-  @Prop({ required: true, enum: ['planning', 'in_progress', 'completed', 'on_hold'] })
+  @Prop({
+    required: true,
+    enum: ["planning", "in_progress", "completed", "on_hold"],
+  })
   status: string;
 
   @Prop()
@@ -63,11 +66,11 @@ export class Project {
     type: {
       _id: false,
       enabled: { type: Boolean, default: false },
-      workDayStartTime: { type: String, default: '07:00' },
-      workDayEndTime: { type: String, default: '16:00' },
+      workDayStartTime: { type: String, default: "07:00" },
+      workDayEndTime: { type: String, default: "16:00" },
       startGraceMinutes: { type: Number, default: 20 },
       endGraceMinutes: { type: Number, default: 20 },
-      timezone: { type: String, default: 'Europe/Oslo' },
+      timezone: { type: String, default: "Europe/Oslo" },
     },
     default: undefined,
   })
@@ -78,7 +81,7 @@ export class Project {
 
   // Littera / customer order reference (e.g. "100014"); flows to the invoice's
   // order reference and into hour-invoice descriptions.
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   littera: string;
 
   @Prop({ type: Date })
@@ -102,10 +105,10 @@ export class Project {
   @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
   documents: Array<string | ProjectDocumentFile>;
 
-  @Prop({ type: [String], ref: 'Task', default: [] })
+  @Prop({ type: [String], ref: "Task", default: [] })
   tasks: string[];
 
-  @Prop({ type: [String], ref: 'User', default: [] })
+  @Prop({ type: [String], ref: "User", default: [] })
   workers: string[];
 
   @Prop()

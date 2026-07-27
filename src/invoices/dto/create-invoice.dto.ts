@@ -5,9 +5,9 @@ import {
   IsOptional,
   IsString,
   ValidateNested,
-} from 'class-validator';
-import { Type } from 'class-transformer';
-import { InvoiceStatus } from '../schemas/invoice.schema';
+} from "class-validator";
+import { Type } from "class-transformer";
+import { InvoiceStatus } from "../schemas/invoice.schema";
 
 export class InvoiceItemDto {
   @IsOptional()

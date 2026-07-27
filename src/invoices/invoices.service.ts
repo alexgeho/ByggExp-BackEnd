@@ -3,24 +3,28 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { existsSync } from 'fs';
-import { readFile } from 'fs/promises';
-import { Model } from 'mongoose';
-import path from 'path';
-import { Company, CompanyDocument } from '../company/schemas/company.schema';
-import { MailService } from '../mail/mail.service';
-import { UserRole } from '../users/schemas/user.schema';
-import { CreateInvoiceDto, InvoiceItemDto } from './dto/create-invoice.dto';
-import { UpdateInvoiceDto } from './dto/update-invoice.dto';
-import { generateOCR } from './generate-ocr';
-import { Invoice, InvoiceDocument, InvoiceStatus } from './schemas/invoice.schema';
-import { launchForInvoicePdf } from './puppeteer-launch';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { existsSync } from "fs";
+import { readFile } from "fs/promises";
+import { Model } from "mongoose";
+import path from "path";
+import { Company, CompanyDocument } from "../company/schemas/company.schema";
+import { MailService } from "../mail/mail.service";
+import { UserRole } from "../users/schemas/user.schema";
+import { CreateInvoiceDto, InvoiceItemDto } from "./dto/create-invoice.dto";
+import { UpdateInvoiceDto } from "./dto/update-invoice.dto";
+import { generateOCR } from "./generate-ocr";
+import {
+  Invoice,
+  InvoiceDocument,
+  InvoiceStatus,
+} from "./schemas/invoice.schema";
+import { launchForInvoicePdf } from "./puppeteer-launch";
 import {
   buildInvoicePdfHtmlPuppeteer,
   InvoicePdfData,
-} from './templates/invoice-pdf.template';
+} from "./templates/invoice-pdf.template";
 
 type AuthUser = {
   role: UserRole;
@@ -49,10 +53,10 @@ export class InvoicesService {
     message?: string,
   ): Promise<{ sent: boolean; to: string }> {
     const invoice = await this.findOne(id, user);
-    const to = (email || invoice.email || '').trim();
+    const to = (email || invoice.email || "").trim();
     if (!to) {
       throw new BadRequestException(
-        'No recipient email — set the customer email or provide one',
+        "No recipient email — set the customer email or provide one",
       );
     }
     const pdf = await this.buildInvoicePdf(id, user);
@@ -68,13 +72,16 @@ export class InvoicesService {
   async create(dto: CreateInvoiceDto, user: AuthUser): Promise<Invoice> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
     const invoiceNumber = await this.getNextInvoiceNumber(companyId);
-    const totals = this.calculateTotals(dto.items || [], dto.reverseVAT === 'true');
+    const totals = this.calculateTotals(
+      dto.items || [],
+      dto.reverseVAT === "true",
+    );
     const companyFooter = await this.resolveCompanyFooter(companyId, dto);
     // Snapshot the company logo onto the invoice so the PDF shows it (and stays
     // fixed even if the company later changes its logo).
     const company = await this.companyModel
       .findById(companyId)
-      .select('logoUrl')
+      .select("logoUrl")
       .lean()
       .exec();
     const logoUrl = dto.logoUrl ?? company?.logoUrl ?? null;
@@ -121,10 +128,14 @@ export class InvoicesService {
     return invoice;
   }
 
-  async update(id: string, dto: UpdateInvoiceDto, user: AuthUser): Promise<InvoiceDocument> {
+  async update(
+    id: string,
+    dto: UpdateInvoiceDto,
+    user: AuthUser,
+  ): Promise<InvoiceDocument> {
     const invoice = await this.findOne(id, user);
     const items = dto.items ?? invoice.items;
-    const isReverseVAT = (dto.reverseVAT ?? invoice.reverseVAT) === 'true';
+    const isReverseVAT = (dto.reverseVAT ?? invoice.reverseVAT) === "true";
     const totals = this.calculateTotals(items || [], isReverseVAT);
 
     Object.assign(invoice, {
@@ -151,7 +162,7 @@ export class InvoicesService {
 
   async copy(id: string, user: AuthUser): Promise<Invoice> {
     const source = await this.findOne(id, user);
-    const raw = (source as InvoiceDocument).toObject();
+    const raw = source.toObject();
     const invoiceNumber = await this.getNextInvoiceNumber(source.companyId);
     const payload = { ...raw } as Record<string, unknown>;
 
@@ -176,15 +187,18 @@ export class InvoicesService {
     const latest = await this.invoiceModel
       .findOne({ companyId })
       .sort({ invoiceNumber: -1 })
-      .select('invoiceNumber')
+      .select("invoiceNumber")
       .lean()
       .exec();
 
     const last = latest?.invoiceNumber;
-    return typeof last === 'number' && !Number.isNaN(last) ? last + 1 : 1;
+    return typeof last === "number" && !Number.isNaN(last) ? last + 1 : 1;
   }
 
-  async getNextInvoiceNumberForUser(user: AuthUser, companyId?: string): Promise<{ invoiceNumber: number; ocr: string }> {
+  async getNextInvoiceNumberForUser(
+    user: AuthUser,
+    companyId?: string,
+  ): Promise<{ invoiceNumber: number; ocr: string }> {
     const resolvedCompanyId = this.resolveCompanyId(companyId, user);
     const invoiceNumber = await this.getNextInvoiceNumber(resolvedCompanyId);
 
@@ -208,11 +222,11 @@ export class InvoicesService {
 
     try {
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'load' });
+      await page.setContent(html, { waitUntil: "load" });
       const pdfBuffer = await page.pdf({
-        format: 'A4',
+        format: "A4",
         printBackground: true,
-        margin: { top: '0', bottom: '0', left: '0', right: '0' },
+        margin: { top: "0", bottom: "0", left: "0", right: "0" },
         preferCSSPageSize: true,
       });
 
@@ -222,22 +236,31 @@ export class InvoicesService {
     }
   }
 
-  private resolveCompanyId(_companyId: string | undefined, user: AuthUser): string {
+  private resolveCompanyId(
+    _companyId: string | undefined,
+    user: AuthUser,
+  ): string {
     // Every actor (superadmin included) creates only within its own company.
     if (!user.companyId) {
-      throw new ForbiddenException('Your account is not attached to a company');
+      throw new ForbiddenException("Your account is not attached to a company");
     }
 
     return user.companyId;
   }
 
   private assertCanAccess(invoice: Invoice, user: AuthUser): void {
-    if (!user.companyId || String(invoice.companyId) !== String(user.companyId)) {
-      throw new ForbiddenException('You do not have access to this invoice');
+    if (
+      !user.companyId ||
+      String(invoice.companyId) !== String(user.companyId)
+    ) {
+      throw new ForbiddenException("You do not have access to this invoice");
     }
   }
 
-  private calculateTotals(items: InvoiceItemDto[], reverseVAT: boolean): InvoiceTotals {
+  private calculateTotals(
+    items: InvoiceItemDto[],
+    reverseVAT: boolean,
+  ): InvoiceTotals {
     const subtotal = items.reduce((sum, item) => {
       const quantity = Number(item.quantity ?? 0);
       const price = Number(item.price ?? 0);
@@ -248,13 +271,15 @@ export class InvoicesService {
     const vat = reverseVAT
       ? 0
       : items.reduce((sum, item) => {
-        const quantity = Number(item.quantity ?? 0);
-        const price = Number(item.price ?? 0);
-        const discount = Number(item.discount ?? 0);
-        const vatRate = Number(item.vatRate ?? 25);
+          const quantity = Number(item.quantity ?? 0);
+          const price = Number(item.price ?? 0);
+          const discount = Number(item.discount ?? 0);
+          const vatRate = Number(item.vatRate ?? 25);
 
-        return sum + quantity * price * (1 - discount / 100) * (vatRate / 100);
-      }, 0);
+          return (
+            sum + quantity * price * (1 - discount / 100) * (vatRate / 100)
+          );
+        }, 0);
 
     return {
       subtotal,
@@ -277,21 +302,21 @@ export class InvoicesService {
     // it into the label the invoice footer should print.
     const fskatt = company?.vatStatus;
     const vatStatus =
-      fskatt === 'true'
-        ? 'Godkänd för F-skatt'
-        : !fskatt || fskatt === 'false'
-          ? ''
+      fskatt === "true"
+        ? "Godkänd för F-skatt"
+        : !fskatt || fskatt === "false"
+          ? ""
           : fskatt;
 
     return {
-      name: company?.name || '',
-      address: company?.address || '',
-      city: company?.city || '',
-      phone: company?.phone || '',
-      email: company?.email || '',
-      website: company?.website || '',
-      orgNumber: company?.orgNumber || '',
-      vatNumber: company?.vatNumber || '',
+      name: company?.name || "",
+      address: company?.address || "",
+      city: company?.city || "",
+      phone: company?.phone || "",
+      email: company?.email || "",
+      website: company?.website || "",
+      orgNumber: company?.orgNumber || "",
+      vatNumber: company?.vatNumber || "",
       vatStatus,
     };
   }
@@ -323,14 +348,18 @@ export class InvoicesService {
   }
 
   private async getLogoDataUrl(logoUrl?: string | null): Promise<string> {
-    if (!logoUrl || logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
-      return '';
+    if (
+      !logoUrl ||
+      logoUrl.startsWith("http://") ||
+      logoUrl.startsWith("https://")
+    ) {
+      return "";
     }
 
-    const relativePath = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
+    const relativePath = logoUrl.startsWith("/") ? logoUrl.slice(1) : logoUrl;
     const candidates = [
       path.join(process.cwd(), relativePath),
-      path.join(process.cwd(), 'public', relativePath),
+      path.join(process.cwd(), "public", relativePath),
     ];
 
     for (const filePath of candidates) {
@@ -339,10 +368,10 @@ export class InvoicesService {
       }
 
       const buffer = await readFile(filePath);
-      const ext = path.extname(filePath).slice(1) || 'png';
-      return `data:image/${ext};base64,${buffer.toString('base64')}`;
+      const ext = path.extname(filePath).slice(1) || "png";
+      return `data:image/${ext};base64,${buffer.toString("base64")}`;
     }
 
-    return '';
+    return "";
   }
 }

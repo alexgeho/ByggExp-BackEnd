@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { MailService } from '../mail/mail.service';
-import { CreateDemoRequestDto } from './dto/create-demo-request.dto';
+import { Injectable } from "@nestjs/common";
+import { MailService } from "../mail/mail.service";
+import { CreateDemoRequestDto } from "./dto/create-demo-request.dto";
 
 @Injectable()
 export class DemoRequestsService {

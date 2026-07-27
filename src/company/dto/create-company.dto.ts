@@ -1,4 +1,10 @@
-import { IsString, IsEmail, IsNotEmpty, IsOptional, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsArray,
+} from "class-validator";
 
 export class CreateCompanyDto {
   // Only email is required — it becomes the login of the company's first admin.

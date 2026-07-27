@@ -3,15 +3,15 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Message, MessageDocument } from '../messages/schemas/message.schema';
-import { Project, ProjectDocument } from '../projects/schemas/project.schema';
-import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
-import { CreateDirectChatDto } from './dto/create-direct-chat.dto';
-import { CreateProjectGroupChatDto } from './dto/create-project-group-chat.dto';
-import { Chat, ChatDocument, ChatType } from './schemas/chat.schema';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { Message, MessageDocument } from "../messages/schemas/message.schema";
+import { Project, ProjectDocument } from "../projects/schemas/project.schema";
+import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
+import { CreateDirectChatDto } from "./dto/create-direct-chat.dto";
+import { CreateProjectGroupChatDto } from "./dto/create-project-group-chat.dto";
+import { Chat, ChatDocument, ChatType } from "./schemas/chat.schema";
 
 type AuthenticatedUser = {
   userId: string;
@@ -24,8 +24,10 @@ export class ChatsService {
   constructor(
     @InjectModel(Chat.name) private readonly chatModel: Model<ChatDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
-    @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
-    @InjectModel(Message.name) private readonly messageModel: Model<MessageDocument>,
+    @InjectModel(Project.name)
+    private readonly projectModel: Model<ProjectDocument>,
+    @InjectModel(Message.name)
+    private readonly messageModel: Model<MessageDocument>,
   ) {}
 
   async findAccessible(user: AuthenticatedUser) {
@@ -40,24 +42,32 @@ export class ChatsService {
 
   async findOneAccessible(chatId: string, user: AuthenticatedUser) {
     const chat = await this.findAccessibleChat(chatId, user);
-    const [formattedChat] = await this.formatChats([chat], this.normalizeId(user.userId));
+    const [formattedChat] = await this.formatChats(
+      [chat],
+      this.normalizeId(user.userId),
+    );
     return formattedChat;
   }
 
-  async getOrCreateDirectChat(createDirectChatDto: CreateDirectChatDto, user: AuthenticatedUser) {
+  async getOrCreateDirectChat(
+    createDirectChatDto: CreateDirectChatDto,
+    user: AuthenticatedUser,
+  ) {
     const participantId = createDirectChatDto.participantId?.trim();
 
     if (!participantId) {
-      throw new BadRequestException('Participant id is required');
+      throw new BadRequestException("Participant id is required");
     }
 
     if (participantId === user.userId) {
-      throw new BadRequestException('Cannot create a direct chat with yourself');
+      throw new BadRequestException(
+        "Cannot create a direct chat with yourself",
+      );
     }
 
     const participant = await this.userModel
       .findById(participantId)
-      .select('_id name email profession avatarUrl companyId')
+      .select("_id name email profession avatarUrl companyId")
       .lean()
       .exec();
 
@@ -69,17 +79,21 @@ export class ChatsService {
     // own company (superadmin is exempt).
     if (
       user.role !== UserRole.SuperAdmin &&
-      String((participant as { companyId?: unknown }).companyId ?? '') !==
-        String(user.companyId ?? '')
+      String((participant as { companyId?: unknown }).companyId ?? "") !==
+        String(user.companyId ?? "")
     ) {
-      throw new ForbiddenException('You cannot message users outside your company');
+      throw new ForbiddenException(
+        "You cannot message users outside your company",
+      );
     }
 
-    const members = [...new Set([
-      this.normalizeId(user.userId),
-      this.normalizeId(participantId),
-    ])].sort();
-    const directKey = `direct:${members.join(':')}`;
+    const members = [
+      ...new Set([
+        this.normalizeId(user.userId),
+        this.normalizeId(participantId),
+      ]),
+    ].sort();
+    const directKey = `direct:${members.join(":")}`;
 
     let chat: any = await this.chatModel.findOne({ directKey }).lean().exec();
 
@@ -89,16 +103,19 @@ export class ChatsService {
         type: ChatType.Direct,
         members,
         readStates: this.buildReadStates(members),
-        title: '',
+        title: "",
         directKey,
-        lastMessageText: '',
+        lastMessageText: "",
         lastMessageAt: null,
       });
 
       chat = createdChat.toObject() as any;
     }
 
-    const [formattedChat] = await this.formatChats([chat], this.normalizeId(user.userId));
+    const [formattedChat] = await this.formatChats(
+      [chat],
+      this.normalizeId(user.userId),
+    );
     return formattedChat;
   }
 
@@ -106,7 +123,10 @@ export class ChatsService {
     createProjectGroupChatDto: CreateProjectGroupChatDto,
     user: AuthenticatedUser,
   ) {
-    const project = await this.projectModel.findById(createProjectGroupChatDto.projectId).lean().exec();
+    const project = await this.projectModel
+      .findById(createProjectGroupChatDto.projectId)
+      .lean()
+      .exec();
 
     if (!project) {
       throw new NotFoundException(
@@ -118,19 +138,33 @@ export class ChatsService {
 
     const members = this.getProjectChatMembers(project, user.userId);
     const groupKey = `project:${project._id.toString()}`;
-    const title = createProjectGroupChatDto.title?.trim() || project.name || 'Project chat';
+    const title =
+      createProjectGroupChatDto.title?.trim() || project.name || "Project chat";
 
     const existingChat = await this.chatModel.findOne({ groupKey }).exec();
 
     if (existingChat) {
-      const nextMembers = [...new Set([...(existingChat.members || []), ...members])];
-      const membersChanged = nextMembers.length !== (existingChat.members || []).length;
+      const nextMembers = [
+        ...new Set([...(existingChat.members || []), ...members]),
+      ];
+      const membersChanged =
+        nextMembers.length !== (existingChat.members || []).length;
       const titleChanged = existingChat.title !== title;
       const projectChanged = existingChat.projectId !== project._id.toString();
-      const nextReadStates = this.mergeReadStates(existingChat.readStates, nextMembers);
-      const readStatesChanged = JSON.stringify(nextReadStates) !== JSON.stringify(existingChat.readStates || []);
+      const nextReadStates = this.mergeReadStates(
+        existingChat.readStates,
+        nextMembers,
+      );
+      const readStatesChanged =
+        JSON.stringify(nextReadStates) !==
+        JSON.stringify(existingChat.readStates || []);
 
-      if (membersChanged || titleChanged || projectChanged || readStatesChanged) {
+      if (
+        membersChanged ||
+        titleChanged ||
+        projectChanged ||
+        readStatesChanged
+      ) {
         existingChat.members = nextMembers;
         existingChat.readStates = nextReadStates;
         existingChat.title = title;
@@ -153,7 +187,7 @@ export class ChatsService {
       title,
       projectId: project._id.toString(),
       groupKey,
-      lastMessageText: '',
+      lastMessageText: "",
       lastMessageAt: null,
     });
 
@@ -179,7 +213,7 @@ export class ChatsService {
     const normalizedUserId = this.normalizeId(user.userId);
 
     if (!members.includes(normalizedUserId)) {
-      throw new ForbiddenException('You do not have access to this chat');
+      throw new ForbiddenException("You do not have access to this chat");
     }
 
     chat.readStates = this.markReadState(
@@ -189,7 +223,10 @@ export class ChatsService {
     );
     await chat.save();
 
-    const [formattedChat] = await this.formatChats([chat.toObject()], normalizedUserId);
+    const [formattedChat] = await this.formatChats(
+      [chat.toObject()],
+      normalizedUserId,
+    );
     return formattedChat;
   }
 
@@ -203,7 +240,7 @@ export class ChatsService {
     const members = this.normalizeIds(chat.members);
 
     if (!members.includes(this.normalizeId(user.userId))) {
-      throw new ForbiddenException('You do not have access to this chat');
+      throw new ForbiddenException("You do not have access to this chat");
     }
 
     return {
@@ -224,108 +261,130 @@ export class ChatsService {
     const projectCompanyId = this.normalizeId(project.companyId);
     const isParticipant = participantIds.includes(normalizedUserId);
 
-    const isCompanyAdminForProject = user.role === UserRole.CompanyAdmin
-      && !!normalizedCompanyId
-      && projectCompanyId === normalizedCompanyId;
+    const isCompanyAdminForProject =
+      user.role === UserRole.CompanyAdmin &&
+      !!normalizedCompanyId &&
+      projectCompanyId === normalizedCompanyId;
 
-    if (isParticipant || user.role === UserRole.SuperAdmin || isCompanyAdminForProject) {
+    if (
+      isParticipant ||
+      user.role === UserRole.SuperAdmin ||
+      isCompanyAdminForProject
+    ) {
       return;
     }
 
-    throw new ForbiddenException('You do not have access to this project chat');
+    throw new ForbiddenException("You do not have access to this project chat");
   }
 
   private getProjectChatMembers(project: any, actorUserId?: string) {
-    return [...new Set(this.normalizeIds([
-      project.ownerId,
-      project.projectManagerId,
-      ...(project.projectAdmins || []),
-      ...(project.workers || []),
-      actorUserId,
-    ]))];
+    return [
+      ...new Set(
+        this.normalizeIds([
+          project.ownerId,
+          project.projectManagerId,
+          ...(project.projectAdmins || []),
+          ...(project.workers || []),
+          actorUserId,
+        ]),
+      ),
+    ];
   }
 
   private async formatChats(chats: any[], currentUserId: string) {
     const directParticipantIds = chats
       .filter((chat) => chat.type === ChatType.Direct)
-      .flatMap((chat) => (chat.members || []).filter((memberId) => memberId !== currentUserId));
+      .flatMap((chat) =>
+        (chat.members || []).filter((memberId) => memberId !== currentUserId),
+      );
     const projectIds = chats
       .filter((chat) => chat.type === ChatType.Group && chat.projectId)
       .map((chat) => chat.projectId);
 
     const [users, projects] = await Promise.all([
       directParticipantIds.length
-        ? this.userModel.find({ _id: { $in: [...new Set(directParticipantIds)] } })
-          .select('_id name email profession avatarUrl')
-          .lean()
-          .exec()
+        ? this.userModel
+            .find({ _id: { $in: [...new Set(directParticipantIds)] } })
+            .select("_id name email profession avatarUrl")
+            .lean()
+            .exec()
         : Promise.resolve([]),
       projectIds.length
-        ? this.projectModel.find({ _id: { $in: [...new Set(projectIds)] } })
-          .select('_id name')
-          .lean()
-          .exec()
+        ? this.projectModel
+            .find({ _id: { $in: [...new Set(projectIds)] } })
+            .select("_id name")
+            .lean()
+            .exec()
         : Promise.resolve([]),
     ]);
 
-    const usersById = new Map(users.map((user: any) => [user._id.toString(), user]));
-    const projectsById = new Map(projects.map((project: any) => [project._id.toString(), project]));
+    const usersById = new Map(
+      users.map((user: any) => [user._id.toString(), user]),
+    );
+    const projectsById = new Map(
+      projects.map((project: any) => [project._id.toString(), project]),
+    );
 
-    const formattedChats = await Promise.all(chats.map(async (chat) => {
-      const id = this.normalizeId(chat._id);
-      const members = this.normalizeIds(chat.members);
-      const projectId = this.normalizeId(chat.projectId);
-      const project = projectId ? projectsById.get(projectId) : null;
-      const unreadCount = await this.countUnreadMessages(chat, currentUserId);
+    const formattedChats = await Promise.all(
+      chats.map(async (chat) => {
+        const id = this.normalizeId(chat._id);
+        const members = this.normalizeIds(chat.members);
+        const projectId = this.normalizeId(chat.projectId);
+        const project = projectId ? projectsById.get(projectId) : null;
+        const unreadCount = await this.countUnreadMessages(chat, currentUserId);
 
-      if (chat.type === ChatType.Direct) {
-        const participantId = members.find((memberId) => memberId !== currentUserId) || null;
-        const participant = participantId ? usersById.get(participantId) || null : null;
+        if (chat.type === ChatType.Direct) {
+          const participantId =
+            members.find((memberId) => memberId !== currentUserId) || null;
+          const participant = participantId
+            ? usersById.get(participantId) || null
+            : null;
+
+          return {
+            _id: id,
+            type: chat.type,
+            title: participant?.name || participant?.email || "Direct chat",
+            members,
+            memberCount: members.length,
+            lastMessageText: chat.lastMessageText || "",
+            lastMessageAt: chat.lastMessageAt || null,
+            unreadCount,
+            createdAt: chat.createdAt || null,
+            updatedAt: chat.updatedAt || null,
+            participant: participant
+              ? {
+                  _id: participant._id.toString(),
+                  name: participant.name,
+                  email: participant.email,
+                  profession: participant.profession || "",
+                  avatarUrl: participant.avatarUrl || "",
+                }
+              : null,
+            project: null,
+          };
+        }
 
         return {
           _id: id,
           type: chat.type,
-          title: participant?.name || participant?.email || 'Direct chat',
+          title: chat.title || project?.name || "Project chat",
           members,
           memberCount: members.length,
-          lastMessageText: chat.lastMessageText || '',
+          lastMessageText: chat.lastMessageText || "",
           lastMessageAt: chat.lastMessageAt || null,
           unreadCount,
           createdAt: chat.createdAt || null,
           updatedAt: chat.updatedAt || null,
-          participant: participant
+          participant: null,
+          project: project
             ? {
-                _id: participant._id.toString(),
-                name: participant.name,
-                email: participant.email,
-                profession: participant.profession || '',
-                avatarUrl: participant.avatarUrl || '',
-              }
-            : null,
-          project: null,
-        };
-      }
-
-      return {
-        _id: id,
-        type: chat.type,
-        title: chat.title || project?.name || 'Project chat',
-        members,
-        memberCount: members.length,
-        lastMessageText: chat.lastMessageText || '',
-        lastMessageAt: chat.lastMessageAt || null,
-        unreadCount,
-        createdAt: chat.createdAt || null,
-        updatedAt: chat.updatedAt || null,
-        participant: null,
-        project: project
-          ? {
                 _id: this.normalizeId(project._id),
                 name: project.name,
               }
-          : null,
-      };
-    }));
+            : null,
+        };
+      }),
+    );
 
     return formattedChats;
   }
@@ -337,9 +396,15 @@ export class ChatsService {
     }));
   }
 
-  private mergeReadStates(readStates: Array<{ memberId: string; lastReadAt?: Date | null }> = [], memberIds: string[]) {
+  private mergeReadStates(
+    readStates: Array<{ memberId: string; lastReadAt?: Date | null }> = [],
+    memberIds: string[],
+  ) {
     const existingByMemberId = new Map(
-      (readStates || []).map((entry) => [this.normalizeId(entry.memberId), entry]),
+      (readStates || []).map((entry) => [
+        this.normalizeId(entry.memberId),
+        entry,
+      ]),
     );
 
     return this.normalizeIds(memberIds).map((memberId) => {
@@ -378,10 +443,14 @@ export class ChatsService {
     }
 
     const readState = Array.isArray(chat.readStates)
-      ? chat.readStates.find((entry) => this.normalizeId(entry.memberId) === currentUserId)
+      ? chat.readStates.find(
+          (entry) => this.normalizeId(entry.memberId) === currentUserId,
+        )
       : null;
 
-    const lastReadAt = readState?.lastReadAt ? new Date(readState.lastReadAt) : null;
+    const lastReadAt = readState?.lastReadAt
+      ? new Date(readState.lastReadAt)
+      : null;
     const filter: Record<string, unknown> = {
       chatId,
       userId: { $ne: currentUserId },
@@ -396,14 +465,14 @@ export class ChatsService {
 
   private normalizeId(value: any) {
     if (value === undefined || value === null) {
-      return '';
+      return "";
     }
 
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       return value;
     }
 
-    if (typeof value?.toString === 'function') {
+    if (typeof value?.toString === "function") {
       return value.toString();
     }
 
@@ -415,8 +484,6 @@ export class ChatsService {
       return [];
     }
 
-    return values
-      .map((value) => this.normalizeId(value))
-      .filter(Boolean);
+    return values.map((value) => this.normalizeId(value)).filter(Boolean);
   }
 }

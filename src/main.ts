@@ -1,20 +1,20 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { ValidationPipe, Logger } from '@nestjs/common';
-import { AllExceptionsFilter } from './filtres/exception.filter';
-import { existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import express from 'express';
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
+import { ValidationPipe, Logger } from "@nestjs/common";
+import { AllExceptionsFilter } from "./filtres/exception.filter";
+import { existsSync, mkdirSync } from "fs";
+import { join } from "path";
+import express from "express";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const uploadsDir = join(process.cwd(), 'uploads', 'project-documents');
-  const taskUploadsDir = join(process.cwd(), 'uploads', 'task-documents');
-  const shiftUploadsDir = join(process.cwd(), 'uploads', 'shift-photos');
-  const avatarUploadsDir = join(process.cwd(), 'uploads', 'user-avatars');
-  const userDocumentsDir = join(process.cwd(), 'uploads', 'user-documents');
-  const toolPhotosDir = join(process.cwd(), 'uploads', 'tool-photos');
-  const bugReportsDir = join(process.cwd(), 'uploads', 'bug-reports');
+  const uploadsDir = join(process.cwd(), "uploads", "project-documents");
+  const taskUploadsDir = join(process.cwd(), "uploads", "task-documents");
+  const shiftUploadsDir = join(process.cwd(), "uploads", "shift-photos");
+  const avatarUploadsDir = join(process.cwd(), "uploads", "user-avatars");
+  const userDocumentsDir = join(process.cwd(), "uploads", "user-documents");
+  const toolPhotosDir = join(process.cwd(), "uploads", "tool-photos");
+  const bugReportsDir = join(process.cwd(), "uploads", "bug-reports");
 
   if (!existsSync(uploadsDir)) {
     mkdirSync(uploadsDir, { recursive: true });
@@ -44,10 +44,10 @@ async function bootstrap() {
     mkdirSync(bugReportsDir, { recursive: true });
   }
 
-  const logger = new Logger('Bootstrap');
+  const logger = new Logger("Bootstrap");
   app.useLogger(logger);
   app.useGlobalFilters(new AllExceptionsFilter());
-  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+  app.use("/uploads", express.static(join(process.cwd(), "uploads")));
 
   app.use((req, res, next) => {
     logger.log(`${req.method} ${req.url}`);
@@ -56,29 +56,29 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
-      transform: true, 
-      whitelist: true, 
-    })
+      transform: true,
+      whitelist: true,
+    }),
   );
 
-  const extraOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
-    .split(',')
+  const extraOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
+    .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
 
   const allowedOrigins = new Set([
-    'http://localhost:3000',
-    'http://localhost:4000',
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://185.189.51.128:8080',
-    'https://bygghub.nu',
-    'https://www.bygghub.nu',
-    'https://byggexp.se',
-    'https://www.byggexp.se',
-    'https://tot-bygghub-admin-site.vercel.app',
-    'http://localhost:8081',
-    'https://admin.byggexp.se',
+    "http://localhost:3000",
+    "http://localhost:4000",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://185.189.51.128:8080",
+    "https://bygghub.nu",
+    "https://www.bygghub.nu",
+    "https://byggexp.se",
+    "https://www.byggexp.se",
+    "https://tot-bygghub-admin-site.vercel.app",
+    "http://localhost:8081",
+    "https://admin.byggexp.se",
     ...extraOrigins,
   ]);
 

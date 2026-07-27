@@ -1,4 +1,4 @@
-import { ConfigService } from '@nestjs/config';
+import { ConfigService } from "@nestjs/config";
 
 /**
  * Returns the JWT signing secret from configuration, failing fast if it is not
@@ -9,10 +9,10 @@ import { ConfigService } from '@nestjs/config';
  */
 export function requireJwtSecret(configService: ConfigService): string {
   const secret =
-    configService.get<string>('JWT_SECRET') ?? process.env.JWT_SECRET;
+    configService.get<string>("JWT_SECRET") ?? process.env.JWT_SECRET;
   if (!secret) {
     throw new Error(
-      'JWT_SECRET environment variable must be set (no insecure default is allowed)',
+      "JWT_SECRET environment variable must be set (no insecure default is allowed)",
     );
   }
   return secret;

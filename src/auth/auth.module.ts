@@ -1,13 +1,13 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { AuthService } from './auth.service';
-import { JwtStrategy } from './jwt.strategy';
-import { UsersModule } from 'src/users/users.module';
-import { CompanyModule } from '../company/company.module';
-import { AuthController } from './auth.controller';
-import { requireJwtSecret } from './jwt-secret';
+import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { JwtModule } from "@nestjs/jwt";
+import { PassportModule } from "@nestjs/passport";
+import { AuthService } from "./auth.service";
+import { JwtStrategy } from "./jwt.strategy";
+import { UsersModule } from "src/users/users.module";
+import { CompanyModule } from "../company/company.module";
+import { AuthController } from "./auth.controller";
+import { requireJwtSecret } from "./jwt-secret";
 
 @Module({
   imports: [
@@ -20,7 +20,7 @@ import { requireJwtSecret } from './jwt-secret';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: requireJwtSecret(configService),
-        signOptions: { expiresIn: '15m' },
+        signOptions: { expiresIn: "15m" },
       }),
     }),
   ],

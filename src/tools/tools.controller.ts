@@ -10,28 +10,35 @@ import {
   UploadedFiles,
   UseGuards,
   UseInterceptors,
-} from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { Roles } from '../common/decorators/roles.decorator';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { UserRole } from '../users/schemas/user.schema';
-import { CreateToolDto } from './dto/create-tool.dto';
-import { UpdateToolDto } from './dto/update-tool.dto';
-import { AttachToolsToProjectDto, AttachToolsToWorkerDto } from './dto/attach-tools.dto';
-import { ToolsService } from './tools.service';
+} from "@nestjs/common";
+import { AuthGuard } from "@nestjs/passport";
+import { FileFieldsInterceptor } from "@nestjs/platform-express";
+import { diskStorage } from "multer";
+import { extname } from "path";
+import { Roles } from "../common/decorators/roles.decorator";
+import { RolesGuard } from "../common/guards/roles.guard";
+import { UserRole } from "../users/schemas/user.schema";
+import { CreateToolDto } from "./dto/create-tool.dto";
+import { UpdateToolDto } from "./dto/update-tool.dto";
+import {
+  AttachToolsToProjectDto,
+  AttachToolsToWorkerDto,
+} from "./dto/attach-tools.dto";
+import { ToolsService } from "./tools.service";
 
 const toolPhotoStorage = diskStorage({
-  destination: './uploads/tool-photos',
+  destination: "./uploads/tool-photos",
   filename: (_req, file, callback) => {
-    const safeBaseName = file.originalname
-      .replace(extname(file.originalname), '')
-      .replace(/[^a-zA-Z0-9-_]/g, '_')
-      .slice(0, 80) || 'tool';
+    const safeBaseName =
+      file.originalname
+        .replace(extname(file.originalname), "")
+        .replace(/[^a-zA-Z0-9-_]/g, "_")
+        .slice(0, 80) || "tool";
 
-    callback(null, `${Date.now()}-${safeBaseName}${extname(file.originalname)}`);
+    callback(
+      null,
+      `${Date.now()}-${safeBaseName}${extname(file.originalname)}`,
+    );
   },
 });
 
@@ -43,8 +50,8 @@ const MAX_TOOL_PHOTOS = 20;
 
 const toolPhotoUploadInterceptor = FileFieldsInterceptor(
   [
-    { name: 'photos', maxCount: MAX_TOOL_PHOTOS },
-    { name: 'photo', maxCount: 1 },
+    { name: "photos", maxCount: MAX_TOOL_PHOTOS },
+    { name: "photo", maxCount: 1 },
   ],
   { storage: toolPhotoStorage },
 );
@@ -62,36 +69,44 @@ const normalizeToolPhotoPayload = (
   files: UploadedPhotoFile[] = [],
 ) => {
   const uploadedUrls = mapUploadedPhotos(files);
-  const existingUrls = Array.isArray(dto.photoUrls) ? dto.photoUrls.filter(Boolean) : [];
-  const legacyUrl = dto.photoUrl && !existingUrls.includes(dto.photoUrl) ? [dto.photoUrl] : [];
+  const existingUrls = Array.isArray(dto.photoUrls)
+    ? dto.photoUrls.filter(Boolean)
+    : [];
+  const legacyUrl =
+    dto.photoUrl && !existingUrls.includes(dto.photoUrl) ? [dto.photoUrl] : [];
   const photoUrls = [...existingUrls, ...legacyUrl, ...uploadedUrls];
 
   dto.photoUrls = photoUrls;
-  dto.photoUrl = photoUrls[0] || '';
+  dto.photoUrl = photoUrls[0] || "";
 };
 
-@Controller('tools')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Controller("tools")
+@UseGuards(AuthGuard("jwt"), RolesGuard)
 export class ToolsController {
   constructor(private readonly toolsService: ToolsService) {}
 
   @Get()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
   findAllAccessible(@Request() req) {
     return this.toolsService.findAccessible(req.user);
   }
 
-  @Post('attach-to-worker')
+  @Post("attach-to-worker")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async attachToWorker(@Body() dto: AttachToolsToWorkerDto, @Request() req) {
     await this.toolsService.assertToolsInCompany(dto.toolIds, req.user);
     return this.toolsService.attachToWorker(dto.workerId, dto.toolIds);
   }
 
-  @Put('worker/:workerId/assignments')
+  @Put("worker/:workerId/assignments")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async replaceWorkerAssignments(
-    @Param('workerId') workerId: string,
+    @Param("workerId") workerId: string,
     @Body() dto: AttachToolsToWorkerDto,
     @Request() req,
   ) {
@@ -99,7 +114,7 @@ export class ToolsController {
     return this.toolsService.replaceWorkerAssignments(workerId, dto.toolIds);
   }
 
-  @Post('attach-to-project')
+  @Post("attach-to-project")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async attachToProject(@Body() dto: AttachToolsToProjectDto, @Request() req) {
     await this.toolsService.assertToolsInCompany(dto.toolIds, req.user);
@@ -112,21 +127,23 @@ export class ToolsController {
   create(
     @Request() req,
     @Body() createToolDto: CreateToolDto,
-    @UploadedFiles() files?: { photos?: UploadedPhotoFile[]; photo?: UploadedPhotoFile[] },
+    @UploadedFiles()
+    files?: { photos?: UploadedPhotoFile[]; photo?: UploadedPhotoFile[] },
   ) {
     normalizeToolPhotoPayload(createToolDto, collectUploadedPhotos(files));
 
     return this.toolsService.create(createToolDto, req.user);
   }
 
-  @Put(':id')
+  @Put(":id")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   @UseInterceptors(toolPhotoUploadInterceptor)
   async update(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() updateToolDto: UpdateToolDto,
     @Request() req,
-    @UploadedFiles() files?: { photos?: UploadedPhotoFile[]; photo?: UploadedPhotoFile[] },
+    @UploadedFiles()
+    files?: { photos?: UploadedPhotoFile[]; photo?: UploadedPhotoFile[] },
   ) {
     await this.toolsService.assertToolAccessById(id, req.user);
 
@@ -148,16 +165,21 @@ export class ToolsController {
     return this.toolsService.update(id, updateToolDto);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  async remove(@Param('id') id: string, @Request() req) {
+  async remove(@Param("id") id: string, @Request() req) {
     await this.toolsService.assertToolAccessById(id, req.user);
     return this.toolsService.remove(id);
   }
 
-  @Get(':id')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  findOne(@Param('id') id: string, @Request() req) {
+  @Get(":id")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  findOne(@Param("id") id: string, @Request() req) {
     return this.toolsService.assertToolAccessById(id, req.user);
   }
 }

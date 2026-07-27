@@ -1,9 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { cronsDisabled } from '../common/cron.util';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { NotificationsService } from '../notifications/notifications.service';
+import { Injectable, Logger } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { cronsDisabled } from "../common/cron.util";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { NotificationsService } from "../notifications/notifications.service";
 import {
   buildAssignmentMessage,
   buildReminderMessage,
@@ -11,13 +11,13 @@ import {
   getRecurringIntervalMs,
   getReminderRecipientIds,
   normalizeTaskNotificationSettings,
-} from './task-reminder-settings';
+} from "./task-reminder-settings";
 import {
   TaskReminder,
   TaskReminderDocument,
   TaskReminderScheduleType,
   TaskReminderStatus,
-} from './schemas/task-reminder.schema';
+} from "./schemas/task-reminder.schema";
 
 type SyncTaskReminderParams = {
   notificationSettings?: unknown;
@@ -51,9 +51,13 @@ export class TaskRemindersService {
   ) {}
 
   async sendAssignmentNotification(params: SendAssignmentNotificationParams) {
-    const settings = normalizeTaskNotificationSettings(params.notificationSettings);
-    const recipients = getReminderRecipientIds(settings, params.projectMemberIds)
-      .filter((userId) => userId !== params.actorUserId);
+    const settings = normalizeTaskNotificationSettings(
+      params.notificationSettings,
+    );
+    const recipients = getReminderRecipientIds(
+      settings,
+      params.projectMemberIds,
+    ).filter((userId) => userId !== params.actorUserId);
 
     if (!recipients.length) {
       return { attempted: 0, sent: 0, disabledTokens: 0 };
@@ -62,10 +66,10 @@ export class TaskRemindersService {
     return this.notificationsService.sendToUsers(recipients, {
       title: `Task assigned in ${params.projectName}`,
       body: buildAssignmentMessage(params.taskTitle, settings),
-      preferenceKey: 'tasks',
+      preferenceKey: "tasks",
       data: {
-        type: 'task_assignment',
-        screen: params.projectId ? 'Project' : 'Tasks',
+        type: "task_assignment",
+        screen: params.projectId ? "Project" : "Tasks",
         ...(params.projectId ? { projectId: params.projectId } : {}),
         entityId: params.taskId,
       },
@@ -75,8 +79,13 @@ export class TaskRemindersService {
   async syncTaskReminders(params: SyncTaskReminderParams) {
     await this.cancelTaskReminders(params.taskId);
 
-    const settings = normalizeTaskNotificationSettings(params.notificationSettings);
-    const recipients = getReminderRecipientIds(settings, params.projectMemberIds);
+    const settings = normalizeTaskNotificationSettings(
+      params.notificationSettings,
+    );
+    const recipients = getReminderRecipientIds(
+      settings,
+      params.projectMemberIds,
+    );
     if (!recipients.length) {
       return { created: 0 };
     }
@@ -128,11 +137,12 @@ export class TaskRemindersService {
 
     try {
       const now = new Date();
-      const reminders = await this.taskReminderModel.find({
-        enabled: true,
-        status: TaskReminderStatus.Active,
-        nextRunAt: { $lte: now },
-      })
+      const reminders = await this.taskReminderModel
+        .find({
+          enabled: true,
+          status: TaskReminderStatus.Active,
+          nextRunAt: { $lte: now },
+        })
         .sort({ nextRunAt: 1 })
         .limit(100)
         .exec();
@@ -141,7 +151,7 @@ export class TaskRemindersService {
         await this.processSingleReminder(reminder, now);
       }
     } catch (error) {
-      this.logger.error('Failed to process task reminders', error);
+      this.logger.error("Failed to process task reminders", error);
     } finally {
       this.isProcessingDueReminders = false;
     }
@@ -153,25 +163,32 @@ export class TaskRemindersService {
   ) {
     try {
       await this.notificationsService.sendToUsers([reminder.targetUserId], {
-        title: reminder.messageTitle || `Reminder for ${reminder.taskTitle || 'task'}`,
-        body: reminder.messageBody || 'Task reminder',
-        preferenceKey: 'tasks',
+        title:
+          reminder.messageTitle ||
+          `Reminder for ${reminder.taskTitle || "task"}`,
+        body: reminder.messageBody || "Task reminder",
+        preferenceKey: "tasks",
         data: {
-          type: 'task_reminder',
-          screen: reminder.projectId ? 'Project' : 'Tasks',
+          type: "task_reminder",
+          screen: reminder.projectId ? "Project" : "Tasks",
           ...(reminder.projectId ? { projectId: reminder.projectId } : {}),
           entityId: reminder.taskId,
         },
       });
     } catch (error) {
-      this.logger.error(`Failed to send task reminder ${reminder._id.toString()}`, error);
+      this.logger.error(
+        `Failed to send task reminder ${reminder._id.toString()}`,
+        error,
+      );
     }
 
     const sentCount = (reminder.sentCount || 0) + 1;
     const nextRunAt = this.getNextRunAt(reminder, now);
-    const shouldComplete = sentCount >= (reminder.maxRuns || 1)
-      || !nextRunAt
-      || (reminder.endAt && nextRunAt.getTime() > new Date(reminder.endAt).getTime());
+    const shouldComplete =
+      sentCount >= (reminder.maxRuns || 1) ||
+      !nextRunAt ||
+      (reminder.endAt &&
+        nextRunAt.getTime() > new Date(reminder.endAt).getTime());
 
     reminder.lastSentAt = now;
     reminder.sentCount = sentCount;

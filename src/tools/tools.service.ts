@@ -1,11 +1,15 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Tool, ToolDocument } from './schemas/tool.schema';
-import { CreateToolDto } from './dto/create-tool.dto';
-import { UpdateToolDto } from './dto/update-tool.dto';
-import { Project, ProjectDocument } from '../projects/schemas/project.schema';
-import { UserRole } from '../users/schemas/user.schema';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { Tool, ToolDocument } from "./schemas/tool.schema";
+import { CreateToolDto } from "./dto/create-tool.dto";
+import { UpdateToolDto } from "./dto/update-tool.dto";
+import { Project, ProjectDocument } from "../projects/schemas/project.schema";
+import { UserRole } from "../users/schemas/user.schema";
 
 type AuthUser = {
   role: UserRole;
@@ -20,10 +24,7 @@ export class ToolsService {
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
   ) {}
 
-  async create(
-    createToolDto: CreateToolDto,
-    user?: AuthUser,
-  ): Promise<Tool> {
+  async create(createToolDto: CreateToolDto, user?: AuthUser): Promise<Tool> {
     const payload: CreateToolDto = {
       ...createToolDto,
       workerIds: createToolDto.workerIds || [],
@@ -36,7 +37,9 @@ export class ToolsService {
     // companyId supplied in the body is ignored (anti cross-tenant tampering).
     if (user) {
       if (!user.companyId) {
-        throw new ForbiddenException('Your account is not attached to a company');
+        throw new ForbiddenException(
+          "Your account is not attached to a company",
+        );
       }
       payload.companyId = user.companyId;
     }
@@ -46,13 +49,16 @@ export class ToolsService {
 
   // ---- Tenant access control ----
 
-  async assertToolAccessById(id: string, user: AuthUser): Promise<ToolDocument> {
+  async assertToolAccessById(
+    id: string,
+    user: AuthUser,
+  ): Promise<ToolDocument> {
     const tool = await this.toolModel.findById(id).exec();
     if (!tool) {
       throw new NotFoundException(`Tool with ID "${id}" not found`);
     }
     if (!user.companyId || String(tool.companyId) !== String(user.companyId)) {
-      throw new ForbiddenException('You do not have access to this tool');
+      throw new ForbiddenException("You do not have access to this tool");
     }
     return tool;
   }
@@ -62,28 +68,33 @@ export class ToolsService {
       return;
     }
     if (!user.companyId) {
-      throw new ForbiddenException('Your account is not attached to a company');
+      throw new ForbiddenException("Your account is not attached to a company");
     }
     const owned = await this.toolModel
       .countDocuments({ _id: { $in: toolIds }, companyId: user.companyId })
       .exec();
     if (owned !== new Set(toolIds).size) {
-      throw new ForbiddenException('One or more tools are outside your company');
+      throw new ForbiddenException(
+        "One or more tools are outside your company",
+      );
     }
   }
 
   async findAccessible(user: AuthUser): Promise<Tool[]> {
     // Superadmin is scoped to its own company like a company admin.
     if (
-      (user.role === UserRole.CompanyAdmin || user.role === UserRole.SuperAdmin) &&
+      (user.role === UserRole.CompanyAdmin ||
+        user.role === UserRole.SuperAdmin) &&
       user.companyId
     ) {
       const companyProjects = await this.projectModel
         .find({ companyId: user.companyId })
-        .select('_id')
+        .select("_id")
         .lean()
         .exec();
-      const projectIds = companyProjects.map((project) => project._id.toString());
+      const projectIds = companyProjects.map((project) =>
+        project._id.toString(),
+      );
 
       return this.toolModel
         .find({
@@ -97,7 +108,11 @@ export class ToolsService {
     }
 
     const projectFilter = this.getProjectFilterForUser(user);
-    const projects = await this.projectModel.find(projectFilter).select('_id').lean().exec();
+    const projects = await this.projectModel
+      .find(projectFilter)
+      .select("_id")
+      .lean()
+      .exec();
     const projectIds = projects.map((project) => project._id.toString());
 
     if (!projectIds.length && user.role !== UserRole.Worker) {
@@ -175,8 +190,14 @@ export class ToolsService {
     );
   }
 
-  async replaceWorkerAssignments(workerId: string, toolIds: string[]): Promise<void> {
-    await this.toolModel.updateMany({ workerIds: workerId }, { $pull: { workerIds: workerId } });
+  async replaceWorkerAssignments(
+    workerId: string,
+    toolIds: string[],
+  ): Promise<void> {
+    await this.toolModel.updateMany(
+      { workerIds: workerId },
+      { $pull: { workerIds: workerId } },
+    );
 
     if (!toolIds.length) {
       return;
@@ -211,7 +232,10 @@ export class ToolsService {
     return {};
   }
 
-  private syncPhotoFields(payload: { photoUrl?: string; photoUrls?: string[] }) {
+  private syncPhotoFields(payload: {
+    photoUrl?: string;
+    photoUrls?: string[];
+  }) {
     const photoUrls = Array.isArray(payload.photoUrls)
       ? payload.photoUrls.filter(Boolean)
       : [];
@@ -228,6 +252,6 @@ export class ToolsService {
     }
 
     payload.photoUrls = [];
-    payload.photoUrl = '';
+    payload.photoUrl = "";
   }
 }

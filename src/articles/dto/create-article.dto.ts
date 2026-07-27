@@ -5,8 +5,8 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-} from 'class-validator';
-import { HouseworkType } from '../schemas/article.schema';
+} from "class-validator";
+import { HouseworkType } from "../schemas/article.schema";
 
 export class CreateArticleDto {
   @IsOptional()

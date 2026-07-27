@@ -1,6 +1,6 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
-import { UserRole } from '../../users/schemas/user.schema';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
+import { UserRole } from "../../users/schemas/user.schema";
 
 export type CompanyInviteDocument = CompanyInvite & Document;
 
@@ -9,13 +9,13 @@ export type CompanyInviteDocument = CompanyInvite & Document;
 // a user account.
 @Schema({ timestamps: true })
 export class CompanyInvite {
-  @Prop({ ref: 'Company', required: true, index: true })
+  @Prop({ ref: "Company", required: true, index: true })
   companyId: string;
 
   @Prop({ required: true, lowercase: true, trim: true, index: true })
   email: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   name: string;
 
   @Prop({ type: String, enum: UserRole, default: UserRole.CompanyAdmin })
@@ -30,7 +30,7 @@ export class CompanyInvite {
   @Prop({ type: Date, default: null })
   acceptedAt?: Date | null;
 
-  @Prop({ type: String, ref: 'User', default: null })
+  @Prop({ type: String, ref: "User", default: null })
   invitedByUserId?: string | null;
 }
 

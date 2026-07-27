@@ -1,5 +1,5 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { DevicePlatform } from '../schemas/device-token.schema';
+import { IsEnum, IsOptional, IsString } from "class-validator";
+import { DevicePlatform } from "../schemas/device-token.schema";
 
 export class RegisterPushTokenDto {
   @IsString()

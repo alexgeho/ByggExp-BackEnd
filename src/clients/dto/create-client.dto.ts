@@ -4,8 +4,8 @@ import {
   IsEnum,
   IsOptional,
   IsString,
-} from 'class-validator';
-import { ClientType } from '../schemas/client.schema';
+} from "class-validator";
+import { ClientType } from "../schemas/client.schema";
 
 export class CreateClientDto {
   @IsOptional()

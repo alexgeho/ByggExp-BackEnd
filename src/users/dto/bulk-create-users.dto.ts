@@ -1,11 +1,11 @@
-import { Type } from 'class-transformer';
+import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   ValidateNested,
-} from 'class-validator';
-import { CreateUserDto } from './create-user.dto';
+} from "class-validator";
+import { CreateUserDto } from "./create-user.dto";
 
 export class BulkCreateUsersDto {
   @IsArray()

@@ -12,38 +12,44 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
-} from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { Roles } from '../common/decorators/roles.decorator';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { UserRole } from '../users/schemas/user.schema';
-import { BugReportsService } from './bug-reports.service';
-import { CreateBugReportDto } from './dto/create-bug-report.dto';
-import { UpdateBugReportDto } from './dto/update-bug-report.dto';
-import { UpdateBugReportStatusDto } from './dto/update-bug-report-status.dto';
+} from "@nestjs/common";
+import { AuthGuard } from "@nestjs/passport";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { diskStorage } from "multer";
+import { extname } from "path";
+import { Roles } from "../common/decorators/roles.decorator";
+import { RolesGuard } from "../common/guards/roles.guard";
+import { UserRole } from "../users/schemas/user.schema";
+import { BugReportsService } from "./bug-reports.service";
+import { CreateBugReportDto } from "./dto/create-bug-report.dto";
+import { UpdateBugReportDto } from "./dto/update-bug-report.dto";
+import { UpdateBugReportStatusDto } from "./dto/update-bug-report-status.dto";
 
 const MAX_BUG_REPORT_ATTACHMENT_BYTES = 100 * 1024 * 1024;
 
 const isAllowedBugReportMimeType = (mimeType?: string) =>
-  Boolean(mimeType && (mimeType.startsWith('image/') || mimeType.startsWith('video/')));
+  Boolean(
+    mimeType &&
+    (mimeType.startsWith("image/") || mimeType.startsWith("video/")),
+  );
 
 const bugReportAttachmentStorage = diskStorage({
-  destination: './uploads/bug-reports',
+  destination: "./uploads/bug-reports",
   filename: (_req, file, callback) => {
     const safeBaseName =
       file.originalname
-        .replace(extname(file.originalname), '')
-        .replace(/[^a-zA-Z0-9-_]/g, '_')
-        .slice(0, 80) || 'bug-report';
+        .replace(extname(file.originalname), "")
+        .replace(/[^a-zA-Z0-9-_]/g, "_")
+        .slice(0, 80) || "bug-report";
 
-    callback(null, `${Date.now()}-${safeBaseName}${extname(file.originalname)}`);
+    callback(
+      null,
+      `${Date.now()}-${safeBaseName}${extname(file.originalname)}`,
+    );
   },
 });
 
-const bugReportAttachmentInterceptor = FileInterceptor('attachment', {
+const bugReportAttachmentInterceptor = FileInterceptor("attachment", {
   storage: bugReportAttachmentStorage,
   limits: { fileSize: MAX_BUG_REPORT_ATTACHMENT_BYTES },
   fileFilter: (_req, file, callback) => {
@@ -53,7 +59,9 @@ const bugReportAttachmentInterceptor = FileInterceptor('attachment', {
     }
 
     callback(
-      new BadRequestException('Only image or video attachments are allowed') as any,
+      new BadRequestException(
+        "Only image or video attachments are allowed",
+      ) as any,
       false,
     );
   },
@@ -66,8 +74,8 @@ type UploadedBugReportFile = {
   size?: number;
 };
 
-@Controller('bug-reports')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Controller("bug-reports")
+@UseGuards(AuthGuard("jwt"), RolesGuard)
 export class BugReportsController {
   constructor(private readonly bugReportsService: BugReportsService) {}
 
@@ -106,21 +114,21 @@ export class BugReportsController {
     return this.bugReportsService.findAccessible(req.user);
   }
 
-  @Patch(':id/status')
+  @Patch(":id/status")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   updateStatus(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() dto: UpdateBugReportStatusDto,
     @Request() req,
   ) {
     return this.bugReportsService.updateStatus(id, dto.status, req.user);
   }
 
-  @Put(':id')
+  @Put(":id")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   @UseInterceptors(bugReportAttachmentInterceptor)
   update(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() dto: UpdateBugReportDto,
     @Request() req,
     @UploadedFile() file?: UploadedBugReportFile,
@@ -137,9 +145,9 @@ export class BugReportsController {
     return this.bugReportsService.update(id, dto, req.user, attachment);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  remove(@Param('id') id: string, @Request() req) {
+  remove(@Param("id") id: string, @Request() req) {
     return this.bugReportsService.remove(id, req.user);
   }
 }

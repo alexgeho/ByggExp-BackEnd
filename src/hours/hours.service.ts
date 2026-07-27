@@ -3,19 +3,23 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Project, ProjectDocument } from '../projects/schemas/project.schema';
-import { Shift, ShiftDocument, ShiftStatus } from '../shifts/schemas/shift.schema';
-import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
-import { parseTimeToMinutes } from '../shifts/shift-schedule.util';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { Project, ProjectDocument } from "../projects/schemas/project.schema";
+import {
+  Shift,
+  ShiftDocument,
+  ShiftStatus,
+} from "../shifts/schemas/shift.schema";
+import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
+import { parseTimeToMinutes } from "../shifts/shift-schedule.util";
 import {
   HourAdjustment,
   HourAdjustmentDocument,
-} from './schemas/hour-adjustment.schema';
-import { HoursQueryDto } from './dto/hours-query.dto';
-import { SaveAdjustmentDto } from './dto/save-adjustment.dto';
+} from "./schemas/hour-adjustment.schema";
+import { HoursQueryDto } from "./dto/hours-query.dto";
+import { SaveAdjustmentDto } from "./dto/save-adjustment.dto";
 
 type AuthenticatedUser = {
   userId: string;
@@ -37,20 +41,22 @@ export class HoursService {
   ) {}
 
   private getEntityId(value: unknown): string {
-    if (!value) return '';
-    if (typeof value === 'string') return value;
+    if (!value) return "";
+    if (typeof value === "string") return value;
     const entity = value as { _id?: unknown; id?: unknown };
-    return String(entity._id ?? entity.id ?? '');
+    return String(entity._id ?? entity.id ?? "");
   }
 
   // Planned hours for a day = project workday window; null when the project has
   // no enforced schedule (then there is no planned baseline to compare against).
-  private schedulePlanned(project: Pick<Project, 'shiftSchedule'>): number | null {
+  private schedulePlanned(
+    project: Pick<Project, "shiftSchedule">,
+  ): number | null {
     const schedule = project.shiftSchedule;
     if (!schedule?.enabled) return null;
     const minutes =
-      parseTimeToMinutes(schedule.workDayEndTime || '16:00') -
-      parseTimeToMinutes(schedule.workDayStartTime || '07:00');
+      parseTimeToMinutes(schedule.workDayEndTime || "16:00") -
+      parseTimeToMinutes(schedule.workDayStartTime || "07:00");
     if (!(minutes > 0)) return null;
     return round(minutes / 60);
   }
@@ -91,10 +97,17 @@ export class HoursService {
     const projectIds = [...projectById.keys()];
 
     if (!projectIds.length) {
-      return { from: query.from || null, to: query.to || null, projectId: query.projectId || null, workers: [] };
+      return {
+        from: query.from || null,
+        to: query.to || null,
+        projectId: query.projectId || null,
+        workers: [],
+      };
     }
 
-    const shiftFilter: Record<string, unknown> = { projectId: { $in: projectIds } };
+    const shiftFilter: Record<string, unknown> = {
+      projectId: { $in: projectIds },
+    };
     if (query.from || query.to) {
       const range: Record<string, string> = {};
       if (query.from) range.$gte = query.from;
@@ -104,7 +117,10 @@ export class HoursService {
 
     const [shifts, adjustments] = await Promise.all([
       this.shiftModel.find(shiftFilter).lean().exec(),
-      this.adjustmentModel.find({ projectId: { $in: projectIds } }).lean().exec(),
+      this.adjustmentModel
+        .find({ projectId: { $in: projectIds } })
+        .lean()
+        .exec(),
     ]);
 
     // adjustments keyed by project|worker|date
@@ -146,7 +162,7 @@ export class HoursService {
     const workerIds = [...byWorker.keys()];
     const users = await this.userModel
       .find({ _id: { $in: workerIds } })
-      .select('name role profession avatarUrl')
+      .select("name role profession avatarUrl")
       .lean()
       .exec();
     const userById = new Map(users.map((u) => [this.getEntityId(u), u]));
@@ -198,7 +214,7 @@ export class HoursService {
 
       return {
         workerId,
-        name: u?.name || 'Unknown',
+        name: u?.name || "Unknown",
         role: u?.role || null,
         profession: u?.profession || null,
         avatarUrl: u?.avatarUrl || null,
@@ -217,32 +233,44 @@ export class HoursService {
   async saveAdjustment(user: AuthenticatedUser, dto: SaveAdjustmentDto) {
     const [project] = await this.accessibleProjects(user, dto.projectId);
     if (!project) {
-      throw new NotFoundException('Project not found or not accessible');
+      throw new NotFoundException("Project not found or not accessible");
     }
 
-    const companyId = this.getEntityId(project.companyId) || String(project.companyId);
+    const companyId =
+      this.getEntityId(project.companyId) || String(project.companyId);
     if (!companyId) {
-      throw new BadRequestException('Project has no company');
+      throw new BadRequestException("Project has no company");
     }
     if (
-      (user.role === UserRole.CompanyAdmin || user.role === UserRole.SuperAdmin) &&
+      (user.role === UserRole.CompanyAdmin ||
+        user.role === UserRole.SuperAdmin) &&
       String(user.companyId) !== String(companyId)
     ) {
-      throw new ForbiddenException('Project belongs to another company');
+      throw new ForbiddenException("Project belongs to another company");
     }
 
     const existing = await this.adjustmentModel
-      .findOne({ companyId, projectId: dto.projectId, workerId: dto.workerId, date: dto.date })
+      .findOne({
+        companyId,
+        projectId: dto.projectId,
+        workerId: dto.workerId,
+        date: dto.date,
+      })
       .exec();
 
     // Keep the very first schedule-derived value as the trail's origin.
     const originalPlannedHours = existing
       ? existing.originalPlannedHours
-      : this.schedulePlanned(project) ?? 0;
+      : (this.schedulePlanned(project) ?? 0);
 
     const saved = await this.adjustmentModel
       .findOneAndUpdate(
-        { companyId, projectId: dto.projectId, workerId: dto.workerId, date: dto.date },
+        {
+          companyId,
+          projectId: dto.projectId,
+          workerId: dto.workerId,
+          date: dto.date,
+        },
         {
           companyId,
           projectId: dto.projectId,

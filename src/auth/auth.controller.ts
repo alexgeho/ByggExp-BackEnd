@@ -1,69 +1,70 @@
-import { Controller, Post, Body, Get, Query, Res, BadRequestException } from '@nestjs/common';
-import type { Response } from 'express';
-import { AuthService } from './auth.service';
-import { CreateUserDto } from '../users/dto/create-user.dto';
-import { RegisterCompanyPublicDto } from './dto/register-company-public.dto';
-import { Public } from '../common/decorators/public.decorator';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Query,
+  Res,
+  BadRequestException,
+} from "@nestjs/common";
+import type { Response } from "express";
+import { AuthService } from "./auth.service";
+import { CreateUserDto } from "../users/dto/create-user.dto";
+import { RegisterCompanyPublicDto } from "./dto/register-company-public.dto";
+import { Public } from "../common/decorators/public.decorator";
 
 @Public()
-@Controller('auth')
+@Controller("auth")
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  @Post('register')
+  @Post("register")
   register(@Body() createUserDto: CreateUserDto) {
     return this.authService.register(createUserDto);
   }
 
-  @Post('register-company')
+  @Post("register-company")
   registerCompany(@Body() dto: RegisterCompanyPublicDto) {
     return this.authService.registerCompany(dto);
   }
 
-  @Post('register-superadmin')
+  @Post("register-superadmin")
   registerSuperAdmin(@Body() createUserDto: CreateUserDto) {
     return this.authService.registerSuperAdmin(createUserDto);
   }
 
-  @Post('login')
+  @Post("login")
   async login(@Body() loginDto: { email: string; password: string }) {
     return this.authService.login(loginDto.email, loginDto.password);
   }
 
-  @Post('refresh')
-  refresh(@Body('refresh_token') refreshToken: string) {
+  @Post("refresh")
+  refresh(@Body("refresh_token") refreshToken: string) {
     return this.authService.refresh(refreshToken);
   }
 
-  @Post('magic-login')
-  async magicLogin(@Body('code') code: string) {
+  @Post("magic-login")
+  async magicLogin(@Body("code") code: string) {
     if (!code?.trim()) {
-      throw new BadRequestException('Sign-in code is required');
+      throw new BadRequestException("Sign-in code is required");
     }
 
     return this.authService.magicLogin(code.trim());
   }
 
-  @Get('verify-email')
-  async verifyEmail(
-    @Query('token') token: string,
-    @Res() res: Response,
-  ) {
+  @Get("verify-email")
+  async verifyEmail(@Query("token") token: string, @Res() res: Response) {
     if (!token?.trim()) {
-      throw new BadRequestException('Verification token is required');
+      throw new BadRequestException("Verification token is required");
     }
 
     try {
       const result = await this.authService.verifyEmail(token.trim());
       const encodedCode = encodeURIComponent(result.magicLoginCode);
       const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
-      const androidIntentUrl =
-        `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end`;
+      const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end`;
 
-      res
-        .status(200)
-        .type('html')
-        .send(`<!DOCTYPE html>
+      res.status(200).type("html").send(`<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -104,12 +105,9 @@ export class AuthController {
       const message =
         error instanceof BadRequestException
           ? error.message
-          : 'Unable to verify email.';
+          : "Unable to verify email.";
 
-      res
-        .status(400)
-        .type('html')
-        .send(`<!DOCTYPE html>
+      res.status(400).type("html").send(`<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />

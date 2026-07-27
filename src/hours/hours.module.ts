@@ -1,14 +1,14 @@
-import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { Shift, ShiftSchema } from '../shifts/schemas/shift.schema';
-import { Project, ProjectSchema } from '../projects/schemas/project.schema';
-import { User, UserSchema } from '../users/schemas/user.schema';
+import { Module } from "@nestjs/common";
+import { MongooseModule } from "@nestjs/mongoose";
+import { Shift, ShiftSchema } from "../shifts/schemas/shift.schema";
+import { Project, ProjectSchema } from "../projects/schemas/project.schema";
+import { User, UserSchema } from "../users/schemas/user.schema";
 import {
   HourAdjustment,
   HourAdjustmentSchema,
-} from './schemas/hour-adjustment.schema';
-import { HoursController } from './hours.controller';
-import { HoursService } from './hours.service';
+} from "./schemas/hour-adjustment.schema";
+import { HoursController } from "./hours.controller";
+import { HoursService } from "./hours.service";
 
 @Module({
   imports: [

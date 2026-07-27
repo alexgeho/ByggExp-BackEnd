@@ -1,8 +1,11 @@
-import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { NotificationsModule } from '../notifications/notifications.module';
-import { TaskReminder, TaskReminderSchema } from './schemas/task-reminder.schema';
-import { TaskRemindersService } from './task-reminders.service';
+import { Module } from "@nestjs/common";
+import { MongooseModule } from "@nestjs/mongoose";
+import { NotificationsModule } from "../notifications/notifications.module";
+import {
+  TaskReminder,
+  TaskReminderSchema,
+} from "./schemas/task-reminder.schema";
+import { TaskRemindersService } from "./task-reminders.service";
 
 @Module({
   imports: [

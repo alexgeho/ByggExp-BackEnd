@@ -7,12 +7,12 @@ import {
   IsDateString,
   IsNumber,
   ValidateNested,
-} from 'class-validator';
-import { Transform, Expose, Type } from 'class-transformer';
-import { ShiftScheduleDto } from './shift-schedule.dto';
+} from "class-validator";
+import { Transform, Expose, Type } from "class-transformer";
+import { ShiftScheduleDto } from "./shift-schedule.dto";
 
 const parseArrayField = (value: unknown) => {
-  if (value === undefined || value === null || value === '') {
+  if (value === undefined || value === null || value === "") {
     return undefined;
   }
 
@@ -20,7 +20,7 @@ const parseArrayField = (value: unknown) => {
     return value;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
       return Array.isArray(parsed) ? parsed : [parsed];
@@ -33,7 +33,7 @@ const parseArrayField = (value: unknown) => {
 };
 
 const parseOptionalNumberField = (value: unknown) => {
-  if (value === undefined || value === null || value === '') {
+  if (value === undefined || value === null || value === "") {
     return undefined;
   }
 
@@ -42,15 +42,15 @@ const parseOptionalNumberField = (value: unknown) => {
 };
 
 const parseObjectField = (value: unknown) => {
-  if (value === undefined || value === null || value === '') {
+  if (value === undefined || value === null || value === "") {
     return undefined;
   }
 
-  if (typeof value === 'object') {
+  if (typeof value === "object") {
     return value;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     try {
       return JSON.parse(value);
     } catch {
@@ -79,7 +79,7 @@ export class CreateProjectDto {
   // Optional customer ("заказчик") the project is for. Must belong to the
   // project's own company; validated server-side. Empty string clears it.
   @Expose()
-  @Transform(({ value }) => (value === '' ? null : value))
+  @Transform(({ value }) => (value === "" ? null : value))
   @IsOptional()
   @IsString()
   clientId?: string | null;
@@ -104,9 +104,9 @@ export class CreateProjectDto {
   @IsNotEmpty()
   name: string;
 
-  @IsEnum(['planning', 'in_progress', 'completed', 'on_hold'])
+  @IsEnum(["planning", "in_progress", "completed", "on_hold"])
   @IsOptional()
-  status?: string = 'planning';
+  status?: string = "planning";
 
   @IsString()
   @IsOptional()

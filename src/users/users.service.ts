@@ -4,11 +4,11 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import * as bcrypt from 'bcrypt';
-import { createHash, randomBytes } from 'crypto';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import * as bcrypt from "bcrypt";
+import { createHash, randomBytes } from "crypto";
 import {
   normalizeUserNotificationPreferences,
   User,
@@ -16,21 +16,28 @@ import {
   UserDocument,
   UserRole,
   UserWorkStatus,
-} from './schemas/user.schema';
-import { MailService } from '../mail/mail.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { Company, CompanyDocument } from '../company/schemas/company.schema';
-import { Project, ProjectDocument } from '../projects/schemas/project.schema';
-import { DeviceToken, DeviceTokenDocument } from '../notifications/schemas/device-token.schema';
+} from "./schemas/user.schema";
+import { MailService } from "../mail/mail.service";
+import { CreateUserDto } from "./dto/create-user.dto";
+import { Company, CompanyDocument } from "../company/schemas/company.schema";
+import { Project, ProjectDocument } from "../projects/schemas/project.schema";
+import {
+  DeviceToken,
+  DeviceTokenDocument,
+} from "../notifications/schemas/device-token.schema";
 import {
   UserActivityLog,
   UserActivityLogDocument,
   UserActivityLogLevel,
-} from './schemas/user-activity-log.schema';
-import { WorkerNote, WorkerNoteDocument } from './schemas/worker-note.schema';
-import { Tool, ToolDocument } from '../tools/schemas/tool.schema';
+} from "./schemas/user-activity-log.schema";
+import { WorkerNote, WorkerNoteDocument } from "./schemas/worker-note.schema";
+import { Tool, ToolDocument } from "../tools/schemas/tool.schema";
 
-type UserDetailProjectRole = 'owner' | 'projectManager' | 'projectAdmin' | 'worker';
+type UserDetailProjectRole =
+  | "owner"
+  | "projectManager"
+  | "projectAdmin"
+  | "worker";
 
 type AuthUser = {
   userId?: string;
@@ -162,7 +169,8 @@ export class UsersService {
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
     @InjectModel(Tool.name) private toolModel: Model<ToolDocument>,
-    @InjectModel(DeviceToken.name) private deviceTokenModel: Model<DeviceTokenDocument>,
+    @InjectModel(DeviceToken.name)
+    private deviceTokenModel: Model<DeviceTokenDocument>,
     @InjectModel(UserActivityLog.name)
     private userActivityLogModel: Model<UserActivityLogDocument>,
     @InjectModel(WorkerNote.name)
@@ -175,11 +183,14 @@ export class UsersService {
   }
 
   private hashVerificationToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
+    return createHash("sha256").update(token).digest("hex");
   }
 
-  private buildVerificationToken(): { plainToken: string; hashedToken: string } {
-    const plainToken = randomBytes(32).toString('hex');
+  private buildVerificationToken(): {
+    plainToken: string;
+    hashedToken: string;
+  } {
+    const plainToken = randomBytes(32).toString("hex");
 
     return {
       plainToken,
@@ -193,7 +204,9 @@ export class UsersService {
       accountStatus?: UserAccountStatus;
     },
   ): Promise<UserDocument> {
-    const createdUser = new this.userModel(this.normalizeCreateUserInput(createUserDto));
+    const createdUser = new this.userModel(
+      this.normalizeCreateUserInput(createUserDto),
+    );
     const savedUser = await createdUser.save();
 
     await this.syncUserProjectAssignments(
@@ -206,18 +219,18 @@ export class UsersService {
   }
 
   private generateInvitePassword(): string {
-    return randomBytes(12).toString('base64url');
+    return randomBytes(12).toString("base64url");
   }
 
   private getRoleLabel(role: UserRole): string {
     const labels: Record<UserRole, string> = {
-      [UserRole.SuperAdmin]: 'Super Admin',
-      [UserRole.CompanyAdmin]: 'Company Admin',
-      [UserRole.ProjectAdmin]: 'Project Admin',
-      [UserRole.Worker]: 'Worker',
+      [UserRole.SuperAdmin]: "Super Admin",
+      [UserRole.CompanyAdmin]: "Company Admin",
+      [UserRole.ProjectAdmin]: "Project Admin",
+      [UserRole.Worker]: "Worker",
     };
 
-    return labels[role] || 'User';
+    return labels[role] || "User";
   }
 
   private normalizeCreateUserInput(
@@ -229,15 +242,20 @@ export class UsersService {
     return {
       ...createUserDto,
       email: createUserDto.email?.trim().toLowerCase(),
-      name: createUserDto.name?.trim() || createUserDto.email.split('@')[0] || '',
+      name:
+        createUserDto.name?.trim() || createUserDto.email.split("@")[0] || "",
       accountStatus: createUserDto.accountStatus ?? UserAccountStatus.Active,
-      ...(createUserDto.phoneAreaCode != null ? { phoneAreaCode: createUserDto.phoneAreaCode } : {}),
-      ...(createUserDto.phoneNumber != null ? { phoneNumber: createUserDto.phoneNumber } : {}),
+      ...(createUserDto.phoneAreaCode != null
+        ? { phoneAreaCode: createUserDto.phoneAreaCode }
+        : {}),
+      ...(createUserDto.phoneNumber != null
+        ? { phoneNumber: createUserDto.phoneNumber }
+        : {}),
     };
   }
 
   private normalizeId(value: unknown) {
-    return value ? String(value) : '';
+    return value ? String(value) : "";
   }
 
   private async canProjectAdminManageWorker(
@@ -252,7 +270,10 @@ export class UsersService {
     return managedProjectsCount > 0;
   }
 
-  private async canViewUser(actor: AuthUser, targetUser: AccessTargetUser): Promise<boolean> {
+  private async canViewUser(
+    actor: AuthUser,
+    targetUser: AccessTargetUser,
+  ): Promise<boolean> {
     const actorUserId = this.normalizeId(actor.userId);
     const targetUserId = this.normalizeId(targetUser._id);
 
@@ -276,19 +297,25 @@ export class UsersService {
     ) {
       return Boolean(
         actor.companyId &&
-          targetUser.companyId &&
-          String(actor.companyId) === String(targetUser.companyId),
+        targetUser.companyId &&
+        String(actor.companyId) === String(targetUser.companyId),
       );
     }
 
-    if (actor.role === UserRole.ProjectAdmin && targetUser.role === UserRole.Worker) {
+    if (
+      actor.role === UserRole.ProjectAdmin &&
+      targetUser.role === UserRole.Worker
+    ) {
       return this.canProjectAdminManageWorker(actorUserId, targetUserId);
     }
 
     return false;
   }
 
-  private async canEditUser(actor: AuthUser, targetUser: AccessTargetUser): Promise<boolean> {
+  private async canEditUser(
+    actor: AuthUser,
+    targetUser: AccessTargetUser,
+  ): Promise<boolean> {
     const actorUserId = this.normalizeId(actor.userId);
     const targetUserId = this.normalizeId(targetUser._id);
 
@@ -311,8 +338,8 @@ export class UsersService {
     ) {
       return Boolean(
         actor.companyId &&
-          targetUser.companyId &&
-          String(actor.companyId) === String(targetUser.companyId),
+        targetUser.companyId &&
+        String(actor.companyId) === String(targetUser.companyId),
       );
     }
 
@@ -323,7 +350,10 @@ export class UsersService {
     return false;
   }
 
-  private async canDeleteUser(actor: AuthUser, targetUser: AccessTargetUser): Promise<boolean> {
+  private async canDeleteUser(
+    actor: AuthUser,
+    targetUser: AccessTargetUser,
+  ): Promise<boolean> {
     const actorUserId = this.normalizeId(actor.userId);
     const targetUserId = this.normalizeId(targetUser._id);
 
@@ -342,8 +372,8 @@ export class UsersService {
     ) {
       return Boolean(
         actor.companyId &&
-          targetUser.companyId &&
-          String(actor.companyId) === String(targetUser.companyId),
+        targetUser.companyId &&
+        String(actor.companyId) === String(targetUser.companyId),
       );
     }
 
@@ -354,7 +384,10 @@ export class UsersService {
     return false;
   }
 
-  private async canCommentOnWorker(actor: AuthUser, targetUser: AccessTargetUser): Promise<boolean> {
+  private async canCommentOnWorker(
+    actor: AuthUser,
+    targetUser: AccessTargetUser,
+  ): Promise<boolean> {
     if (targetUser.role !== UserRole.Worker) {
       return false;
     }
@@ -372,60 +405,81 @@ export class UsersService {
     if (actor.role === UserRole.CompanyAdmin) {
       return Boolean(
         actor.companyId &&
-          targetUser.companyId &&
-          String(actor.companyId) === String(targetUser.companyId),
+        targetUser.companyId &&
+        String(actor.companyId) === String(targetUser.companyId),
       );
     }
 
     if (actor.role === UserRole.ProjectAdmin) {
-      return this.canProjectAdminManageWorker(actorUserId, this.normalizeId(targetUser._id));
+      return this.canProjectAdminManageWorker(
+        actorUserId,
+        this.normalizeId(targetUser._id),
+      );
     }
 
     return false;
   }
 
-  async assertCanViewUser(actor: AuthUser, targetUserId: string): Promise<UserDocument> {
+  async assertCanViewUser(
+    actor: AuthUser,
+    targetUserId: string,
+  ): Promise<UserDocument> {
     const targetUser = await this.findOne(targetUserId);
 
     if (!(await this.canViewUser(actor, targetUser))) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException("Access denied");
     }
 
     return targetUser;
   }
 
-  async assertCanEditUser(actor: AuthUser, targetUserId: string): Promise<UserDocument> {
+  async assertCanEditUser(
+    actor: AuthUser,
+    targetUserId: string,
+  ): Promise<UserDocument> {
     const targetUser = await this.findOne(targetUserId);
 
     if (!(await this.canEditUser(actor, targetUser))) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException("Access denied");
     }
 
     return targetUser;
   }
 
-  async assertCanDeleteUser(actor: AuthUser, targetUserId: string): Promise<UserDocument> {
+  async assertCanDeleteUser(
+    actor: AuthUser,
+    targetUserId: string,
+  ): Promise<UserDocument> {
     const targetUser = await this.findOne(targetUserId);
 
     if (!(await this.canDeleteUser(actor, targetUser))) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException("Access denied");
     }
 
     return targetUser;
   }
 
-  async assertCanCommentOnWorker(actor: AuthUser, targetUserId: string): Promise<UserDocument> {
+  async assertCanCommentOnWorker(
+    actor: AuthUser,
+    targetUserId: string,
+  ): Promise<UserDocument> {
     const targetUser = await this.findOne(targetUserId);
 
     if (!(await this.canCommentOnWorker(actor, targetUser))) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException("Access denied");
     }
 
     return targetUser;
   }
 
   private normalizeProjectIds(projectIds?: string[]): string[] {
-    return [...new Set((projectIds || []).filter(Boolean).map((projectId) => String(projectId)))];
+    return [
+      ...new Set(
+        (projectIds || [])
+          .filter(Boolean)
+          .map((projectId) => String(projectId)),
+      ),
+    ];
   }
 
   private async syncUserProjectAssignments(
@@ -447,7 +501,10 @@ export class UsersService {
         { $pull: { workers: normalizedUserId } },
       ),
       this.projectModel.updateMany(
-        { projectAdmins: normalizedUserId, _id: { $nin: desiredProjectAdminIds } },
+        {
+          projectAdmins: normalizedUserId,
+          _id: { $nin: desiredProjectAdminIds },
+        },
         { $pull: { projectAdmins: normalizedUserId } },
       ),
     ]);
@@ -468,7 +525,10 @@ export class UsersService {
   }
 
   async createUserPendingApproval(
-    createUserDto: CreateUserDto & { role: UserRole; companyId?: string | null },
+    createUserDto: CreateUserDto & {
+      role: UserRole;
+      companyId?: string | null;
+    },
   ): Promise<UserDocument> {
     const plainPassword = this.generateInvitePassword();
     const hashedPassword = await this.hashPassword(plainPassword);
@@ -539,11 +599,11 @@ export class UsersService {
         emailVerificationExpiresAt: { $gt: new Date() },
         accountStatus: UserAccountStatus.WaitingForApproval,
       })
-      .select('+emailVerificationToken +emailVerificationExpiresAt')
+      .select("+emailVerificationToken +emailVerificationExpiresAt")
       .exec();
 
     if (!user) {
-      throw new BadRequestException('Invalid or expired verification link');
+      throw new BadRequestException("Invalid or expired verification link");
     }
 
     user.accountStatus = UserAccountStatus.Active;
@@ -551,7 +611,9 @@ export class UsersService {
     user.emailVerificationExpiresAt = null;
 
     const savedUser = await user.save();
-    const magicLoginCode = await this.createMagicLoginCode(savedUser._id.toString());
+    const magicLoginCode = await this.createMagicLoginCode(
+      savedUser._id.toString(),
+    );
 
     return {
       user: savedUser,
@@ -560,7 +622,7 @@ export class UsersService {
   }
 
   async createMagicLoginCode(userId: string): Promise<string> {
-    const plainCode = randomBytes(32).toString('hex');
+    const plainCode = randomBytes(32).toString("hex");
     const hashedCode = this.hashVerificationToken(plainCode);
 
     await this.userModel.findByIdAndUpdate(userId, {
@@ -579,11 +641,11 @@ export class UsersService {
         magicLoginExpiresAt: { $gt: new Date() },
         accountStatus: UserAccountStatus.Active,
       })
-      .select('+magicLoginCode +magicLoginExpiresAt')
+      .select("+magicLoginCode +magicLoginExpiresAt")
       .exec();
 
     if (!user) {
-      throw new BadRequestException('Invalid or expired sign-in link');
+      throw new BadRequestException("Invalid or expired sign-in link");
     }
 
     user.magicLoginCode = null;
@@ -611,19 +673,21 @@ export class UsersService {
     return this.userModel.find(query).exec();
   }
 
-  async findByIds(ids: string[], scopeCompanyId?: string | null): Promise<User[]> {
+  async findByIds(
+    ids: string[],
+    scopeCompanyId?: string | null,
+  ): Promise<User[]> {
     const query: Record<string, unknown> = { _id: { $in: ids } };
     if (scopeCompanyId) {
       query.companyId = scopeCompanyId;
     }
-    return this.userModel.find(query)
-      .select('email name profession role companyId projectIds')
+    return this.userModel
+      .find(query)
+      .select("email name profession role companyId projectIds")
       .exec();
   }
 
-  async findUserById(
-    id: string,
-  ): Promise<{
+  async findUserById(id: string): Promise<{
     id: string;
     email: string;
     name: string;
@@ -639,21 +703,26 @@ export class UsersService {
   } | null> {
     const user = await this.userModel
       .findById(id)
-      .select('email name profession role avatarUrl notificationPreferences')
+      .select("email name profession role avatarUrl notificationPreferences")
       .exec();
     if (!user) return null;
     return {
       id: user._id.toString(),
       email: user.email,
       name: user.name,
-      profession: user.profession || '',
+      profession: user.profession || "",
       role: user.role,
-      avatarUrl: user.avatarUrl || '',
-      notificationPreferences: normalizeUserNotificationPreferences(user.notificationPreferences),
+      avatarUrl: user.avatarUrl || "",
+      notificationPreferences: normalizeUserNotificationPreferences(
+        user.notificationPreferences,
+      ),
     };
   }
 
-  async findDetailedUserById(id: string, actor?: AuthUser): Promise<UserDetailResponse | null> {
+  async findDetailedUserById(
+    id: string,
+    actor?: AuthUser,
+  ): Promise<UserDetailResponse | null> {
     const user = await this.userModel.findById(id).lean().exec();
     if (!user) {
       return null;
@@ -672,65 +741,79 @@ export class UsersService {
       ],
     };
 
-    const [company, projects, tools, activePushTokens, activityLogs, activityLogCount] =
-      await Promise.all([
-        companyId
-          ? this.companyModel.findById(companyId).select('name email address').lean().exec()
-          : null,
-        this.projectModel
-          .find(projectMembershipFilter)
-          .select('name status location ownerId projectManagerId projectAdmins workers')
-          .sort({ name: 1 })
-          .lean()
-          .exec(),
-        this.toolModel
-          .find({ workerIds: normalizedUserId })
-          .select('name status notes photoUrl')
-          .sort({ name: 1 })
-          .lean()
-          .exec(),
-        this.deviceTokenModel
-          .find({ userId: id, enabled: true })
-          .sort({ lastSeenAt: -1, updatedAt: -1 })
-          .lean()
-          .exec(),
-        this.userActivityLogModel
-          .find({ userId: id })
-          .sort({ createdAt: -1 })
-          .limit(50)
-          .lean()
-          .exec(),
-        this.userActivityLogModel.countDocuments({ userId: id }).exec(),
-      ]);
+    const [
+      company,
+      projects,
+      tools,
+      activePushTokens,
+      activityLogs,
+      activityLogCount,
+    ] = await Promise.all([
+      companyId
+        ? this.companyModel
+            .findById(companyId)
+            .select("name email address")
+            .lean()
+            .exec()
+        : null,
+      this.projectModel
+        .find(projectMembershipFilter)
+        .select(
+          "name status location ownerId projectManagerId projectAdmins workers",
+        )
+        .sort({ name: 1 })
+        .lean()
+        .exec(),
+      this.toolModel
+        .find({ workerIds: normalizedUserId })
+        .select("name status notes photoUrl")
+        .sort({ name: 1 })
+        .lean()
+        .exec(),
+      this.deviceTokenModel
+        .find({ userId: id, enabled: true })
+        .sort({ lastSeenAt: -1, updatedAt: -1 })
+        .lean()
+        .exec(),
+      this.userActivityLogModel
+        .find({ userId: id })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean()
+        .exec(),
+      this.userActivityLogModel.countDocuments({ userId: id }).exec(),
+    ]);
 
     const detailedProjects = projects.map((project) => {
       const roles: UserDetailProjectRole[] = [];
       const userId = this.normalizeId(user._id);
 
       if (this.normalizeId(project.ownerId) === userId) {
-        roles.push('owner');
+        roles.push("owner");
       }
       if (this.normalizeId(project.projectManagerId) === userId) {
-        roles.push('projectManager');
+        roles.push("projectManager");
       }
       if (
         Array.isArray(project.projectAdmins) &&
-        project.projectAdmins.some((entry) => this.normalizeId(entry) === userId)
+        project.projectAdmins.some(
+          (entry) => this.normalizeId(entry) === userId,
+        )
       ) {
-        roles.push('projectAdmin');
+        roles.push("projectAdmin");
       }
       if (
         Array.isArray(project.workers) &&
         project.workers.some((entry) => this.normalizeId(entry) === userId)
       ) {
-        roles.push('worker');
+        roles.push("worker");
       }
 
       return {
         id: this.normalizeId(project._id),
         name: project.name,
         status: project.status,
-        location: project.location || '',
+        location: project.location || "",
         roles,
       };
     });
@@ -739,8 +822,14 @@ export class UsersService {
       actor && actor.userId && actor.role
         ? {
             canEdit: await this.canEditUser(actor, user as AccessTargetUser),
-            canDelete: await this.canDeleteUser(actor, user as AccessTargetUser),
-            canComment: await this.canCommentOnWorker(actor, user as AccessTargetUser),
+            canDelete: await this.canDeleteUser(
+              actor,
+              user as AccessTargetUser,
+            ),
+            canComment: await this.canCommentOnWorker(
+              actor,
+              user as AccessTargetUser,
+            ),
           }
         : {
             canEdit: false,
@@ -752,14 +841,18 @@ export class UsersService {
       id: this.normalizeId(user._id),
       email: user.email,
       name: user.name,
-      profession: user.profession || '',
+      profession: user.profession || "",
       role: user.role,
-      avatarUrl: user.avatarUrl || '',
+      avatarUrl: user.avatarUrl || "",
       phoneAreaCode: user.phoneAreaCode ?? null,
       phoneNumber: user.phoneNumber ?? null,
       language: user.language || {},
-      additionalDocuments: Array.isArray(user.additionalDocuments) ? user.additionalDocuments : [],
-      notificationPreferences: normalizeUserNotificationPreferences(user.notificationPreferences),
+      additionalDocuments: Array.isArray(user.additionalDocuments)
+        ? user.additionalDocuments
+        : [],
+      notificationPreferences: normalizeUserNotificationPreferences(
+        user.notificationPreferences,
+      ),
       workPresence: {
         status: user.workStatus || UserWorkStatus.OffDuty,
         projectId: user.workStatusProjectId || null,
@@ -781,8 +874,8 @@ export class UsersService {
         id: this.normalizeId(tool._id),
         name: tool.name,
         status: tool.status,
-        notes: tool.notes || '',
-        photoUrl: tool.photoUrl || '',
+        notes: tool.notes || "",
+        photoUrl: tool.photoUrl || "",
       })),
       permissions,
       activePushTokens: activePushTokens.map((token) => ({
@@ -809,7 +902,9 @@ export class UsersService {
       counts: {
         projectCount: detailedProjects.length,
         activePushTokenCount: activePushTokens.length,
-        additionalDocumentCount: Array.isArray(user.additionalDocuments) ? user.additionalDocuments.length : 0,
+        additionalDocumentCount: Array.isArray(user.additionalDocuments)
+          ? user.additionalDocuments.length
+          : 0,
         activityLogCount,
       },
       createdAt: (user as { createdAt?: Date }).createdAt || null,
@@ -870,7 +965,7 @@ export class UsersService {
       this.userActivityLogModel.countDocuments(filter).exec(),
     ]);
 
-    const normalizeId = (value: unknown) => (value ? String(value) : '');
+    const normalizeId = (value: unknown) => (value ? String(value) : "");
 
     return {
       items: items.map((log) => ({
@@ -901,8 +996,8 @@ export class UsersService {
       id: this.normalizeId(note._id),
       workerId: note.workerId,
       authorUserId: note.authorUserId,
-      authorName: note.authorName || '',
-      authorRole: note.authorRole || '',
+      authorName: note.authorName || "",
+      authorRole: note.authorRole || "",
       text: note.text,
       createdAt: (note as { createdAt?: Date }).createdAt || null,
       updatedAt: (note as { updatedAt?: Date }).updatedAt || null,
@@ -918,9 +1013,9 @@ export class UsersService {
     const note = await this.workerNoteModel.create({
       workerId,
       authorUserId: this.normalizeId(actor.userId),
-      authorName: author?.name || author?.email || 'User',
-      authorRole: actor.role || '',
-      companyId: actor.companyId || '',
+      authorName: author?.name || author?.email || "User",
+      authorRole: actor.role || "",
+      companyId: actor.companyId || "",
       text: text.trim(),
     });
 
@@ -928,8 +1023,8 @@ export class UsersService {
       id: note._id.toString(),
       workerId: note.workerId,
       authorUserId: note.authorUserId,
-      authorName: note.authorName || '',
-      authorRole: note.authorRole || '',
+      authorName: note.authorName || "",
+      authorRole: note.authorRole || "",
       text: note.text,
       createdAt: (note as unknown as { createdAt?: Date }).createdAt || null,
       updatedAt: (note as unknown as { updatedAt?: Date }).updatedAt || null,
@@ -972,17 +1067,18 @@ export class UsersService {
     const cleaned: Partial<CreateUserDto> = { ...dto };
     const isSuper = actor.role === UserRole.SuperAdmin;
     const isCompanyAdmin = actor.role === UserRole.CompanyAdmin;
-    const editingSelf = !!actor.userId && String(actor.userId) === String(targetId);
+    const editingSelf =
+      !!actor.userId && String(actor.userId) === String(targetId);
 
     // Tenant membership: only superadmin may change companyId.
-    if (!isSuper && 'companyId' in cleaned) {
+    if (!isSuper && "companyId" in cleaned) {
       delete cleaned.companyId;
     }
 
     // Role: superadmin → any; companyAdmin → may set worker/projectAdmin for
     // OTHER users only (never self, never companyAdmin/superadmin); anyone else
     // (incl. a user editing self) cannot change role at all.
-    if ('role' in cleaned) {
+    if ("role" in cleaned) {
       const requested = cleaned.role;
       const companyAdminMayAssign =
         isCompanyAdmin &&
@@ -995,7 +1091,7 @@ export class UsersService {
 
     // Project membership is an admin-only assignment; a worker cannot add
     // themselves to arbitrary projects through self-update.
-    if ('projectIds' in cleaned) {
+    if ("projectIds" in cleaned) {
       const mayAssignProjects =
         isSuper || isCompanyAdmin || actor.role === UserRole.ProjectAdmin;
       if (!mayAssignProjects) {
@@ -1043,7 +1139,10 @@ export class UsersService {
     );
 
     if (updatedUser.role !== UserRole.Worker) {
-      await this.toolModel.updateMany({}, { $pull: { workerIds: updatedUser._id.toString() } });
+      await this.toolModel.updateMany(
+        {},
+        { $pull: { workerIds: updatedUser._id.toString() } },
+      );
     }
 
     return updatedUser;
@@ -1081,18 +1180,18 @@ export class UsersService {
     // Exact lowercase match first, then case-insensitive for legacy records.
     const exactMatch = await this.userModel
       .findOne({ email: normalizedEmail })
-      .select('+password')
+      .select("+password")
       .exec();
 
     if (exactMatch) {
       return exactMatch;
     }
 
-    const escapedEmail = normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedEmail = normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     return this.userModel
-      .findOne({ email: { $regex: `^${escapedEmail}$`, $options: 'i' } })
-      .select('+password')
+      .findOne({ email: { $regex: `^${escapedEmail}$`, $options: "i" } })
+      .select("+password")
       .exec();
   }
 
@@ -1104,7 +1203,7 @@ export class UsersService {
     if (scopeCompanyId) {
       query.companyId = scopeCompanyId;
     }
-    const user = await this.userModel.findOne(query).select('_id').exec();
+    const user = await this.userModel.findOne(query).select("_id").exec();
     return user ? { id: user._id.toString() } : null;
   }
 
@@ -1122,7 +1221,10 @@ export class UsersService {
     return user;
   }
 
-  async removeUserFromProject(userId: string, projectId: string): Promise<User> {
+  async removeUserFromProject(
+    userId: string,
+    projectId: string,
+  ): Promise<User> {
     const user = await this.userModel.findById(userId);
     if (!user) {
       throw new NotFoundException(`User with ID "${userId}" not found`);
@@ -1134,7 +1236,10 @@ export class UsersService {
     return user;
   }
 
-  async updateUserCompany(userId: string, companyId: string | null): Promise<User> {
+  async updateUserCompany(
+    userId: string,
+    companyId: string | null,
+  ): Promise<User> {
     const user = await this.userModel.findById(userId);
     if (!user) {
       throw new NotFoundException(`User with ID "${userId}" not found`);
@@ -1163,9 +1268,9 @@ export class UsersService {
         {
           workStatus: status,
           workStatusProjectId: options.projectId ?? null,
-          workStatusProjectName: options.projectName ?? '',
+          workStatusProjectName: options.projectName ?? "",
           workStatusShiftId: options.shiftId ?? null,
-          workStatusReason: options.reason ?? '',
+          workStatusReason: options.reason ?? "",
           workStatusUpdatedAt: options.updatedAt ?? new Date(),
         },
         { new: true },
@@ -1191,7 +1296,7 @@ export class UsersService {
   ) {
     return this.updateWorkStatus(userId, UserWorkStatus.Working, {
       ...options,
-      reason: options.reason ?? 'active_shift',
+      reason: options.reason ?? "active_shift",
     });
   }
 
@@ -1203,7 +1308,7 @@ export class UsersService {
     } = {},
   ) {
     return this.updateWorkStatus(userId, UserWorkStatus.OffDuty, {
-      reason: options.reason ?? 'shift_not_active',
+      reason: options.reason ?? "shift_not_active",
       updatedAt: options.updatedAt,
     });
   }
@@ -1220,7 +1325,7 @@ export class UsersService {
   ) {
     return this.updateWorkStatus(userId, UserWorkStatus.OutsideProjectArea, {
       ...options,
-      reason: options.reason ?? 'outside_project_area',
+      reason: options.reason ?? "outside_project_area",
     });
   }
 
@@ -1234,7 +1339,10 @@ export class UsersService {
       .exec();
   }
 
-  async appendAdditionalDocuments(id: string, documentUrls: string[]): Promise<User> {
+  async appendAdditionalDocuments(
+    id: string,
+    documentUrls: string[],
+  ): Promise<User> {
     const user = await this.userModel.findById(id).exec();
 
     if (!user) {
@@ -1246,7 +1354,9 @@ export class UsersService {
       : [];
 
     if (existingDocuments.length + documentUrls.length > 4) {
-      throw new BadRequestException('You can upload up to 4 additional documents.');
+      throw new BadRequestException(
+        "You can upload up to 4 additional documents.",
+      );
     }
 
     user.additionalDocuments = [...existingDocuments, ...documentUrls];

@@ -1,11 +1,11 @@
-import { TaskReminderScheduleType } from './schemas/task-reminder.schema';
+import { TaskReminderScheduleType } from "./schemas/task-reminder.schema";
 import {
   DEFAULT_REPEAT_INTERVAL_MINUTES,
   MAX_HOURLY_REPEAT_RUNS,
   MAX_MINUTE_REPEAT_RUNS,
   MAX_REPEAT_INTERVAL_MINUTES,
   MIN_REPEAT_INTERVAL_MINUTES,
-} from './task-reminder.settings';
+} from "./task-reminder.settings";
 
 const MINUTE_IN_MS = 60 * 1000;
 const HOUR_IN_MS = 60 * MINUTE_IN_MS;
@@ -24,7 +24,7 @@ export type TaskNotificationSettings = {
   autoReminder: boolean;
   customReminder: boolean;
   customMessage: string;
-  repeat: 'none' | 'minutes' | 'hourly' | 'daily' | 'weekly';
+  repeat: "none" | "minutes" | "hourly" | "daily" | "weekly";
   repeatIntervalMinutes: number;
 };
 
@@ -39,36 +39,43 @@ export type TaskReminderPlan = {
 export const normalizeTaskNotificationSettings = (
   value: unknown,
 ): TaskNotificationSettings => {
-  const source = typeof value === 'object' && value !== null
-    ? value as Record<string, unknown>
-    : {};
+  const source =
+    typeof value === "object" && value !== null
+      ? (value as Record<string, unknown>)
+      : {};
 
   const assignees = Array.isArray(source.assignees)
     ? source.assignees
-        .filter((item): item is Record<string, unknown> => (
-          typeof item === 'object'
-          && item !== null
-          && typeof item.id === 'string'
-          && item.id.trim().length > 0
-        ))
+        .filter(
+          (item): item is Record<string, unknown> =>
+            typeof item === "object" &&
+            item !== null &&
+            typeof item.id === "string" &&
+            item.id.trim().length > 0,
+        )
         .map((item) => ({
           id: item.id as string,
-          name: typeof item.name === 'string' ? item.name : undefined,
-          profession: typeof item.profession === 'string' ? item.profession : undefined,
+          name: typeof item.name === "string" ? item.name : undefined,
+          profession:
+            typeof item.profession === "string" ? item.profession : undefined,
         }))
     : [];
 
-  const repeat = typeof source.repeat === 'string'
-    && ['none', 'minutes', 'hourly', 'daily', 'weekly'].includes(source.repeat)
-    ? source.repeat as TaskNotificationSettings['repeat']
-    : 'none';
+  const repeat =
+    typeof source.repeat === "string" &&
+    ["none", "minutes", "hourly", "daily", "weekly"].includes(source.repeat)
+      ? (source.repeat as TaskNotificationSettings["repeat"])
+      : "none";
 
   const parsedIntervalMinutes = Number(source.repeatIntervalMinutes);
   const repeatIntervalMinutes = Number.isFinite(parsedIntervalMinutes)
     ? Math.min(
-      MAX_REPEAT_INTERVAL_MINUTES,
-      Math.max(MIN_REPEAT_INTERVAL_MINUTES, Math.round(parsedIntervalMinutes)),
-    )
+        MAX_REPEAT_INTERVAL_MINUTES,
+        Math.max(
+          MIN_REPEAT_INTERVAL_MINUTES,
+          Math.round(parsedIntervalMinutes),
+        ),
+      )
     : DEFAULT_REPEAT_INTERVAL_MINUTES;
 
   return {
@@ -76,7 +83,10 @@ export const normalizeTaskNotificationSettings = (
     allMembersNotification: Boolean(source.allMembersNotification),
     autoReminder: Boolean(source.autoReminder),
     customReminder: Boolean(source.customReminder),
-    customMessage: typeof source.customMessage === 'string' ? source.customMessage.trim() : '',
+    customMessage:
+      typeof source.customMessage === "string"
+        ? source.customMessage.trim()
+        : "",
     repeat,
     repeatIntervalMinutes,
   };
@@ -85,16 +95,17 @@ export const normalizeTaskNotificationSettings = (
 export const getReminderRecipientIds = (
   settings: TaskNotificationSettings,
   projectMemberIds: string[] = [],
-) => (
-  [...new Set([
-    ...settings.assignees.map((assignee) => assignee.id),
-    ...(settings.allMembersNotification ? projectMemberIds : []),
-  ].filter(Boolean))]
-);
+) => [
+  ...new Set(
+    [
+      ...settings.assignees.map((assignee) => assignee.id),
+      ...(settings.allMembersNotification ? projectMemberIds : []),
+    ].filter(Boolean),
+  ),
+];
 
-export const hasReminderEnabled = (settings: TaskNotificationSettings) => (
-  settings.autoReminder || settings.customReminder
-);
+export const hasReminderEnabled = (settings: TaskNotificationSettings) =>
+  settings.autoReminder || settings.customReminder;
 
 export const buildAssignmentMessage = (
   taskTitle: string,
@@ -144,7 +155,7 @@ export const buildTaskReminderPlan = ({
     return null;
   }
 
-  if (settings.repeat === 'minutes') {
+  if (settings.repeat === "minutes") {
     const intervalMs = settings.repeatIntervalMinutes * MINUTE_IN_MS;
 
     if (diffMs < intervalMs) {
@@ -153,10 +164,7 @@ export const buildTaskReminderPlan = ({
 
     const maxRuns = Math.max(
       1,
-      Math.min(
-        MAX_MINUTE_REPEAT_RUNS,
-        Math.floor(diffMs / intervalMs),
-      ),
+      Math.min(MAX_MINUTE_REPEAT_RUNS, Math.floor(diffMs / intervalMs)),
     );
 
     return {
@@ -168,17 +176,14 @@ export const buildTaskReminderPlan = ({
     };
   }
 
-  if (settings.repeat === 'hourly') {
+  if (settings.repeat === "hourly") {
     if (diffMs < HOUR_IN_MS) {
       return null;
     }
 
     const maxRuns = Math.max(
       1,
-      Math.min(
-        MAX_HOURLY_REPEAT_RUNS,
-        Math.floor(diffMs / HOUR_IN_MS),
-      ),
+      Math.min(MAX_HOURLY_REPEAT_RUNS, Math.floor(diffMs / HOUR_IN_MS)),
     );
 
     return {
@@ -189,7 +194,7 @@ export const buildTaskReminderPlan = ({
     };
   }
 
-  if (settings.repeat === 'daily') {
+  if (settings.repeat === "daily") {
     if (diffMs < DAY_IN_MS || diffMs > 30 * DAY_IN_MS) {
       return null;
     }
@@ -202,7 +207,7 @@ export const buildTaskReminderPlan = ({
     };
   }
 
-  if (settings.repeat === 'weekly') {
+  if (settings.repeat === "weekly") {
     if (diffMs < WEEK_IN_MS) {
       return null;
     }

@@ -1,8 +1,14 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { UserRole } from '../../users/schemas/user.schema';
-import { ProjectsService } from '../../projects/projects.service';
-import { CompanyService } from '../../company/company.service';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  NotFoundException,
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { UserRole } from "../../users/schemas/user.schema";
+import { ProjectsService } from "../../projects/projects.service";
+import { CompanyService } from "../../company/company.service";
 
 @Injectable()
 export class ProjectAccessGuard implements CanActivate {
@@ -16,7 +22,7 @@ export class ProjectAccessGuard implements CanActivate {
     const user = request.user;
 
     if (!user) {
-      throw new ForbiddenException('User not authenticated');
+      throw new ForbiddenException("User not authenticated");
     }
 
     // SuperAdmin имеет доступ ко всем проектам
@@ -40,7 +46,10 @@ export class ProjectAccessGuard implements CanActivate {
 
       // ProjectAdmin имеет доступ только к своим проектам
       if (user.role === UserRole.ProjectAdmin) {
-        return project.projectAdmins.includes(user.sub) || project.ownerId === user.sub;
+        return (
+          project.projectAdmins.includes(user.sub) ||
+          project.ownerId === user.sub
+        );
       }
 
       // Worker имеет доступ только к проектам, где он является работником
@@ -50,7 +59,7 @@ export class ProjectAccessGuard implements CanActivate {
 
       return false;
     } catch {
-      throw new NotFoundException('Project not found');
+      throw new NotFoundException("Project not found");
     }
   }
 }

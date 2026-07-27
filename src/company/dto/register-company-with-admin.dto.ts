@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, IsOptional } from "class-validator";
 
 export class RegisterCompanyWithAdminDto {
   @IsString()
@@ -27,7 +27,7 @@ export class RegisterCompanyWithAdminDto {
 
   @IsString()
   @IsOptional()
-  adminPhoneAreaCode?: string = '+7';
+  adminPhoneAreaCode?: string = "+7";
 
   @IsString()
   @IsOptional()

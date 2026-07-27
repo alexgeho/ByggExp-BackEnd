@@ -5,9 +5,9 @@ import {
   IsOptional,
   IsString,
   ValidateNested,
-} from 'class-validator';
-import { Type } from 'class-transformer';
-import { OfferStatus } from '../schemas/offer.schema';
+} from "class-validator";
+import { Type } from "class-transformer";
+import { OfferStatus } from "../schemas/offer.schema";
 
 export class OfferContactPersonDto {
   @IsOptional()

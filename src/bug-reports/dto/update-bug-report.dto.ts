@@ -1,6 +1,6 @@
-import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
-import { Transform } from 'class-transformer';
-import { BugReportStatus } from '../schemas/bug-report.schema';
+import { IsBoolean, IsEnum, IsOptional, IsString } from "class-validator";
+import { Transform } from "class-transformer";
+import { BugReportStatus } from "../schemas/bug-report.schema";
 
 export class UpdateBugReportDto {
   @IsString()
@@ -12,7 +12,7 @@ export class UpdateBugReportDto {
   status?: BugReportStatus;
 
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true')
+  @Transform(({ value }) => value === true || value === "true")
   @IsBoolean()
   removeAttachment?: boolean;
 }

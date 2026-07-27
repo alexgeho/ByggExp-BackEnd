@@ -91,15 +91,15 @@ body {
 
 function escapeHtml(value: string): string {
   return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function text(value?: string | number | null): string {
-  if (value === null || value === undefined) return '';
+  if (value === null || value === undefined) return "";
   return escapeHtml(String(value));
 }
 
@@ -108,7 +108,7 @@ function multiline(value?: string): string {
 }
 
 function section(title: string, body: string): string {
-  if (!body || !body.trim()) return '';
+  if (!body || !body.trim()) return "";
   return `
     <div class="offer-section">
       <p class="offer-section__title">${title}</p>
@@ -130,9 +130,14 @@ function buildFooter(footer: OfferPdfCompanyFooter = {}): string {
   `;
 }
 
-export function buildOfferPdfHtml(data: OfferPdfData, logoDataUrl = ''): string {
-  const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : '';
-  const contacts = (data.contactPersons || []).filter((c) => c && (c.name || c.role));
+export function buildOfferPdfHtml(
+  data: OfferPdfData,
+  logoDataUrl = "",
+): string {
+  const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : "";
+  const contacts = (data.contactPersons || []).filter(
+    (c) => c && (c.name || c.role),
+  );
   const contactsHtml = contacts.length
     ? `
       <div class="offer-contacts">
@@ -140,15 +145,16 @@ export function buildOfferPdfHtml(data: OfferPdfData, logoDataUrl = ''): string 
         ${contacts
           .map(
             (c) =>
-              `<div class="offer-contacts__row">${text(c.name)}${c.role ? ` — ${text(c.role)}` : ''}</div>`,
+              `<div class="offer-contacts__row">${text(c.name)}${c.role ? ` — ${text(c.role)}` : ""}</div>`,
           )
-          .join('')}
+          .join("")}
       </div>`
-    : '';
+    : "";
 
-  const priceHtml = data.priceText && data.priceText.trim()
-    ? `<div class="offer-price">${multiline(data.priceText)}</div>`
-    : '';
+  const priceHtml =
+    data.priceText && data.priceText.trim()
+      ? `<div class="offer-price">${multiline(data.priceText)}</div>`
+      : "";
 
   return `<!DOCTYPE html>
 <html lang="sv">
@@ -164,22 +170,22 @@ export function buildOfferPdfHtml(data: OfferPdfData, logoDataUrl = ''): string 
       <div>
         <div class="offer-header__title">Offert</div>
         <div class="offer-header__recipient">
-          ${text(data.companyName) || '&nbsp;'}<br>
-          ${text(data.email) || '&nbsp;'}
+          ${text(data.companyName) || "&nbsp;"}<br>
+          ${text(data.email) || "&nbsp;"}
         </div>
       </div>
       <dl class="offer-header__meta">
-        <dt>Offertnr</dt><dd>${text(data.offerNumber) || '&nbsp;'}</dd>
-        <dt>Datum</dt><dd>${text(data.date) || '&nbsp;'}</dd>
-        <dt>Giltig till</dt><dd>${text(data.validUntil) || '&nbsp;'}</dd>
+        <dt>Offertnr</dt><dd>${text(data.offerNumber) || "&nbsp;"}</dd>
+        <dt>Datum</dt><dd>${text(data.date) || "&nbsp;"}</dd>
+        <dt>Giltig till</dt><dd>${text(data.validUntil) || "&nbsp;"}</dd>
       </dl>
     </header>
 
     <div class="offer-body">
-      ${data.subtitle ? `<h1 class="offer-subtitle">${text(data.subtitle)}</h1>` : ''}
-      ${section('Beskrivning', data.description || '')}
+      ${data.subtitle ? `<h1 class="offer-subtitle">${text(data.subtitle)}</h1>` : ""}
+      ${section("Beskrivning", data.description || "")}
       ${priceHtml}
-      ${section('Förtydliganden', data.clarifications || '')}
+      ${section("Förtydliganden", data.clarifications || "")}
       ${contactsHtml}
     </div>
 

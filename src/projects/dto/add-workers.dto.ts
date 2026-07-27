@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsArray } from 'class-validator';
+import { IsString, IsNotEmpty, IsArray } from "class-validator";
 
 export class AddWorkersToProjectDto {
   @IsArray()

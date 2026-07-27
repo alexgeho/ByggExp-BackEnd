@@ -1,29 +1,29 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
 
 export type ArticleDocument = Article & Document;
 
 export enum HouseworkType {
-  None = 'none',
-  Rot = 'rot',
-  Rut = 'rut',
+  None = "none",
+  Rot = "rot",
+  Rut = "rut",
 }
 
 @Schema({ timestamps: true })
 export class Article {
-  @Prop({ ref: 'Company', index: true })
+  @Prop({ ref: "Company", index: true })
   companyId?: string;
 
-  @Prop({ ref: 'User', required: true })
+  @Prop({ ref: "User", required: true })
   createdByUserId: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   articleNumber: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   name: string;
 
-  @Prop({ default: 'Tjänster 25%' })
+  @Prop({ default: "Tjänster 25%" })
   kontering: string;
 
   @Prop({ type: Number, default: 25 })
@@ -35,13 +35,13 @@ export class Article {
   @Prop({ type: Boolean, default: true })
   active: boolean;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   nameEnglish: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   notes: string;
 
-  @Prop({ default: 'st' })
+  @Prop({ default: "st" })
   unit: string;
 
   @Prop({ type: Number, default: 0 })

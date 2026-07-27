@@ -1,59 +1,60 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
 
 export type OfferDocument = Offer & Document;
 
 export enum OfferStatus {
-  Draft = 'draft',
-  Sent = 'sent',
-  Accepted = 'accepted',
-  Rejected = 'rejected',
+  Draft = "draft",
+  Sent = "sent",
+  Accepted = "accepted",
+  Rejected = "rejected",
 }
 
 @Schema({ _id: false })
 export class OfferContactPerson {
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   role?: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   name?: string;
 }
 
-const OfferContactPersonSchema = SchemaFactory.createForClass(OfferContactPerson);
+const OfferContactPersonSchema =
+  SchemaFactory.createForClass(OfferContactPerson);
 
 @Schema({ timestamps: true, strict: false })
 export class Offer {
-  @Prop({ ref: 'Company', required: true, index: true })
+  @Prop({ ref: "Company", required: true, index: true })
   companyId: string;
 
-  @Prop({ ref: 'User', required: true })
+  @Prop({ ref: "User", required: true })
   createdByUserId: string;
 
   @Prop({ type: Number, required: true })
   offerNumber: number;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   companyName: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   email: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   date: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   validUntil: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   subtitle: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   priceText: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   description: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   clarifications: string;
 
   @Prop({ type: [OfferContactPersonSchema], default: [] })

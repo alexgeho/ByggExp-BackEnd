@@ -1,14 +1,14 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
 
 export type MessageDocument = Message & Document;
 
 @Schema({ timestamps: true })
 export class Message {
-  @Prop({ required: true, ref: 'Chat' }) // Ссылка на чат
+  @Prop({ required: true, ref: "Chat" }) // Ссылка на чат
   chatId: string;
 
-  @Prop({ required: true, ref: 'User' }) // Автор сообщения
+  @Prop({ required: true, ref: "User" }) // Автор сообщения
   userId: string;
 
   @Prop({ required: true })

@@ -1,5 +1,5 @@
-import { existsSync } from 'fs';
-import puppeteer from 'puppeteer-core';
+import { existsSync } from "fs";
+import puppeteer from "puppeteer-core";
 
 function resolveChromeExecutable(): string | undefined {
   const fromEnv =
@@ -11,22 +11,22 @@ function resolveChromeExecutable(): string | undefined {
     return fromEnv;
   }
 
-  if (process.platform === 'darwin') {
+  if (process.platform === "darwin") {
     const candidates = [
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-      '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+      "/Applications/Chromium.app/Contents/MacOS/Chromium",
     ];
 
     return candidates.find((candidate) => existsSync(candidate));
   }
 
-  if (process.platform === 'linux') {
+  if (process.platform === "linux") {
     const candidates = [
-      '/usr/bin/google-chrome-stable',
-      '/usr/bin/google-chrome',
-      '/usr/bin/chromium',
-      '/usr/bin/chromium-browser',
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/google-chrome",
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser",
     ];
 
     return candidates.find((candidate) => existsSync(candidate));
@@ -42,9 +42,9 @@ export function launchForInvoicePdf() {
     headless: true,
     ...(executablePath ? { executablePath } : {}),
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
     ],
   });
 }

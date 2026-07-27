@@ -1,30 +1,30 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
 
 export type TaskReminderDocument = TaskReminder & Document;
 
 export enum TaskReminderScheduleType {
-  Once = 'once',
-  Minutes = 'minutes',
-  Hourly = 'hourly',
-  Daily = 'daily',
-  Weekly = 'weekly',
-  Custom = 'custom',
+  Once = "once",
+  Minutes = "minutes",
+  Hourly = "hourly",
+  Daily = "daily",
+  Weekly = "weekly",
+  Custom = "custom",
 }
 
 export enum TaskReminderStatus {
-  Active = 'active',
-  Paused = 'paused',
-  Completed = 'completed',
-  Cancelled = 'cancelled',
+  Active = "active",
+  Paused = "paused",
+  Completed = "completed",
+  Cancelled = "cancelled",
 }
 
-@Schema({ timestamps: true, collection: 'task_reminders' })
+@Schema({ timestamps: true, collection: "task_reminders" })
 export class TaskReminder {
-  @Prop({ required: true, ref: 'Task', index: true })
+  @Prop({ required: true, ref: "Task", index: true })
   taskId: string;
 
-  @Prop({ required: true, ref: 'User', index: true })
+  @Prop({ required: true, ref: "User", index: true })
   targetUserId: string;
 
   @Prop({ default: true })

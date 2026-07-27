@@ -5,19 +5,22 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-} from '@nestjs/common';
-import { InjectModel, InjectConnection } from '@nestjs/mongoose';
-import { Model, Connection } from 'mongoose';
-import { randomBytes } from 'crypto';
-import * as bcrypt from 'bcrypt';
-import { Company, CompanyDocument } from './schemas/company.schema';
-import { CompanyInvite, CompanyInviteDocument } from './schemas/company-invite.schema';
-import { CreateCompanyDto } from './dto/create-company.dto';
-import { RegisterCompanyWithAdminDto } from './dto/register-company-with-admin.dto';
-import { AcceptInviteDto } from './dto/accept-invite.dto';
-import { UsersService } from '../users/users.service';
-import { MailService } from '../mail/mail.service';
-import { UserAccountStatus, UserRole } from '../users/schemas/user.schema';
+} from "@nestjs/common";
+import { InjectModel, InjectConnection } from "@nestjs/mongoose";
+import { Model, Connection } from "mongoose";
+import { randomBytes } from "crypto";
+import * as bcrypt from "bcrypt";
+import { Company, CompanyDocument } from "./schemas/company.schema";
+import {
+  CompanyInvite,
+  CompanyInviteDocument,
+} from "./schemas/company-invite.schema";
+import { CreateCompanyDto } from "./dto/create-company.dto";
+import { RegisterCompanyWithAdminDto } from "./dto/register-company-with-admin.dto";
+import { AcceptInviteDto } from "./dto/accept-invite.dto";
+import { UsersService } from "../users/users.service";
+import { MailService } from "../mail/mail.service";
+import { UserAccountStatus, UserRole } from "../users/schemas/user.schema";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -27,7 +30,8 @@ export class CompanyService {
 
   constructor(
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
-    @InjectModel(CompanyInvite.name) private inviteModel: Model<CompanyInviteDocument>,
+    @InjectModel(CompanyInvite.name)
+    private inviteModel: Model<CompanyInviteDocument>,
     @InjectConnection() private readonly connection: Connection,
     private usersService: UsersService,
     private mailService: MailService,
@@ -48,17 +52,17 @@ export class CompanyService {
   ): Promise<{ company: Company; invited: boolean }> {
     const email = createCompanyDto.email?.trim().toLowerCase();
     if (!email) {
-      throw new BadRequestException('Company email is required');
+      throw new BadRequestException("Company email is required");
     }
 
     const existingCompany = await this.companyModel.findOne({ email }).exec();
     if (existingCompany) {
-      throw new ConflictException('Company with this email already exists');
+      throw new ConflictException("Company with this email already exists");
     }
 
     const existingUser = await this.usersService.findByEmail(email);
     if (existingUser) {
-      throw new ConflictException('A user with this email already exists');
+      throw new ConflictException("A user with this email already exists");
     }
 
     const company = await this.create({
@@ -69,11 +73,11 @@ export class CompanyService {
     });
 
     // Pending invite — the admin User is only created on acceptance.
-    const token = randomBytes(32).toString('hex');
+    const token = randomBytes(32).toString("hex");
     await this.inviteModel.create({
       companyId: company._id.toString(),
       email,
-      name: createCompanyDto.name?.trim() || '',
+      name: createCompanyDto.name?.trim() || "",
       role: UserRole.CompanyAdmin,
       token,
       expiresAt: new Date(Date.now() + INVITE_TTL_MS),
@@ -82,7 +86,7 @@ export class CompanyService {
     try {
       await this.mailService.sendCompanyInviteEmail(
         email,
-        createCompanyDto.name?.trim() || '',
+        createCompanyDto.name?.trim() || "",
         token,
       );
     } catch (error) {
@@ -98,13 +102,13 @@ export class CompanyService {
   private async findLiveInvite(token: string): Promise<CompanyInviteDocument> {
     const invite = await this.inviteModel.findOne({ token }).exec();
     if (!invite) {
-      throw new NotFoundException('Invitation not found');
+      throw new NotFoundException("Invitation not found");
     }
     if (invite.acceptedAt) {
-      throw new ConflictException('Invitation already accepted');
+      throw new ConflictException("Invitation already accepted");
     }
     if (invite.expiresAt.getTime() < Date.now()) {
-      throw new GoneException('Invitation has expired');
+      throw new GoneException("Invitation has expired");
     }
     return invite;
   }
@@ -118,17 +122,20 @@ export class CompanyService {
       name: invite.name,
       role: invite.role,
       companyId: invite.companyId,
-      companyName: company?.name || '',
+      companyName: company?.name || "",
     };
   }
 
   // Public: create the company's admin account from a valid invite.
-  async acceptInvite(token: string, dto: AcceptInviteDto): Promise<{ email: string }> {
+  async acceptInvite(
+    token: string,
+    dto: AcceptInviteDto,
+  ): Promise<{ email: string }> {
     const invite = await this.findLiveInvite(token);
 
     const existingUser = await this.usersService.findByEmail(invite.email);
     if (existingUser) {
-      throw new ConflictException('A user with this email already exists');
+      throw new ConflictException("A user with this email already exists");
     }
 
     const hashedPassword = await this.usersService.hashPassword(dto.password);
@@ -152,17 +159,21 @@ export class CompanyService {
     return { email: invite.email };
   }
 
-  async registerCompanyWithAdmin(dto: RegisterCompanyWithAdminDto): Promise<{ company: Company; admin: any }> {
+  async registerCompanyWithAdmin(
+    dto: RegisterCompanyWithAdminDto,
+  ): Promise<{ company: Company; admin: any }> {
     // Проверяем существование компании
-    const existingCompany = await this.companyModel.findOne({ email: dto.email }).exec();
+    const existingCompany = await this.companyModel
+      .findOne({ email: dto.email })
+      .exec();
     if (existingCompany) {
-      throw new ConflictException('Company with this email already exists');
+      throw new ConflictException("Company with this email already exists");
     }
 
     // Проверяем существование админа
     const existingAdmin = await this.usersService.findByEmail(dto.adminEmail);
     if (existingAdmin) {
-      throw new ConflictException('User with this email already exists');
+      throw new ConflictException("User with this email already exists");
     }
 
     // Создаём компанию
@@ -180,8 +191,12 @@ export class CompanyService {
       email: dto.adminEmail,
       password: hashedPassword,
       name: dto.adminName,
-      phoneAreaCode: dto.adminPhoneAreaCode ? parseInt(dto.adminPhoneAreaCode.replace(/\D/g, '')) || 7 : 7,
-      phoneNumber: dto.adminPhoneNumber ? parseInt(dto.adminPhoneNumber.replace(/\D/g, '')) : 0,
+      phoneAreaCode: dto.adminPhoneAreaCode
+        ? parseInt(dto.adminPhoneAreaCode.replace(/\D/g, "")) || 7
+        : 7,
+      phoneNumber: dto.adminPhoneNumber
+        ? parseInt(dto.adminPhoneNumber.replace(/\D/g, ""))
+        : 0,
       role: UserRole.CompanyAdmin,
       companyId: company._id.toString(),
       projectIds: [],
@@ -212,13 +227,19 @@ export class CompanyService {
   }
 
   async findByIds(ids: string[]): Promise<Company[]> {
-    return this.companyModel.find({ _id: { $in: ids } })
-      .select('name email address companyAdmins projects')
+    return this.companyModel
+      .find({ _id: { $in: ids } })
+      .select("name email address companyAdmins projects")
       .exec();
   }
 
-  async findCompanyById(id: string): Promise<{ id: string; name: string; email: string } | null> {
-    const company = await this.companyModel.findById(id).select('name email').exec();
+  async findCompanyById(
+    id: string,
+  ): Promise<{ id: string; name: string; email: string } | null> {
+    const company = await this.companyModel
+      .findById(id)
+      .select("name email")
+      .exec();
     if (!company) return null;
     return {
       id: company._id.toString(),
@@ -261,7 +282,10 @@ export class CompanyService {
     return this.findOne(companyId);
   }
 
-  async update(id: string, updateCompanyDto: Partial<CreateCompanyDto>): Promise<Company> {
+  async update(
+    id: string,
+    updateCompanyDto: Partial<CreateCompanyDto>,
+  ): Promise<Company> {
     const updatedCompany = await this.companyModel
       .findByIdAndUpdate(id, updateCompanyDto, { new: true })
       .exec();
@@ -286,12 +310,12 @@ export class CompanyService {
 
     // 1) Collect this company's project ids BEFORE deleting projects, so we can
     //    cascade the records that are scoped by projectId (not companyId).
-    const projectModel = this.connection.models['Project'];
+    const projectModel = this.connection.models["Project"];
     let projectIds: string[] = [];
     if (projectModel) {
       const projects = await projectModel
         .find({ companyId })
-        .select('_id')
+        .select("_id")
         .lean()
         .exec();
       projectIds = projects.map((p: { _id: unknown }) => String(p._id));
@@ -299,9 +323,9 @@ export class CompanyService {
 
     // 2) Delete project-scoped data (tasks, shifts, chats).
     if (projectIds.length) {
-      for (const name of ['Task', 'Shift', 'Chat']) {
+      for (const name of ["Task", "Shift", "Chat"]) {
         const model = this.connection.models[name];
-        if (model && model.schema.path('projectId')) {
+        if (model && model.schema.path("projectId")) {
           await model.deleteMany({ projectId: { $in: projectIds } });
         }
       }
@@ -312,7 +336,7 @@ export class CompanyService {
     //    offers, articles, worker-notes, bug-reports, …).
     for (const model of Object.values(this.connection.models)) {
       if (model.modelName === Company.name) continue;
-      if (model.schema.path('companyId')) {
+      if (model.schema.path("companyId")) {
         await model.deleteMany({ companyId });
       }
     }

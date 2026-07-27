@@ -1,12 +1,12 @@
-import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { NotificationsModule } from '../notifications/notifications.module';
-import { Project, ProjectSchema } from '../projects/schemas/project.schema';
-import { UsersModule } from '../users/users.module';
-import { User, UserSchema } from '../users/schemas/user.schema';
-import { Shift, ShiftSchema } from './schemas/shift.schema';
-import { ShiftsController } from './shifts.controller';
-import { ShiftsService } from './shifts.service';
+import { Module } from "@nestjs/common";
+import { MongooseModule } from "@nestjs/mongoose";
+import { NotificationsModule } from "../notifications/notifications.module";
+import { Project, ProjectSchema } from "../projects/schemas/project.schema";
+import { UsersModule } from "../users/users.module";
+import { User, UserSchema } from "../users/schemas/user.schema";
+import { Shift, ShiftSchema } from "./schemas/shift.schema";
+import { ShiftsController } from "./shifts.controller";
+import { ShiftsService } from "./shifts.service";
 
 @Module({
   imports: [

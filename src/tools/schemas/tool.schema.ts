@@ -1,5 +1,5 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
 
 export type ToolDocument = Tool & Document;
 
@@ -8,18 +8,18 @@ export class Tool {
   @Prop({ required: true })
   name: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   photoUrl: string;
 
   @Prop({ type: [String], default: [] })
   photoUrls: string[];
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   notes: string;
 
   @Prop({
-    enum: ['available', 'broken', 'in_repair', 'occupied'],
-    default: 'available',
+    enum: ["available", "broken", "in_repair", "occupied"],
+    default: "available",
   })
   status: string;
 
@@ -29,7 +29,7 @@ export class Tool {
   @Prop({ type: [String], default: [] })
   projectIds: string[];
 
-  @Prop({ ref: 'Company' })
+  @Prop({ ref: "Company" })
   companyId?: string;
 }
 

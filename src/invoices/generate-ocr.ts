@@ -1,5 +1,5 @@
 export function generateOCR(invoiceNumber: number): string {
-  const digits = String(invoiceNumber).split('').map(Number);
+  const digits = String(invoiceNumber).split("").map(Number);
   let sum = 0;
   let shouldDouble = true;
 

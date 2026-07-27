@@ -1,18 +1,18 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
 
 export type DeviceTokenDocument = DeviceToken & Document;
 
 export enum DevicePlatform {
-  IOS = 'ios',
-  Android = 'android',
-  Web = 'web',
-  Unknown = 'unknown',
+  IOS = "ios",
+  Android = "android",
+  Web = "web",
+  Unknown = "unknown",
 }
 
-@Schema({ timestamps: true, collection: 'device_tokens' })
+@Schema({ timestamps: true, collection: "device_tokens" })
 export class DeviceToken {
-  @Prop({ required: true, ref: 'User', index: true })
+  @Prop({ required: true, ref: "User", index: true })
   userId: string;
 
   @Prop({ required: true, unique: true })
@@ -21,7 +21,11 @@ export class DeviceToken {
   @Prop({ required: true, index: true })
   expoPushToken: string;
 
-  @Prop({ required: true, enum: DevicePlatform, default: DevicePlatform.Unknown })
+  @Prop({
+    required: true,
+    enum: DevicePlatform,
+    default: DevicePlatform.Unknown,
+  })
   platform: DevicePlatform;
 
   @Prop()

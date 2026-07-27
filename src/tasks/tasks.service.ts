@@ -1,13 +1,19 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Task, TaskDocument, TaskStatus } from './schemas/task.schema';
-import { CreateTaskDto } from './dto/create-task.dto';
-import { Project, ProjectDocument } from '../projects/schemas/project.schema';
-import { UpdateTaskDto } from './dto/update-task.dto';
-import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
-import { NotificationsService } from '../notifications/notifications.service';
-import { TaskRemindersService } from '../task-reminders/task-reminders.service';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { Task, TaskDocument, TaskStatus } from "./schemas/task.schema";
+import { CreateTaskDto } from "./dto/create-task.dto";
+import { Project, ProjectDocument } from "../projects/schemas/project.schema";
+import { UpdateTaskDto } from "./dto/update-task.dto";
+import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
+import { NotificationsService } from "../notifications/notifications.service";
+import { TaskRemindersService } from "../task-reminders/task-reminders.service";
 
 type TaskAuthUser = {
   role?: UserRole;
@@ -46,14 +52,19 @@ export class TasksService {
     private readonly taskRemindersService: TaskRemindersService,
   ) {}
 
-  async create(createTaskDto: CreateTaskDto, actor?: TaskActorContext): Promise<Task> {
+  async create(
+    createTaskDto: CreateTaskDto,
+    actor?: TaskActorContext,
+  ): Promise<Task> {
     const actorUserId = actor?.userId;
     const actorRole = actor?.role;
     const hasProject = Boolean(createTaskDto.projectId);
     const hasAssignee = Boolean(createTaskDto.assigneeUserId);
 
     if (!hasProject && !hasAssignee) {
-      throw new BadRequestException('Task must be assigned to a project or one user.');
+      throw new BadRequestException(
+        "Task must be assigned to a project or one user.",
+      );
     }
 
     if (!hasProject && hasAssignee) {
@@ -68,24 +79,32 @@ export class TasksService {
     }
 
     if (actorRole === UserRole.Worker && actorUserId) {
-      const workerIds = (project.workers || []).map((value) => value.toString());
+      const workerIds = (project.workers || []).map((value) =>
+        value.toString(),
+      );
       if (!workerIds.includes(String(actorUserId))) {
-        throw new BadRequestException('Workers can only create tasks in their own projects.');
+        throw new BadRequestException(
+          "Workers can only create tasks in their own projects.",
+        );
       }
     }
 
     let assigneeUserId: string | null = null;
-    let assigneeUserName = '';
+    let assigneeUserName = "";
 
     if (createTaskDto.assigneeUserId) {
-      const assignee = await this.userModel.findById(createTaskDto.assigneeUserId).exec();
+      const assignee = await this.userModel
+        .findById(createTaskDto.assigneeUserId)
+        .exec();
 
       if (!assignee) {
-        throw new NotFoundException(`User with ID "${createTaskDto.assigneeUserId}" not found`);
+        throw new NotFoundException(
+          `User with ID "${createTaskDto.assigneeUserId}" not found`,
+        );
       }
 
       assigneeUserId = assignee._id.toString();
-      assigneeUserName = assignee.name || assignee.email || 'User';
+      assigneeUserName = assignee.name || assignee.email || "User";
     }
 
     const createdTask = await new this.taskModel({
@@ -99,10 +118,20 @@ export class TasksService {
       $push: { tasks: createdTask._id.toString() },
     });
 
-    const notificationProject = this.toProjectNotificationSource(project as unknown as ProjectDocument);
-    const notificationTask = this.toTaskNotificationSource(createdTask as unknown as TaskDocument);
-    const projectMemberIds = this.getProjectMemberIds(project as unknown as ProjectDocument);
-    await this.sendTaskCreatedNotification(notificationTask, notificationProject, actorUserId);
+    const notificationProject = this.toProjectNotificationSource(
+      project as unknown as ProjectDocument,
+    );
+    const notificationTask = this.toTaskNotificationSource(
+      createdTask as unknown as TaskDocument,
+    );
+    const projectMemberIds = this.getProjectMemberIds(
+      project as unknown as ProjectDocument,
+    );
+    await this.sendTaskCreatedNotification(
+      notificationTask,
+      notificationProject,
+      actorUserId,
+    );
     await this.taskRemindersService.sendAssignmentNotification({
       actorUserId,
       notificationSettings: createTaskDto.notificationSettings,
@@ -129,17 +158,21 @@ export class TasksService {
     createTaskDto: CreateTaskDto,
     actorUserId?: string,
   ): Promise<Task> {
-    const assignee = await this.userModel.findById(createTaskDto.assigneeUserId).exec();
+    const assignee = await this.userModel
+      .findById(createTaskDto.assigneeUserId)
+      .exec();
 
     if (!assignee) {
-      throw new NotFoundException(`User with ID "${createTaskDto.assigneeUserId}" not found`);
+      throw new NotFoundException(
+        `User with ID "${createTaskDto.assigneeUserId}" not found`,
+      );
     }
 
     const personalTaskPayload = {
       ...createTaskDto,
       projectId: null,
       assigneeUserId: assignee._id.toString(),
-      assigneeUserName: assignee.name || assignee.email || 'User',
+      assigneeUserName: assignee.name || assignee.email || "User",
       createdByUserId: actorUserId || null,
     };
     const createdTask = await new this.taskModel(personalTaskPayload).save();
@@ -158,8 +191,8 @@ export class TasksService {
         ],
       },
       projectMemberIds: personalMemberIds,
-      projectId: '',
-      projectName: 'Personal task',
+      projectId: "",
+      projectName: "Personal task",
       taskId: createdTask._id.toString(),
       taskTitle: createdTask.taskTitle,
     });
@@ -175,8 +208,8 @@ export class TasksService {
         ],
       },
       projectMemberIds: personalMemberIds,
-      projectId: '',
-      projectName: 'Personal task',
+      projectId: "",
+      projectName: "Personal task",
       taskDueDate: createdTask.dueDate,
       taskId: createdTask._id.toString(),
       taskTitle: createdTask.taskTitle,
@@ -185,12 +218,17 @@ export class TasksService {
     return createdTask;
   }
 
-  async findAccessible(user: { role: UserRole; companyId?: string; userId?: string }): Promise<Task[]> {
+  async findAccessible(user: {
+    role: UserRole;
+    companyId?: string;
+    userId?: string;
+  }): Promise<Task[]> {
     let projectFilter = {};
 
     // Superadmin is scoped to its own company like a company admin.
     if (
-      (user.role === UserRole.CompanyAdmin || user.role === UserRole.SuperAdmin) &&
+      (user.role === UserRole.CompanyAdmin ||
+        user.role === UserRole.SuperAdmin) &&
       user.companyId
     ) {
       projectFilter = { companyId: user.companyId };
@@ -200,7 +238,11 @@ export class TasksService {
       projectFilter = { workers: user.userId };
     }
 
-    const projects = await this.projectModel.find(projectFilter).select('_id').lean().exec();
+    const projects = await this.projectModel
+      .find(projectFilter)
+      .select("_id")
+      .lean()
+      .exec();
     const projectIds = projects.map((project) => project._id.toString());
 
     const personalTaskFilter = user.userId
@@ -234,7 +276,7 @@ export class TasksService {
   ): Promise<void> {
     const project = await this.projectModel
       .findById(projectId)
-      .select('companyId projectAdmins workers ownerId projectManagerId')
+      .select("companyId projectAdmins workers ownerId projectManagerId")
       .lean()
       .exec();
     if (!project) {
@@ -243,18 +285,22 @@ export class TasksService {
     const sameCompany =
       !!user.companyId && String(project.companyId) === String(user.companyId);
     if (!sameCompany) {
-      throw new ForbiddenException('You do not have access to this project');
+      throw new ForbiddenException("You do not have access to this project");
     }
     if (user.role === UserRole.ProjectAdmin || user.role === UserRole.Worker) {
-      const uid = user.userId ? String(user.userId) : '';
+      const uid = user.userId ? String(user.userId) : "";
       const members = [
-        String((project as { ownerId?: unknown }).ownerId ?? ''),
-        String((project as { projectManagerId?: unknown }).projectManagerId ?? ''),
-        ...((project as { projectAdmins?: unknown[] }).projectAdmins ?? []).map(String),
+        String((project as { ownerId?: unknown }).ownerId ?? ""),
+        String(
+          (project as { projectManagerId?: unknown }).projectManagerId ?? "",
+        ),
+        ...((project as { projectAdmins?: unknown[] }).projectAdmins ?? []).map(
+          String,
+        ),
         ...((project as { workers?: unknown[] }).workers ?? []).map(String),
       ];
       if (!uid || !members.includes(uid)) {
-        throw new ForbiddenException('You do not have access to this project');
+        throw new ForbiddenException("You do not have access to this project");
       }
     }
   }
@@ -273,13 +319,16 @@ export class TasksService {
     }
 
     // Personal task (no project): only its assignee/creator may touch it.
-    const uid = user.userId ? String(user.userId) : '';
+    const uid = user.userId ? String(user.userId) : "";
     const isStakeholder =
       !!uid &&
-      (String((task as { assigneeUserId?: unknown }).assigneeUserId ?? '') === uid ||
-        String((task as { createdByUserId?: unknown }).createdByUserId ?? '') === uid);
+      (String((task as { assigneeUserId?: unknown }).assigneeUserId ?? "") ===
+        uid ||
+        String(
+          (task as { createdByUserId?: unknown }).createdByUserId ?? "",
+        ) === uid);
     if (!isStakeholder) {
-      throw new ForbiddenException('You do not have access to this task');
+      throw new ForbiddenException("You do not have access to this task");
     }
     return task;
   }
@@ -294,7 +343,11 @@ export class TasksService {
       .exec();
   }
 
-  async update(id: string, updateTaskDto: UpdateTaskDto, actorUserId?: string): Promise<Task> {
+  async update(
+    id: string,
+    updateTaskDto: UpdateTaskDto,
+    actorUserId?: string,
+  ): Promise<Task> {
     const existingTask = await this.taskModel.findById(id).exec();
 
     if (!existingTask) {
@@ -303,16 +356,22 @@ export class TasksService {
 
     const currentProjectId = existingTask.projectId || null;
     const nextProjectId = updateTaskDto.projectId || currentProjectId;
-    const dueDateChanged = this.hasDueDateChanged(existingTask.dueDate, updateTaskDto.dueDate);
-    let targetProject = nextProjectId && nextProjectId === currentProjectId
-      ? await this.projectModel.findById(currentProjectId).exec()
-      : null;
+    const dueDateChanged = this.hasDueDateChanged(
+      existingTask.dueDate,
+      updateTaskDto.dueDate,
+    );
+    let targetProject =
+      nextProjectId && nextProjectId === currentProjectId
+        ? await this.projectModel.findById(currentProjectId).exec()
+        : null;
 
     if (nextProjectId && nextProjectId !== currentProjectId) {
       targetProject = await this.projectModel.findById(nextProjectId).exec();
 
       if (!targetProject) {
-        throw new NotFoundException(`Project with ID "${nextProjectId}" not found`);
+        throw new NotFoundException(
+          `Project with ID "${nextProjectId}" not found`,
+        );
       }
 
       if (currentProjectId) {
@@ -333,12 +392,20 @@ export class TasksService {
       const notificationProject = this.toProjectNotificationSource(
         targetProject as unknown as ProjectDocument,
       );
-      const notificationTask = this.toTaskNotificationSource(existingTask as unknown as TaskDocument);
-      await this.sendTaskDeadlineUpdatedNotification(notificationTask, notificationProject, actorUserId);
+      const notificationTask = this.toTaskNotificationSource(
+        existingTask as unknown as TaskDocument,
+      );
+      await this.sendTaskDeadlineUpdatedNotification(
+        notificationTask,
+        notificationProject,
+        actorUserId,
+      );
     }
 
     if (targetProject) {
-      const projectMemberIds = this.getProjectMemberIds(targetProject as unknown as ProjectDocument);
+      const projectMemberIds = this.getProjectMemberIds(
+        targetProject as unknown as ProjectDocument,
+      );
       await this.taskRemindersService.syncTaskReminders({
         notificationSettings: existingTask.notificationSettings,
         projectMemberIds,
@@ -349,7 +416,9 @@ export class TasksService {
         taskTitle: existingTask.taskTitle,
       });
     } else {
-      await this.taskRemindersService.cancelTaskReminders(existingTask._id.toString());
+      await this.taskRemindersService.cancelTaskReminders(
+        existingTask._id.toString(),
+      );
     }
 
     return existingTask;
@@ -409,31 +478,48 @@ export class TasksService {
       return false;
     }
 
-    const currentTime = currentDueDate ? new Date(currentDueDate).getTime() : null;
+    const currentTime = currentDueDate
+      ? new Date(currentDueDate).getTime()
+      : null;
     const nextTime = new Date(nextDueDate).getTime();
 
     return currentTime !== nextTime;
   }
 
-  private getProjectNotificationRecipients(project: ProjectNotificationSource, actorUserId?: string) {
-    return [...new Set([
-      project.ownerId,
-      project.projectManagerId,
-      ...(project.projectAdmins || []),
-      ...(project.workers || []),
-    ].filter((userId) => userId && userId !== actorUserId))];
+  private getProjectNotificationRecipients(
+    project: ProjectNotificationSource,
+    actorUserId?: string,
+  ) {
+    return [
+      ...new Set(
+        [
+          project.ownerId,
+          project.projectManagerId,
+          ...(project.projectAdmins || []),
+          ...(project.workers || []),
+        ].filter((userId) => userId && userId !== actorUserId),
+      ),
+    ];
   }
 
   private getProjectMemberIds(project: ProjectDocument) {
-    return [...new Set([
-      project.ownerId,
-      project.projectManagerId,
-      ...(project.projectAdmins || []),
-      ...(project.workers || []),
-    ].filter(Boolean).map((value) => value.toString()))];
+    return [
+      ...new Set(
+        [
+          project.ownerId,
+          project.projectManagerId,
+          ...(project.projectAdmins || []),
+          ...(project.workers || []),
+        ]
+          .filter(Boolean)
+          .map((value) => value.toString()),
+      ),
+    ];
   }
 
-  private toProjectNotificationSource(project: ProjectDocument): ProjectNotificationSource {
+  private toProjectNotificationSource(
+    project: ProjectDocument,
+  ): ProjectNotificationSource {
     return {
       _id: project._id,
       name: project.name,
@@ -456,7 +542,10 @@ export class TasksService {
     project: ProjectNotificationSource,
     actorUserId?: string,
   ) {
-    const recipients = this.getProjectNotificationRecipients(project, actorUserId);
+    const recipients = this.getProjectNotificationRecipients(
+      project,
+      actorUserId,
+    );
     if (!recipients.length) {
       return;
     }
@@ -465,16 +554,16 @@ export class TasksService {
       await this.notificationsService.sendToUsers(recipients, {
         title: `New task in ${project.name}`,
         body: task.taskTitle,
-        preferenceKey: 'tasks',
+        preferenceKey: "tasks",
         data: {
-          type: 'task_created',
-          screen: 'Project',
+          type: "task_created",
+          screen: "Project",
           projectId: project._id.toString(),
           entityId: task._id.toString(),
         },
       });
     } catch (error) {
-      this.logger.error('Failed to send task created notification', error);
+      this.logger.error("Failed to send task created notification", error);
     }
   }
 
@@ -483,7 +572,10 @@ export class TasksService {
     project: ProjectNotificationSource,
     actorUserId?: string,
   ) {
-    const recipients = this.getProjectNotificationRecipients(project, actorUserId);
+    const recipients = this.getProjectNotificationRecipients(
+      project,
+      actorUserId,
+    );
     if (!recipients.length) {
       return;
     }
@@ -492,16 +584,16 @@ export class TasksService {
       await this.notificationsService.sendToUsers(recipients, {
         title: `Task deadline updated in ${project.name}`,
         body: `${task.taskTitle} has a new due date.`,
-        preferenceKey: 'tasks',
+        preferenceKey: "tasks",
         data: {
-          type: 'task_due_updated',
-          screen: 'Project',
+          type: "task_due_updated",
+          screen: "Project",
           projectId: project._id.toString(),
           entityId: task._id.toString(),
         },
       });
     } catch (error) {
-      this.logger.error('Failed to send task deadline notification', error);
+      this.logger.error("Failed to send task deadline notification", error);
     }
   }
 }

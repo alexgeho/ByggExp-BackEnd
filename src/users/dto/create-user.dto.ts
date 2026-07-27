@@ -10,9 +10,9 @@ import {
   IsObject,
   IsBoolean,
   ValidateIf,
-} from 'class-validator';
-import { Transform } from 'class-transformer';
-import { UserRole } from '../schemas/user.schema';
+} from "class-validator";
+import { Transform } from "class-transformer";
+import { UserRole } from "../schemas/user.schema";
 
 export class CreateUserDto {
   @IsEmail()
@@ -42,22 +42,26 @@ export class CreateUserDto {
   avatarUrl?: string;
 
   @Transform(({ value }) => {
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null || value === "") {
       return undefined;
     }
 
-    return typeof value === 'string' ? parseInt(value.replace(/\D/g, ''), 10) : value;
+    return typeof value === "string"
+      ? parseInt(value.replace(/\D/g, ""), 10)
+      : value;
   })
   @IsNumber()
   @IsOptional()
   phoneAreaCode?: number;
 
   @Transform(({ value }) => {
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null || value === "") {
       return undefined;
     }
 
-    return typeof value === 'string' ? parseInt(value.replace(/\D/g, ''), 10) : value;
+    return typeof value === "string"
+      ? parseInt(value.replace(/\D/g, ""), 10)
+      : value;
   })
   @IsNumber()
   @IsOptional()

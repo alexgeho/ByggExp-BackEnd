@@ -1,11 +1,11 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
 
 export type ChatDocument = Chat & Document;
 
 export enum ChatType {
-  Direct = 'direct',
-  Group = 'group',
+  Direct = "direct",
+  Group = "group",
 }
 
 export class ChatReadState {
@@ -15,19 +15,19 @@ export class ChatReadState {
 
 @Schema({ timestamps: true })
 export class Chat {
-  @Prop({ required: true, ref: 'User' }) // Владелец чата
+  @Prop({ required: true, ref: "User" }) // Владелец чата
   ownerId: string;
 
   @Prop({ required: true, enum: ChatType })
   type: ChatType;
 
-  @Prop({ type: [String], ref: 'User', default: [] }) // Участники чата
+  @Prop({ type: [String], ref: "User", default: [] }) // Участники чата
   members: string[];
 
-  @Prop({ type: String, default: '' })
+  @Prop({ type: String, default: "" })
   title: string;
 
-  @Prop({ type: String, ref: 'Project', default: null })
+  @Prop({ type: String, ref: "Project", default: null })
   projectId?: string | null;
 
   @Prop({ type: String })
@@ -36,7 +36,7 @@ export class Chat {
   @Prop({ type: String })
   groupKey?: string | null;
 
-  @Prop({ type: String, default: '' })
+  @Prop({ type: String, default: "" })
   lastMessageText?: string;
 
   @Prop({ type: Date, default: null })
@@ -46,7 +46,7 @@ export class Chat {
     type: [
       {
         _id: false,
-        memberId: { type: String, ref: 'User', required: true },
+        memberId: { type: String, ref: "User", required: true },
         lastReadAt: { type: Date, default: null },
       },
     ],

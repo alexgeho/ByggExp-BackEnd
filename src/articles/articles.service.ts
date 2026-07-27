@@ -2,13 +2,13 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { UserRole } from '../users/schemas/user.schema';
-import { CreateArticleDto } from './dto/create-article.dto';
-import { UpdateArticleDto } from './dto/update-article.dto';
-import { Article, ArticleDocument } from './schemas/article.schema';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { UserRole } from "../users/schemas/user.schema";
+import { CreateArticleDto } from "./dto/create-article.dto";
+import { UpdateArticleDto } from "./dto/update-article.dto";
+import { Article, ArticleDocument } from "./schemas/article.schema";
 
 type AuthUser = {
   role: UserRole;
@@ -24,8 +24,11 @@ export class ArticlesService {
 
   async create(dto: CreateArticleDto, user: AuthUser): Promise<Article> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
-    const scopeFilter = companyId ? { companyId } : { createdByUserId: user.userId };
-    const articleNumber = dto.articleNumber || await this.getNextArticleNumber(scopeFilter);
+    const scopeFilter = companyId
+      ? { companyId }
+      : { createdByUserId: user.userId };
+    const articleNumber =
+      dto.articleNumber || (await this.getNextArticleNumber(scopeFilter));
 
     const article = new this.articleModel({
       ...dto,
@@ -61,7 +64,11 @@ export class ArticlesService {
     return article;
   }
 
-  async update(id: string, dto: UpdateArticleDto, user: AuthUser): Promise<ArticleDocument> {
+  async update(
+    id: string,
+    dto: UpdateArticleDto,
+    user: AuthUser,
+  ): Promise<ArticleDocument> {
     const article = await this.findOne(id, user);
 
     Object.assign(article, {
@@ -80,11 +87,17 @@ export class ArticlesService {
     return article;
   }
 
-  async getNextArticleNumber(filter: { companyId?: string; createdByUserId?: string }): Promise<string> {
-    const articles = await this.articleModel.find(filter).sort({ createdAt: -1 }).exec();
+  async getNextArticleNumber(filter: {
+    companyId?: string;
+    createdByUserId?: string;
+  }): Promise<string> {
+    const articles = await this.articleModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .exec();
 
     if (!articles.length) {
-      return '1';
+      return "1";
     }
 
     const numbers = articles
@@ -92,7 +105,7 @@ export class ArticlesService {
       .filter((value) => !Number.isNaN(value));
 
     if (!numbers.length) {
-      return '1';
+      return "1";
     }
 
     return String(Math.max(...numbers) + 1);
@@ -111,18 +124,24 @@ export class ArticlesService {
     return { nextNumber };
   }
 
-  private resolveCompanyId(_companyId: string | undefined, user: AuthUser): string {
+  private resolveCompanyId(
+    _companyId: string | undefined,
+    user: AuthUser,
+  ): string {
     // Every actor (superadmin included) creates only within its own company.
     if (!user.companyId) {
-      throw new ForbiddenException('Your account is not attached to a company');
+      throw new ForbiddenException("Your account is not attached to a company");
     }
 
     return user.companyId;
   }
 
   private assertCanAccess(article: Article, user: AuthUser): void {
-    if (!user.companyId || String(article.companyId) !== String(user.companyId)) {
-      throw new ForbiddenException('You do not have access to this article');
+    if (
+      !user.companyId ||
+      String(article.companyId) !== String(user.companyId)
+    ) {
+      throw new ForbiddenException("You do not have access to this article");
     }
   }
 }

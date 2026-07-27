@@ -14,42 +14,50 @@ import {
   UploadedFile,
   UploadedFiles,
   UseInterceptors,
-} from '@nestjs/common';
-import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { BulkCreateUsersDto } from './dto/bulk-create-users.dto';
-import { CreateWorkerNoteDto } from './dto/create-worker-note.dto';
-import { User, UserAccountStatus, UserRole } from './schemas/user.schema';
-import { UserActivityLogLevel } from './schemas/user-activity-log.schema';
-import { Roles } from '../common/decorators/roles.decorator';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { AuthGuard } from '@nestjs/passport';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { FilesInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+} from "@nestjs/common";
+import { UsersService } from "./users.service";
+import { CreateUserDto } from "./dto/create-user.dto";
+import { BulkCreateUsersDto } from "./dto/bulk-create-users.dto";
+import { CreateWorkerNoteDto } from "./dto/create-worker-note.dto";
+import { User, UserAccountStatus, UserRole } from "./schemas/user.schema";
+import { UserActivityLogLevel } from "./schemas/user-activity-log.schema";
+import { Roles } from "../common/decorators/roles.decorator";
+import { RolesGuard } from "../common/guards/roles.guard";
+import { AuthGuard } from "@nestjs/passport";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { FilesInterceptor } from "@nestjs/platform-express";
+import { diskStorage } from "multer";
+import { extname } from "path";
 
 const userAvatarStorage = diskStorage({
-  destination: './uploads/user-avatars',
+  destination: "./uploads/user-avatars",
   filename: (_req, file, callback) => {
-    const safeBaseName = file.originalname
-      .replace(extname(file.originalname), '')
-      .replace(/[^a-zA-Z0-9-_]/g, '_')
-      .slice(0, 80) || 'avatar';
+    const safeBaseName =
+      file.originalname
+        .replace(extname(file.originalname), "")
+        .replace(/[^a-zA-Z0-9-_]/g, "_")
+        .slice(0, 80) || "avatar";
 
-    callback(null, `${Date.now()}-${safeBaseName}${extname(file.originalname)}`);
+    callback(
+      null,
+      `${Date.now()}-${safeBaseName}${extname(file.originalname)}`,
+    );
   },
 });
 
 const userDocumentsStorage = diskStorage({
-  destination: './uploads/user-documents',
+  destination: "./uploads/user-documents",
   filename: (_req, file, callback) => {
-    const safeBaseName = file.originalname
-      .replace(extname(file.originalname), '')
-      .replace(/[^a-zA-Z0-9-_]/g, '_')
-      .slice(0, 80) || 'document';
+    const safeBaseName =
+      file.originalname
+        .replace(extname(file.originalname), "")
+        .replace(/[^a-zA-Z0-9-_]/g, "_")
+        .slice(0, 80) || "document";
 
-    callback(null, `${Date.now()}-${safeBaseName}${extname(file.originalname)}`);
+    callback(
+      null,
+      `${Date.now()}-${safeBaseName}${extname(file.originalname)}`,
+    );
   },
 });
 
@@ -61,16 +69,22 @@ type UploadedDocumentFile = {
   filename: string;
 };
 
-@Controller('users')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Controller("users")
+@UseGuards(AuthGuard("jwt"), RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  async create(@Body() createUserDto: CreateUserDto, @Request() req): Promise<User> {
+  async create(
+    @Body() createUserDto: CreateUserDto,
+    @Request() req,
+  ): Promise<User> {
     // ProjectAdmin может создавать только Worker
-    if (req.user.role === UserRole.ProjectAdmin && createUserDto.role !== UserRole.Worker) {
+    if (
+      req.user.role === UserRole.ProjectAdmin &&
+      createUserDto.role !== UserRole.Worker
+    ) {
       createUserDto.role = UserRole.Worker;
     }
 
@@ -100,7 +114,9 @@ export class UsersController {
       });
     }
 
-    const hashedPassword = await this.usersService.hashPassword(createUserDto.password);
+    const hashedPassword = await this.usersService.hashPassword(
+      createUserDto.password,
+    );
 
     return this.usersService.create({
       ...createUserDto,
@@ -110,7 +126,7 @@ export class UsersController {
     });
   }
 
-  @Post('bulk')
+  @Post("bulk")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async createBulk(
     @Body() body: BulkCreateUsersDto,
@@ -138,7 +154,9 @@ export class UsersController {
 
         // Tenant isolation: non-superadmin always imports into its own company.
         const companyId =
-          req.user.role === UserRole.SuperAdmin ? row.companyId : req.user.companyId;
+          req.user.role === UserRole.SuperAdmin
+            ? row.companyId
+            : req.user.companyId;
 
         await this.usersService.createUserPendingApproval({
           ...row,
@@ -150,13 +168,13 @@ export class UsersController {
       } catch (error) {
         const isDuplicate =
           (error as { code?: number })?.code === 11000 ||
-          /duplicate key/i.test((error as Error)?.message || '');
+          /duplicate key/i.test((error as Error)?.message || "");
         failed.push({
           index: i,
-          email: row?.email || '',
+          email: row?.email || "",
           reason: isDuplicate
-            ? 'A user with this email already exists'
-            : (error as Error)?.message || 'Failed to create user',
+            ? "A user with this email already exists"
+            : (error as Error)?.message || "Failed to create user",
         });
       }
     }
@@ -174,10 +192,10 @@ export class UsersController {
       : this.usersService.findAll();
   }
 
-  @Get('company/:companyId')
+  @Get("company/:companyId")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   findAllByCompany(
-    @Param('companyId') _companyId: string,
+    @Param("companyId") _companyId: string,
     @Request() req,
   ): Promise<User[]> {
     // Everyone — superadmin included — only ever lists their own company; the
@@ -188,7 +206,7 @@ export class UsersController {
     return this.usersService.findAllByCompany(req.user.companyId);
   }
 
-  @Get('my-company')
+  @Get("my-company")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   findAllByMyCompany(@Request() req): Promise<User[]> {
     // Scoped to the caller's own company for every role (superadmin included).
@@ -198,10 +216,10 @@ export class UsersController {
     return this.usersService.findAllByCompany(req.user.companyId);
   }
 
-  @Get('project/:projectId')
+  @Get("project/:projectId")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   findAllByProject(
-    @Param('projectId') projectId: string,
+    @Param("projectId") projectId: string,
     @Request() req,
   ): Promise<User[]> {
     // Every role (superadmin included) only sees project members from its own
@@ -212,9 +230,12 @@ export class UsersController {
     return this.usersService.findAllByProject(projectId, req.user.companyId);
   }
 
-  @Get('role/:role')
+  @Get("role/:role")
   @Roles(UserRole.SuperAdmin)
-  findAllByRole(@Param('role') role: UserRole, @Request() req): Promise<User[]> {
+  findAllByRole(
+    @Param("role") role: UserRole,
+    @Request() req,
+  ): Promise<User[]> {
     // Superadmin is scoped to its own company — never lists another tenant's
     // users by role.
     if (!req.user.companyId) {
@@ -223,10 +244,10 @@ export class UsersController {
     return this.usersService.findAllByRole(role, req.user.companyId);
   }
 
-  @Get('by-email')
+  @Get("by-email")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   findOneIdByEmail(
-    @Query('email') email: string,
+    @Query("email") email: string,
     @Request() req,
   ): Promise<{ id: string } | null> {
     // Every role (superadmin included) resolves emails only within its own company.
@@ -236,9 +257,14 @@ export class UsersController {
     return this.usersService.findOneIdByEmail(email, req.user.companyId);
   }
 
-  @Get('info/:id')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  async findUserById(@Param('id') id: string, @Request() req) {
+  @Get("info/:id")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  async findUserById(@Param("id") id: string, @Request() req) {
     await this.usersService.assertCanViewUser(req.user, id);
     const user = await this.usersService.findUserById(id);
     if (!user) {
@@ -247,11 +273,19 @@ export class UsersController {
     return user;
   }
 
-  @Get(':id/detail')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  async findDetailedUser(@Param('id') id: string, @Request() req) {
+  @Get(":id/detail")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  async findDetailedUser(@Param("id") id: string, @Request() req) {
     await this.usersService.assertCanViewUser(req.user, id);
-    const detailedUser = await this.usersService.findDetailedUserById(id, req.user);
+    const detailedUser = await this.usersService.findDetailedUserById(
+      id,
+      req.user,
+    );
     if (!detailedUser) {
       throw new NotFoundException(`User with ID "${id}" not found`);
     }
@@ -259,8 +293,13 @@ export class UsersController {
     return detailedUser;
   }
 
-  @Post('activity-log')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  @Post("activity-log")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
   async createActivityLog(
     @Request() req,
     @Body()
@@ -274,7 +313,7 @@ export class UsersController {
     },
   ) {
     if (!body?.category || !body?.type || !body?.message) {
-      throw new BadRequestException('category, type and message are required');
+      throw new BadRequestException("category, type and message are required");
     }
 
     await this.usersService.logActivity(req.user.userId, {
@@ -289,15 +328,20 @@ export class UsersController {
     return { created: true };
   }
 
-  @Get(':id/activity-logs')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  @Get(":id/activity-logs")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
   async findUserActivityLogs(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Request() req,
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-    @Query('category') category?: string,
-    @Query('level') level?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+    @Query("category") category?: string,
+    @Query("level") level?: string,
   ) {
     await this.usersService.assertCanViewUser(req.user, id);
 
@@ -309,17 +353,22 @@ export class UsersController {
     });
   }
 
-  @Get(':id/notes')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  async listWorkerNotes(@Param('id') id: string, @Request() req) {
+  @Get(":id/notes")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  async listWorkerNotes(@Param("id") id: string, @Request() req) {
     await this.usersService.assertCanViewUser(req.user, id);
     return this.usersService.listWorkerNotes(id);
   }
 
-  @Post(':id/notes')
+  @Post(":id/notes")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async createWorkerNote(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() body: CreateWorkerNoteDto,
     @Request() req,
   ) {
@@ -327,11 +376,11 @@ export class UsersController {
     return this.usersService.createWorkerNote(id, req.user, body.text);
   }
 
-  @Delete(':id/notes/:noteId')
+  @Delete(":id/notes/:noteId")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async deleteWorkerNote(
-    @Param('id') id: string,
-    @Param('noteId') noteId: string,
+    @Param("id") id: string,
+    @Param("noteId") noteId: string,
     @Request() req,
   ) {
     await this.usersService.assertCanCommentOnWorker(req.user, id);
@@ -339,35 +388,45 @@ export class UsersController {
     return { deleted: true };
   }
 
-  @Post('by-ids')
+  @Post("by-ids")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async findByIds(@Body() dto: { ids: string[] }, @Request() req) {
     // Every role (superadmin included) only resolves users from its own company.
     const users = req.user.companyId
       ? await this.usersService.findByIds(dto.ids, req.user.companyId)
       : [];
-    return users.map(user => ({
+    return users.map((user) => ({
       id: (user as any)._id.toString(),
       email: user.email,
       name: user.name,
-      profession: user.profession || '',
+      profession: user.profession || "",
       role: user.role,
       companyId: user.companyId,
     }));
   }
 
-  @Get(':id')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  findOne(@Param('id') id: string, @Request() req): Promise<User> {
+  @Get(":id")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  findOne(@Param("id") id: string, @Request() req): Promise<User> {
     return this.usersService.assertCanViewUser(req.user, id).then(() => {
       return this.usersService.findOne(id);
     });
   }
 
-  @Put(':id')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  @Put(":id")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
   update(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() updateUserDto: Partial<CreateUserDto>,
     @Request() req,
   ): Promise<User> {
@@ -376,31 +435,43 @@ export class UsersController {
     });
   }
 
-  @Post(':id/avatar')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  @UseInterceptors(FileInterceptor('avatar', { storage: userAvatarStorage }))
+  @Post(":id/avatar")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  @UseInterceptors(FileInterceptor("avatar", { storage: userAvatarStorage }))
   uploadAvatar(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @UploadedFile() file: UploadedAvatarFile,
     @Request() req,
   ): Promise<User> {
     return this.usersService.assertCanEditUser(req.user, id).then(() =>
       this.usersService.update(id, {
-        avatarUrl: file ? `/uploads/user-avatars/${file.filename}` : '',
+        avatarUrl: file ? `/uploads/user-avatars/${file.filename}` : "",
       }),
     );
   }
 
-  @Post(':id/documents')
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
-  @UseInterceptors(FilesInterceptor('documents', 4, { storage: userDocumentsStorage }))
+  @Post(":id/documents")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  @UseInterceptors(
+    FilesInterceptor("documents", 4, { storage: userDocumentsStorage }),
+  )
   uploadAdditionalDocuments(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @UploadedFiles() files: UploadedDocumentFile[],
     @Request() req,
   ): Promise<User> {
     if (!files?.length) {
-      throw new BadRequestException('No documents uploaded');
+      throw new BadRequestException("No documents uploaded");
     }
 
     return this.usersService.assertCanEditUser(req.user, id).then(() =>
@@ -411,9 +482,9 @@ export class UsersController {
     );
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
-  remove(@Param('id') id: string, @Request() req): Promise<User> {
+  remove(@Param("id") id: string, @Request() req): Promise<User> {
     return this.usersService.assertCanDeleteUser(req.user, id).then(() => {
       return this.usersService.remove(id);
     });

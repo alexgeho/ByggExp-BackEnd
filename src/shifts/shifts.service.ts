@@ -4,36 +4,36 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-} from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { cronsDisabled } from '../common/cron.util';
-import ExcelJS from 'exceljs';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { NotificationsService } from '../notifications/notifications.service';
-import PDFDocument from 'pdfkit';
-import { Project, ProjectDocument } from '../projects/schemas/project.schema';
-import { UsersService } from '../users/users.service';
-import { UserActivityLogLevel } from '../users/schemas/user-activity-log.schema';
-import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
-import { CompleteShiftDto } from './dto/complete-shift.dto';
-import { ExportShiftsDto } from './dto/export-shifts.dto';
-import { ListShiftsDto } from './dto/list-shifts.dto';
-import { StartShiftDto } from './dto/start-shift.dto';
+} from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { cronsDisabled } from "../common/cron.util";
+import ExcelJS from "exceljs";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { NotificationsService } from "../notifications/notifications.service";
+import PDFDocument from "pdfkit";
+import { Project, ProjectDocument } from "../projects/schemas/project.schema";
+import { UsersService } from "../users/users.service";
+import { UserActivityLogLevel } from "../users/schemas/user-activity-log.schema";
+import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
+import { CompleteShiftDto } from "./dto/complete-shift.dto";
+import { ExportShiftsDto } from "./dto/export-shifts.dto";
+import { ListShiftsDto } from "./dto/list-shifts.dto";
+import { StartShiftDto } from "./dto/start-shift.dto";
 import {
   Shift,
   ShiftDocument,
   ShiftPhotoFile,
   ShiftSegment,
   ShiftStatus,
-} from './schemas/shift.schema';
+} from "./schemas/shift.schema";
 import {
   getCompleteWindowErrorMessage,
   getScheduledShiftDeadline,
   getShiftScheduleWindow,
   getStartWindowErrorMessage,
   isPastShiftScheduleDeadline,
-} from './shift-schedule.util';
+} from "./shift-schedule.util";
 
 type AuthenticatedUser = {
   userId: string;
@@ -91,7 +91,8 @@ export class ShiftsService {
 
   constructor(
     @InjectModel(Shift.name) private readonly shiftModel: Model<ShiftDocument>,
-    @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
+    @InjectModel(Project.name)
+    private readonly projectModel: Model<ProjectDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly notificationsService: NotificationsService,
     private readonly usersService: UsersService,
@@ -107,7 +108,9 @@ export class ShiftsService {
       .exec();
 
     if (activeShift) {
-      throw new BadRequestException('Pause the current shift before starting a new one.');
+      throw new BadRequestException(
+        "Pause the current shift before starting a new one.",
+      );
     }
 
     const shiftDate = this.getDateKey(new Date());
@@ -122,7 +125,9 @@ export class ShiftsService {
       .exec();
 
     if (existingShiftForProject) {
-      throw new BadRequestException('A shift for this project already exists today. Resume it instead.');
+      throw new BadRequestException(
+        "A shift for this project already exists today. Resume it instead.",
+      );
     }
 
     const now = new Date();
@@ -133,7 +138,7 @@ export class ShiftsService {
         workerId: user.userId,
         projectId: dto.projectId,
         projectNameSnapshot: project.name,
-        locationSnapshot: project.location || '',
+        locationSnapshot: project.location || "",
         shiftDate,
         startedAt: now,
         lastResumedAt: now,
@@ -149,7 +154,9 @@ export class ShiftsService {
       }).save();
     } catch (err) {
       if (err?.code === 11000) {
-        throw new BadRequestException('Pause the current shift before starting a new one.');
+        throw new BadRequestException(
+          "Pause the current shift before starting a new one.",
+        );
       }
 
       throw err;
@@ -159,7 +166,7 @@ export class ShiftsService {
       projectId: dto.projectId,
       projectName: project.name,
       shiftId: createdShift._id.toString(),
-      reason: 'shift_started',
+      reason: "shift_started",
       updatedAt: now,
     });
     await this.usersService.touchLastSeen(user.userId, now);
@@ -173,15 +180,15 @@ export class ShiftsService {
     const shift = await this.findOwnedShift(user.userId, shiftId);
 
     if (shift.status !== ShiftStatus.Active || !shift.lastResumedAt) {
-      throw new BadRequestException('Only an active shift can be paused.');
+      throw new BadRequestException("Only an active shift can be paused.");
     }
 
     const now = new Date();
-    this.pauseShiftDocument(shift, now, '');
+    this.pauseShiftDocument(shift, now, "");
     await shift.save();
 
     await this.usersService.setOffDutyStatus(user.userId, {
-      reason: 'shift_paused',
+      reason: "shift_paused",
       updatedAt: now,
     });
 
@@ -194,7 +201,7 @@ export class ShiftsService {
     const shift = await this.findOwnedShift(user.userId, shiftId);
 
     if (shift.status !== ShiftStatus.Paused) {
-      throw new BadRequestException('Only a paused shift can be resumed.');
+      throw new BadRequestException("Only a paused shift can be resumed.");
     }
 
     const project = await this.ensureProjectAccess(user, shift.projectId);
@@ -202,7 +209,9 @@ export class ShiftsService {
 
     const today = this.getDateKey(new Date());
     if (shift.shiftDate !== today) {
-      throw new BadRequestException('This shift belongs to a previous day. Start a new shift instead.');
+      throw new BadRequestException(
+        "This shift belongs to a previous day. Start a new shift instead.",
+      );
     }
 
     const activeShift = await this.shiftModel
@@ -214,7 +223,9 @@ export class ShiftsService {
       .exec();
 
     if (activeShift) {
-      throw new BadRequestException('Pause the current shift before resuming another one.');
+      throw new BadRequestException(
+        "Pause the current shift before resuming another one.",
+      );
     }
 
     const now = new Date();
@@ -225,7 +236,7 @@ export class ShiftsService {
       projectId: shift.projectId,
       projectName: shift.projectNameSnapshot,
       shiftId: shiftId,
-      reason: 'shift_resumed',
+      reason: "shift_resumed",
       updatedAt: now,
     });
     await this.usersService.touchLastSeen(user.userId, now);
@@ -233,21 +244,26 @@ export class ShiftsService {
     return this.serializeShift(shift);
   }
 
-  async complete(user: AuthenticatedUser, shiftId: string, dto: CompleteShiftDto = {}) {
+  async complete(
+    user: AuthenticatedUser,
+    shiftId: string,
+    dto: CompleteShiftDto = {},
+  ) {
     await this.finalizeStaleShifts(user.userId);
 
     const shift = await this.findOwnedShift(user.userId, shiftId);
     const project = await this.projectModel.findById(shift.projectId).exec();
-    const completionReason = dto.reason?.trim() || 'manual';
-    const completionSource = dto.source?.trim() || 'api';
-    const shouldNotifyUser = Boolean(dto.notifyUser) && completionReason === 'outside_project_area';
+    const completionReason = dto.reason?.trim() || "manual";
+    const completionSource = dto.source?.trim() || "api";
+    const shouldNotifyUser =
+      Boolean(dto.notifyUser) && completionReason === "outside_project_area";
 
     if (shift.status === ShiftStatus.Completed) {
       return this.serializeShift(shift);
     }
 
     if (
-      completionReason === 'manual' &&
+      completionReason === "manual" &&
       project &&
       !this.canCompleteShift(project)
     ) {
@@ -259,11 +275,11 @@ export class ShiftsService {
 
     // Leaving the project area pauses the shift (keeping the accrued hours) so
     // it can resume when the worker returns — it does not end the shift.
-    if (completionReason === 'outside_project_area') {
+    if (completionReason === "outside_project_area") {
       if (shift.status === ShiftStatus.Active) {
-        this.pauseShiftDocument(shift, now, 'outside_project_area');
+        this.pauseShiftDocument(shift, now, "outside_project_area");
       } else {
-        shift.autoPausedReason = 'outside_project_area';
+        shift.autoPausedReason = "outside_project_area";
       }
       await shift.save();
 
@@ -274,14 +290,15 @@ export class ShiftsService {
       } | null = null;
 
       if (shouldNotifyUser) {
-        notificationResult = await this.notificationsService.sendShiftOutsideProjectAreaNotification(
-          user.userId,
-          {
-            shiftId,
-            projectId: shift.projectId,
-            projectName: shift.projectNameSnapshot,
-          },
-        );
+        notificationResult =
+          await this.notificationsService.sendShiftOutsideProjectAreaNotification(
+            user.userId,
+            {
+              shiftId,
+              projectId: shift.projectId,
+              projectName: shift.projectNameSnapshot,
+            },
+          );
 
         shift.completionNotifiedAt = new Date();
         await shift.save();
@@ -292,16 +309,17 @@ export class ShiftsService {
         projectName: shift.projectNameSnapshot,
         shiftId,
         reason: shouldNotifyUser
-          ? 'outside_project_area_notified'
-          : 'outside_project_area',
+          ? "outside_project_area_notified"
+          : "outside_project_area",
         updatedAt: now,
       });
 
       await this.usersService.logActivity(user.userId, {
-        category: 'attendance',
-        type: 'shift_auto_paused_outside_project_area',
+        category: "attendance",
+        type: "shift_auto_paused_outside_project_area",
         level: UserActivityLogLevel.Warning,
-        message: 'Shift was paused automatically because the user left the project area.',
+        message:
+          "Shift was paused automatically because the user left the project area.",
         source: completionSource,
         details: {
           shiftId,
@@ -329,14 +347,19 @@ export class ShiftsService {
     await shift.save();
 
     await this.usersService.setOffDutyStatus(user.userId, {
-      reason: completionReason === 'manual' ? 'shift_completed' : completionReason,
+      reason:
+        completionReason === "manual" ? "shift_completed" : completionReason,
       updatedAt: now,
     });
 
     return this.serializeShift(shift);
   }
 
-  async uploadPhotos(user: AuthenticatedUser, shiftId: string, files: ShiftPhotoFile[]) {
+  async uploadPhotos(
+    user: AuthenticatedUser,
+    shiftId: string,
+    files: ShiftPhotoFile[],
+  ) {
     await this.finalizeStaleShifts(user.userId);
 
     const shift = await this.findOwnedShift(user.userId, shiftId);
@@ -367,14 +390,17 @@ export class ShiftsService {
     if (shift) {
       const now = new Date();
 
-      if (shift.status === ShiftStatus.Paused && shift.autoPausedReason === 'offline') {
+      if (
+        shift.status === ShiftStatus.Paused &&
+        shift.autoPausedReason === "offline"
+      ) {
         this.resumeShiftDocument(shift, now);
         await shift.save();
         await this.usersService.setWorkingStatus(user.userId, {
           projectId: shift.projectId,
           projectName: shift.projectNameSnapshot,
           shiftId: shift._id.toString(),
-          reason: 'shift_auto_resumed',
+          reason: "shift_auto_resumed",
           updatedAt: now,
         });
       }
@@ -387,14 +413,22 @@ export class ShiftsService {
     return shift ? this.serializeShift(shift) : null;
   }
 
-  async getMonths(user: AuthenticatedUser, query: Pick<ListShiftsDto, 'projectId' | 'workerId'> = {}) {
+  async getMonths(
+    user: AuthenticatedUser,
+    query: Pick<ListShiftsDto, "projectId" | "workerId"> = {},
+  ) {
     const filter = await this.buildAccessibleShiftFilter(user, query);
-    const shiftDates = await this.shiftModel.distinct('shiftDate', filter).exec();
+    const shiftDates = await this.shiftModel
+      .distinct("shiftDate", filter)
+      .exec();
 
     return Array.from(
       new Set(
         shiftDates
-          .filter((shiftDate) => typeof shiftDate === 'string' && shiftDate.length >= 7)
+          .filter(
+            (shiftDate) =>
+              typeof shiftDate === "string" && shiftDate.length >= 7,
+          )
           .map((shiftDate) => shiftDate.slice(0, 7)),
       ),
     ).sort((left, right) => right.localeCompare(left));
@@ -424,45 +458,65 @@ export class ShiftsService {
       month,
       availableMonths,
       monthTotalDurationMs: this.sumShiftDurations(monthShifts),
-      previousMonthTotalDurationMs: await this.sumMonthDurations(user.userId, previousMonth),
-      days: this.groupSerializedShiftsByDay(serializedShifts, 'asc'),
+      previousMonthTotalDurationMs: await this.sumMonthDurations(
+        user.userId,
+        previousMonth,
+      ),
+      days: this.groupSerializedShiftsByDay(serializedShifts, "asc"),
     };
   }
 
   async list(user: AuthenticatedUser, query: ListShiftsDto) {
     await this.finalizeStaleShifts(user.userId);
-    const shifts = await this.findAccessibleShifts(user, query, 'desc');
+    const shifts = await this.findAccessibleShifts(user, query, "desc");
 
     const serializedShifts = await this.serializeShifts(shifts);
 
     return {
       items: serializedShifts,
-      days: this.groupSerializedShiftsByDay(serializedShifts, 'desc'),
+      days: this.groupSerializedShiftsByDay(serializedShifts, "desc"),
     };
   }
 
-  async export(user: AuthenticatedUser, query: ExportShiftsDto): Promise<ShiftExportResult> {
+  async export(
+    user: AuthenticatedUser,
+    query: ExportShiftsDto,
+  ): Promise<ShiftExportResult> {
     await this.finalizeStaleShifts(user.userId);
 
-    const format = query.format || 'pdf';
-    const shifts = await this.findAccessibleShifts(user, query, 'asc');
+    const format = query.format || "pdf";
+    const shifts = await this.findAccessibleShifts(user, query, "asc");
     const serializedShifts = await this.serializeShifts(shifts);
-    const days = this.groupSerializedShiftsByDay(serializedShifts, 'asc');
-    const totalDurationMs = serializedShifts.reduce((total, shift) => total + shift.durationMs, 0);
+    const days = this.groupSerializedShiftsByDay(serializedShifts, "asc");
+    const totalDurationMs = serializedShifts.reduce(
+      (total, shift) => total + shift.durationMs,
+      0,
+    );
     const fileBaseName = this.buildExportFileBaseName(query, days);
 
-    if (format === 'excel') {
+    if (format === "excel") {
       return {
-        buffer: await this.buildExcelReport(serializedShifts, days, query, totalDurationMs),
+        buffer: await this.buildExcelReport(
+          serializedShifts,
+          days,
+          query,
+          totalDurationMs,
+        ),
         fileName: `${fileBaseName}.xlsx`,
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       };
     }
 
     return {
-      buffer: await this.buildPdfReport(serializedShifts, days, query, totalDurationMs),
+      buffer: await this.buildPdfReport(
+        serializedShifts,
+        days,
+        query,
+        totalDurationMs,
+      ),
       fileName: `${fileBaseName}.pdf`,
-      mimeType: 'application/pdf',
+      mimeType: "application/pdf",
     };
   }
 
@@ -485,7 +539,9 @@ export class ShiftsService {
   }
 
   private async findOwnedShift(userId: string, shiftId: string) {
-    const shift = await this.shiftModel.findOne({ _id: shiftId, workerId: userId }).exec();
+    const shift = await this.shiftModel
+      .findOne({ _id: shiftId, workerId: userId })
+      .exec();
 
     if (!shift) {
       throw new NotFoundException(`Shift with ID "${shiftId}" not found`);
@@ -494,16 +550,22 @@ export class ShiftsService {
     return shift;
   }
 
-  private async ensureProjectAccess(user: AuthenticatedUser, projectId: string) {
+  private async ensureProjectAccess(
+    user: AuthenticatedUser,
+    projectId: string,
+  ) {
     const project = await this.projectModel.findById(projectId).exec();
 
     if (!project) {
       throw new NotFoundException(`Project with ID "${projectId}" not found`);
     }
 
-    if (user.role === UserRole.CompanyAdmin || user.role === UserRole.SuperAdmin) {
+    if (
+      user.role === UserRole.CompanyAdmin ||
+      user.role === UserRole.SuperAdmin
+    ) {
       if (project.companyId !== user.companyId) {
-        throw new ForbiddenException('You do not have access to this project.');
+        throw new ForbiddenException("You do not have access to this project.");
       }
 
       return project;
@@ -516,14 +578,17 @@ export class ShiftsService {
         project.projectAdmins.includes(user.userId);
 
       if (!hasAccess) {
-        throw new ForbiddenException('You do not have access to this project.');
+        throw new ForbiddenException("You do not have access to this project.");
       }
 
       return project;
     }
 
-    if (user.role === UserRole.Worker && !project.workers.includes(user.userId)) {
-      throw new ForbiddenException('You do not have access to this project.');
+    if (
+      user.role === UserRole.Worker &&
+      !project.workers.includes(user.userId)
+    ) {
+      throw new ForbiddenException("You do not have access to this project.");
     }
 
     return project;
@@ -531,25 +596,28 @@ export class ShiftsService {
 
   private async findAccessibleShifts(
     user: AuthenticatedUser,
-    query: Pick<ListShiftsDto, 'month' | 'from' | 'to' | 'dates' | 'projectId' | 'workerId'>,
-    order: 'asc' | 'desc',
+    query: Pick<
+      ListShiftsDto,
+      "month" | "from" | "to" | "dates" | "projectId" | "workerId"
+    >,
+    order: "asc" | "desc",
   ) {
     const filter = await this.buildAccessibleShiftFilter(user, query);
     this.applyShiftDateFilter(filter, query);
 
     return this.shiftModel
       .find(filter)
-      .sort({ shiftDate: order === 'asc' ? 1 : -1, startedAt: 1 })
+      .sort({ shiftDate: order === "asc" ? 1 : -1, startedAt: 1 })
       .exec();
   }
 
   private applyShiftDateFilter(
     filter: Record<string, unknown>,
-    query: Pick<ListShiftsDto, 'month' | 'from' | 'to' | 'dates'>,
+    query: Pick<ListShiftsDto, "month" | "from" | "to" | "dates">,
   ) {
     if (query.dates) {
       const dateList = query.dates
-        .split(',')
+        .split(",")
         .map((date) => date.trim())
         .filter(Boolean);
 
@@ -580,11 +648,17 @@ export class ShiftsService {
     }
   }
 
-  private async buildAccessibleShiftFilter(user: AuthenticatedUser, query: ListShiftsDto) {
+  private async buildAccessibleShiftFilter(
+    user: AuthenticatedUser,
+    query: ListShiftsDto,
+  ) {
     const filter: Record<string, unknown> = {};
 
     // Superadmin is scoped to its own company like a company admin.
-    if (user.role === UserRole.CompanyAdmin || user.role === UserRole.SuperAdmin) {
+    if (
+      user.role === UserRole.CompanyAdmin ||
+      user.role === UserRole.SuperAdmin
+    ) {
       const projectFilter: Record<string, unknown> = {
         companyId: user.companyId,
       };
@@ -593,7 +667,11 @@ export class ShiftsService {
         projectFilter._id = query.projectId;
       }
 
-      const projects = await this.projectModel.find(projectFilter).select('_id').lean().exec();
+      const projects = await this.projectModel
+        .find(projectFilter)
+        .select("_id")
+        .lean()
+        .exec();
       const projectIds = projects.map((project) => project._id.toString());
 
       if (!projectIds.length) {
@@ -622,7 +700,11 @@ export class ShiftsService {
         projectFilter._id = query.projectId;
       }
 
-      const projects = await this.projectModel.find(projectFilter).select('_id').lean().exec();
+      const projects = await this.projectModel
+        .find(projectFilter)
+        .select("_id")
+        .lean()
+        .exec();
       const projectIds = projects.map((project) => project._id.toString());
 
       if (!projectIds.length) {
@@ -670,7 +752,7 @@ export class ShiftsService {
     this.isReconcilingOpenShifts = true;
 
     try {
-      const workerIds: string[] = await this.shiftModel.distinct('workerId', {
+      const workerIds: string[] = await this.shiftModel.distinct("workerId", {
         status: { $in: [ShiftStatus.Active, ShiftStatus.Paused] },
       });
 
@@ -678,7 +760,7 @@ export class ShiftsService {
         await this.finalizeStaleShifts(workerId);
       }
     } catch (error) {
-      this.logger.error('Failed to reconcile open shifts', error);
+      this.logger.error("Failed to reconcile open shifts", error);
     } finally {
       this.isReconcilingOpenShifts = false;
     }
@@ -693,7 +775,7 @@ export class ShiftsService {
   private pauseShiftDocument(
     shift: ShiftDocument,
     at: Date,
-    autoPausedReason = '',
+    autoPausedReason = "",
   ) {
     this.closeOpenSegment(shift, at);
     shift.durationMs = this.sumSegmentDurations(shift.segments);
@@ -711,7 +793,7 @@ export class ShiftsService {
     shift.status = ShiftStatus.Active;
     shift.lastResumedAt = at;
     shift.endedAt = undefined;
-    shift.autoPausedReason = '';
+    shift.autoPausedReason = "";
     shift.segments.push({ startedAt: at, durationMs: 0 });
   }
 
@@ -731,7 +813,7 @@ export class ShiftsService {
   private async getShiftCloseTime(projectId: string, shiftDate: string) {
     const project = await this.projectModel
       .findById(projectId)
-      .select('shiftSchedule')
+      .select("shiftSchedule")
       .lean()
       .exec();
     const scheduledDeadline = project?.shiftSchedule?.enabled
@@ -754,7 +836,7 @@ export class ShiftsService {
     for (const shift of openShifts) {
       const project = await this.projectModel
         .findById(shift.projectId)
-        .select('shiftSchedule')
+        .select("shiftSchedule")
         .lean()
         .exec();
 
@@ -781,12 +863,12 @@ export class ShiftsService {
         shift.segments[shift.segments.length - 1]?.endedAt ||
         closeAt;
       shift.status = ShiftStatus.Completed;
-      shift.completionReason = shift.completionReason || 'schedule_deadline';
-      shift.completionSource = shift.completionSource || 'system';
+      shift.completionReason = shift.completionReason || "schedule_deadline";
+      shift.completionSource = shift.completionSource || "system";
       await shift.save();
 
       await this.usersService.setOffDutyStatus(userId, {
-        reason: 'schedule_deadline',
+        reason: "schedule_deadline",
         updatedAt: closeAt,
       });
     }
@@ -803,7 +885,10 @@ export class ShiftsService {
       .exec();
 
     for (const shift of outdatedShifts) {
-      const shiftDayEnd = await this.getShiftCloseTime(shift.projectId, shift.shiftDate);
+      const shiftDayEnd = await this.getShiftCloseTime(
+        shift.projectId,
+        shift.shiftDate,
+      );
 
       if (shift.status === ShiftStatus.Active) {
         this.closeOpenSegment(shift, shiftDayEnd);
@@ -811,31 +896,40 @@ export class ShiftsService {
         shift.lastResumedAt = null;
       }
 
-      shift.endedAt = shift.endedAt || shift.segments[shift.segments.length - 1]?.endedAt || shiftDayEnd;
+      shift.endedAt =
+        shift.endedAt ||
+        shift.segments[shift.segments.length - 1]?.endedAt ||
+        shiftDayEnd;
       shift.status = ShiftStatus.Completed;
-      shift.completionReason = shift.completionReason || 'expired_day_end';
-      shift.completionSource = shift.completionSource || 'system';
+      shift.completionReason = shift.completionReason || "expired_day_end";
+      shift.completionSource = shift.completionSource || "system";
       await shift.save();
 
       await this.usersService.setOffDutyStatus(userId, {
-        reason: 'expired_day_end',
+        reason: "expired_day_end",
         updatedAt: shiftDayEnd,
       });
     }
   }
 
   private closeOpenSegment(shift: ShiftDocument, endedAt: Date) {
-    const activeSegment = [...shift.segments].reverse().find((segment) => !segment.endedAt);
+    const activeSegment = [...shift.segments]
+      .reverse()
+      .find((segment) => !segment.endedAt);
 
     if (!activeSegment) {
       return;
     }
 
     const startedAt = new Date(activeSegment.startedAt);
-    const safeEnd = endedAt.getTime() < startedAt.getTime() ? startedAt : endedAt;
+    const safeEnd =
+      endedAt.getTime() < startedAt.getTime() ? startedAt : endedAt;
 
     activeSegment.endedAt = safeEnd;
-    activeSegment.durationMs = Math.max(0, safeEnd.getTime() - startedAt.getTime());
+    activeSegment.durationMs = Math.max(
+      0,
+      safeEnd.getTime() - startedAt.getTime(),
+    );
   }
 
   private sumMonthDurations(workerId: string, month: string) {
@@ -846,16 +940,22 @@ export class ShiftsService {
   }
 
   private sumShiftDurations(shifts: ShiftDocument[]) {
-    return shifts.reduce((total, shift) => total + this.getEffectiveDuration(shift), 0);
+    return shifts.reduce(
+      (total, shift) => total + this.getEffectiveDuration(shift),
+      0,
+    );
   }
 
   private sumSegmentDurations(segments: ShiftSegment[]) {
-    return segments.reduce((total, segment) => total + (segment.durationMs || 0), 0);
+    return segments.reduce(
+      (total, segment) => total + (segment.durationMs || 0),
+      0,
+    );
   }
 
   private groupSerializedShiftsByDay(
     shifts: SerializedShiftRecord[],
-    order: 'asc' | 'desc',
+    order: "asc" | "desc",
   ): ShiftDayRecord[] {
     const grouped = new Map<string, ShiftDayRecord>();
 
@@ -873,7 +973,9 @@ export class ShiftsService {
     }
 
     return Array.from(grouped.values()).sort((left, right) =>
-      order === 'asc' ? left.date.localeCompare(right.date) : right.date.localeCompare(left.date),
+      order === "asc"
+        ? left.date.localeCompare(right.date)
+        : right.date.localeCompare(left.date),
     );
   }
 
@@ -884,9 +986,17 @@ export class ShiftsService {
       return serializedShifts;
     }
 
-    const workerIds = Array.from(new Set(serializedShifts.map((shift) => shift.workerId).filter(Boolean)));
-    const users = await this.userModel.find({ _id: { $in: workerIds } }).select('_id name').lean().exec();
-    const workerNamesById = new Map(users.map((user) => [user._id.toString(), user.name]));
+    const workerIds = Array.from(
+      new Set(serializedShifts.map((shift) => shift.workerId).filter(Boolean)),
+    );
+    const users = await this.userModel
+      .find({ _id: { $in: workerIds } })
+      .select("_id name")
+      .lean()
+      .exec();
+    const workerNamesById = new Map(
+      users.map((user) => [user._id.toString(), user.name]),
+    );
 
     return serializedShifts.map((shift) => ({
       ...shift,
@@ -901,54 +1011,57 @@ export class ShiftsService {
     totalDurationMs: number,
   ) {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Shift report');
+    const worksheet = workbook.addWorksheet("Shift report");
 
     worksheet.columns = [
-      { header: 'Date', key: 'date', width: 14 },
-      { header: 'Worker', key: 'worker', width: 24 },
-      { header: 'Project', key: 'project', width: 28 },
-      { header: 'Location', key: 'location', width: 24 },
-      { header: 'Start', key: 'start', width: 22 },
-      { header: 'End', key: 'end', width: 22 },
-      { header: 'Duration', key: 'duration', width: 14 },
-      { header: 'Status', key: 'status', width: 14 },
-      { header: 'Photos', key: 'photos', width: 10 },
+      { header: "Date", key: "date", width: 14 },
+      { header: "Worker", key: "worker", width: 24 },
+      { header: "Project", key: "project", width: 28 },
+      { header: "Location", key: "location", width: 24 },
+      { header: "Start", key: "start", width: 22 },
+      { header: "End", key: "end", width: 22 },
+      { header: "Duration", key: "duration", width: 14 },
+      { header: "Status", key: "status", width: 14 },
+      { header: "Photos", key: "photos", width: 10 },
     ];
 
-    worksheet.addRow(['Shift report']);
-    worksheet.mergeCells('A1:I1');
-    worksheet.getCell('A1').font = { size: 16, bold: true };
+    worksheet.addRow(["Shift report"]);
+    worksheet.mergeCells("A1:I1");
+    worksheet.getCell("A1").font = { size: 16, bold: true };
 
-    worksheet.addRow(['Generated at', this.formatDateTimeValue(new Date())]);
-    worksheet.addRow(['Period', this.getReportPeriodLabel(query, days)]);
-    worksheet.addRow(['Total shifts', shifts.length]);
-    worksheet.addRow(['Total duration', this.formatDurationLabel(totalDurationMs)]);
+    worksheet.addRow(["Generated at", this.formatDateTimeValue(new Date())]);
+    worksheet.addRow(["Period", this.getReportPeriodLabel(query, days)]);
+    worksheet.addRow(["Total shifts", shifts.length]);
+    worksheet.addRow([
+      "Total duration",
+      this.formatDurationLabel(totalDurationMs),
+    ]);
     worksheet.addRow([]);
 
     const headerRow = worksheet.addRow({
-      date: 'Date',
-      worker: 'Worker',
-      project: 'Project',
-      location: 'Location',
-      start: 'Start',
-      end: 'End',
-      duration: 'Duration',
-      status: 'Status',
-      photos: 'Photos',
+      date: "Date",
+      worker: "Worker",
+      project: "Project",
+      location: "Location",
+      start: "Start",
+      end: "End",
+      duration: "Duration",
+      status: "Status",
+      photos: "Photos",
     });
 
     headerRow.font = { bold: true };
     headerRow.eachCell((cell) => {
       cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFEAF4FF' },
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFEAF4FF" },
       };
       cell.border = {
-        top: { style: 'thin', color: { argb: 'FFD8E6F3' } },
-        left: { style: 'thin', color: { argb: 'FFD8E6F3' } },
-        bottom: { style: 'thin', color: { argb: 'FFD8E6F3' } },
-        right: { style: 'thin', color: { argb: 'FFD8E6F3' } },
+        top: { style: "thin", color: { argb: "FFD8E6F3" } },
+        left: { style: "thin", color: { argb: "FFD8E6F3" } },
+        bottom: { style: "thin", color: { argb: "FFD8E6F3" } },
+        right: { style: "thin", color: { argb: "FFD8E6F3" } },
       };
     });
 
@@ -964,7 +1077,7 @@ export class ShiftsService {
           date: shift.shiftDate,
           worker: shift.workerName || shift.workerId,
           project: shift.projectName || shift.projectId,
-          location: shift.location || '-',
+          location: shift.location || "-",
           start: this.formatDateTimeValue(shift.startedAt),
           end: this.formatDateTimeValue(shift.endedAt),
           duration: this.formatDurationLabel(shift.durationMs),
@@ -984,7 +1097,7 @@ export class ShiftsService {
     totalDurationMs: number,
   ) {
     return new Promise<Buffer>((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      const doc = new PDFDocument({ size: "A4", margin: 40 });
       const chunks: Buffer[] = [];
 
       const ensureSpace = (height = 24) => {
@@ -993,20 +1106,24 @@ export class ShiftsService {
         }
       };
 
-      doc.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
+      doc.on("data", (chunk) =>
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)),
+      );
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
 
-      doc.fontSize(18).text('Shift report');
+      doc.fontSize(18).text("Shift report");
       doc.moveDown(0.5);
-      doc.fontSize(11).text(`Generated at: ${this.formatDateTimeValue(new Date())}`);
+      doc
+        .fontSize(11)
+        .text(`Generated at: ${this.formatDateTimeValue(new Date())}`);
       doc.text(`Period: ${this.getReportPeriodLabel(query, days)}`);
       doc.text(`Total shifts: ${shifts.length}`);
       doc.text(`Total duration: ${this.formatDurationLabel(totalDurationMs)}`);
 
       if (!days.length) {
         doc.moveDown(1);
-        doc.fontSize(11).text('No shifts found for the selected filters.');
+        doc.fontSize(11).text("No shifts found for the selected filters.");
         doc.end();
         return;
       }
@@ -1014,7 +1131,11 @@ export class ShiftsService {
       for (const day of days) {
         ensureSpace(40);
         doc.moveDown(0.8);
-        doc.fontSize(13).text(`${day.date} | ${this.formatDurationLabel(day.totalDurationMs)}`);
+        doc
+          .fontSize(13)
+          .text(
+            `${day.date} | ${this.formatDurationLabel(day.totalDurationMs)}`,
+          );
 
         for (const shift of day.shifts) {
           ensureSpace(54);
@@ -1024,8 +1145,12 @@ export class ShiftsService {
             .text(
               `${shift.workerName || shift.workerId} | ${shift.projectName || shift.projectId} | ${this.formatDurationLabel(shift.durationMs)}`,
             );
-          doc.text(`Time: ${this.formatTimeValue(shift.startedAt)} - ${this.formatTimeValue(shift.endedAt)}`);
-          doc.text(`Location: ${shift.location || '-'} | Status: ${shift.status} | Photos: ${shift.photos?.length || 0}`);
+          doc.text(
+            `Time: ${this.formatTimeValue(shift.startedAt)} - ${this.formatTimeValue(shift.endedAt)}`,
+          );
+          doc.text(
+            `Location: ${shift.location || "-"} | Status: ${shift.status} | Photos: ${shift.photos?.length || 0}`,
+          );
         }
       }
 
@@ -1035,7 +1160,9 @@ export class ShiftsService {
 
   private serializeShift(shift: ShiftDocument) {
     const effectiveDurationMs = this.getEffectiveDuration(shift);
-    const shiftId = (shift as unknown as { _id: { toString(): string } })._id.toString();
+    const shiftId = (
+      shift as unknown as { _id: { toString(): string } }
+    )._id.toString();
 
     return {
       id: shiftId,
@@ -1066,7 +1193,11 @@ export class ShiftsService {
         durationMs:
           segment.durationMs ||
           (segment.endedAt
-            ? Math.max(0, new Date(segment.endedAt).getTime() - new Date(segment.startedAt).getTime())
+            ? Math.max(
+                0,
+                new Date(segment.endedAt).getTime() -
+                  new Date(segment.startedAt).getTime(),
+              )
             : 0),
       })),
     };
@@ -1077,13 +1208,16 @@ export class ShiftsService {
       return shift.durationMs || this.sumSegmentDurations(shift.segments || []);
     }
 
-    return shift.durationMs + Math.max(0, Date.now() - new Date(shift.lastResumedAt).getTime());
+    return (
+      shift.durationMs +
+      Math.max(0, Date.now() - new Date(shift.lastResumedAt).getTime())
+    );
   }
 
   private getDateKey(date: Date) {
     const year = date.getFullYear();
-    const month = `${date.getMonth() + 1}`.padStart(2, '0');
-    const day = `${date.getDate()}`.padStart(2, '0');
+    const month = `${date.getMonth() + 1}`.padStart(2, "0");
+    const day = `${date.getDate()}`.padStart(2, "0");
 
     return `${year}-${month}-${day}`;
   }
@@ -1093,25 +1227,25 @@ export class ShiftsService {
   }
 
   private getPreviousMonthKey(monthKey: string) {
-    const [year, month] = monthKey.split('-').map(Number);
+    const [year, month] = monthKey.split("-").map(Number);
     const previousMonthDate = new Date(year, month - 2, 1);
 
     return this.getMonthKey(previousMonthDate);
   }
 
   private getDayEnd(shiftDate: string) {
-    const [year, month, day] = shiftDate.split('-').map(Number);
+    const [year, month, day] = shiftDate.split("-").map(Number);
 
     return new Date(year, month - 1, day, 23, 59, 59, 999);
   }
 
   private getReportPeriodLabel(
-    query: Pick<ListShiftsDto, 'month' | 'from' | 'to' | 'dates'>,
+    query: Pick<ListShiftsDto, "month" | "from" | "to" | "dates">,
     days: ShiftDayRecord[],
   ) {
     if (query.dates) {
       const dateList = query.dates
-        .split(',')
+        .split(",")
         .map((date) => date.trim())
         .filter(Boolean);
 
@@ -1129,11 +1263,11 @@ export class ShiftsService {
     }
 
     if (query.from || query.to) {
-      return `${query.from || '...'} - ${query.to || '...'}`;
+      return `${query.from || "..."} - ${query.to || "..."}`;
     }
 
     if (!days.length) {
-      return 'All time';
+      return "All time";
     }
 
     return `${days[0].date} - ${days[days.length - 1].date}`;
@@ -1144,65 +1278,65 @@ export class ShiftsService {
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
 
-    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+    return `${hours}h ${String(minutes).padStart(2, "0")}m`;
   }
 
   private formatDateTimeValue(value?: Date | string | null) {
     if (!value) {
-      return '-';
+      return "-";
     }
 
     const date = new Date(value);
 
     if (Number.isNaN(date.getTime())) {
-      return '-';
+      return "-";
     }
 
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
+    return date.toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }
 
   private formatTimeValue(value?: Date | string | null) {
     if (!value) {
-      return '-';
+      return "-";
     }
 
     const date = new Date(value);
 
     if (Number.isNaN(date.getTime())) {
-      return '-';
+      return "-";
     }
 
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }
 
   private buildExportFileBaseName(
-    query: Pick<ListShiftsDto, 'month' | 'from' | 'to'>,
+    query: Pick<ListShiftsDto, "month" | "from" | "to">,
     days: ShiftDayRecord[],
   ) {
     const rawRange =
       query.month || query.from || query.to
-        ? `${query.month || query.from || 'from'}-${query.to || query.month || 'to'}`
+        ? `${query.month || query.from || "from"}-${query.to || query.month || "to"}`
         : days.length
           ? `${days[0].date}-${days[days.length - 1].date}`
-          : 'all-time';
+          : "all-time";
 
     return `shift-report-${this.sanitizeFilePart(rawRange)}`;
   }
 
   private sanitizeFilePart(value: string) {
     return value
-      .replace(/[^a-zA-Z0-9-_]+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
+      .replace(/[^a-zA-Z0-9-_]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
       .toLowerCase();
   }
 }

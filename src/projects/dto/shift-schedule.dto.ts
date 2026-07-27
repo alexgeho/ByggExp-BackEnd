@@ -7,12 +7,12 @@ import {
   Max,
   Min,
   ValidateNested,
-} from 'class-validator';
-import { Transform, Type } from 'class-transformer';
+} from "class-validator";
+import { Transform, Type } from "class-transformer";
 
 export class ShiftScheduleDto {
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true')
+  @Transform(({ value }) => value === true || value === "true")
   @IsBoolean()
   enabled?: boolean;
 
@@ -27,7 +27,7 @@ export class ShiftScheduleDto {
   workDayEndTime?: string;
 
   @Transform(({ value }) => {
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null || value === "") {
       return undefined;
     }
 
@@ -41,7 +41,7 @@ export class ShiftScheduleDto {
   startGraceMinutes?: number;
 
   @Transform(({ value }) => {
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null || value === "") {
       return undefined;
     }
 

@@ -6,4 +6,4 @@
  * (e.g. task reminder push notifications) in parallel with the deployed server.
  */
 export const cronsDisabled = (): boolean =>
-  process.env.DISABLE_CRONS === 'true';
+  process.env.DISABLE_CRONS === "true";

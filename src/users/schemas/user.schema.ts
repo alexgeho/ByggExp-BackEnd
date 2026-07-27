@@ -1,24 +1,24 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
 
 export type UserDocument = User & Document;
 
 export enum UserRole {
-  SuperAdmin = 'superadmin',
-  CompanyAdmin = 'companyAdmin',
-  ProjectAdmin = 'projectAdmin',
-  Worker = 'worker',
+  SuperAdmin = "superadmin",
+  CompanyAdmin = "companyAdmin",
+  ProjectAdmin = "projectAdmin",
+  Worker = "worker",
 }
 
 export enum UserWorkStatus {
-  OffDuty = 'off_duty',
-  Working = 'working',
-  OutsideProjectArea = 'outside_project_area',
+  OffDuty = "off_duty",
+  Working = "working",
+  OutsideProjectArea = "outside_project_area",
 }
 
 export enum UserAccountStatus {
-  WaitingForApproval = 'waiting_for_approval',
-  Active = 'active',
+  WaitingForApproval = "waiting_for_approval",
+  Active = "active",
 }
 
 export type UserNotificationPreferences = {
@@ -28,30 +28,31 @@ export type UserNotificationPreferences = {
   productAndMarketingAlerts: boolean;
 };
 
-export const DEFAULT_USER_NOTIFICATION_PREFERENCES: UserNotificationPreferences = {
-  flowMode: true,
-  messages: true,
-  tasks: true,
-  productAndMarketingAlerts: true,
-};
+export const DEFAULT_USER_NOTIFICATION_PREFERENCES: UserNotificationPreferences =
+  {
+    flowMode: true,
+    messages: true,
+    tasks: true,
+    productAndMarketingAlerts: true,
+  };
 
 export const normalizeUserNotificationPreferences = (
   value?: Partial<UserNotificationPreferences> | null,
 ): UserNotificationPreferences => ({
   flowMode:
-    typeof value?.flowMode === 'boolean'
+    typeof value?.flowMode === "boolean"
       ? value.flowMode
       : DEFAULT_USER_NOTIFICATION_PREFERENCES.flowMode,
   messages:
-    typeof value?.messages === 'boolean'
+    typeof value?.messages === "boolean"
       ? value.messages
       : DEFAULT_USER_NOTIFICATION_PREFERENCES.messages,
   tasks:
-    typeof value?.tasks === 'boolean'
+    typeof value?.tasks === "boolean"
       ? value.tasks
       : DEFAULT_USER_NOTIFICATION_PREFERENCES.tasks,
   productAndMarketingAlerts:
-    typeof value?.productAndMarketingAlerts === 'boolean'
+    typeof value?.productAndMarketingAlerts === "boolean"
       ? value.productAndMarketingAlerts
       : DEFAULT_USER_NOTIFICATION_PREFERENCES.productAndMarketingAlerts,
 });
@@ -70,16 +71,16 @@ export class User {
   @Prop({ type: Number, default: null })
   phoneNumber?: number | null;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   name: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   profession: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   avatarUrl: string;
 
-  @Prop({ type: Object, default: { ru: 'Русский' } })
+  @Prop({ type: Object, default: { ru: "Русский" } })
   language: Record<string, any>;
 
   @Prop({ type: [String], default: [] })
@@ -108,25 +109,30 @@ export class User {
   @Prop({ type: Date, default: null, select: false })
   magicLoginExpiresAt?: Date | null;
 
-  @Prop({ type: String, ref: 'Company', default: null })
+  @Prop({ type: String, ref: "Company", default: null })
   companyId: string | null;
 
-  @Prop({ type: [String], ref: 'Project', default: [] })
+  @Prop({ type: [String], ref: "Project", default: [] })
   projectIds: string[];
 
-  @Prop({ required: true, enum: UserWorkStatus, default: UserWorkStatus.OffDuty, index: true })
+  @Prop({
+    required: true,
+    enum: UserWorkStatus,
+    default: UserWorkStatus.OffDuty,
+    index: true,
+  })
   workStatus: UserWorkStatus;
 
-  @Prop({ type: String, ref: 'Project', default: null })
+  @Prop({ type: String, ref: "Project", default: null })
   workStatusProjectId?: string | null;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   workStatusProjectName?: string;
 
-  @Prop({ type: String, ref: 'Shift', default: null })
+  @Prop({ type: String, ref: "Shift", default: null })
   workStatusShiftId?: string | null;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   workStatusReason?: string;
 
   @Prop({ type: Date, default: null })

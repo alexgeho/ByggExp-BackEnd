@@ -9,17 +9,17 @@ import {
   Query,
   Request,
   UseGuards,
-} from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { Roles } from '../common/decorators/roles.decorator';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { UserRole } from '../users/schemas/user.schema';
-import { ArticlesService } from './articles.service';
-import { CreateArticleDto } from './dto/create-article.dto';
-import { UpdateArticleDto } from './dto/update-article.dto';
+} from "@nestjs/common";
+import { AuthGuard } from "@nestjs/passport";
+import { Roles } from "../common/decorators/roles.decorator";
+import { RolesGuard } from "../common/guards/roles.guard";
+import { UserRole } from "../users/schemas/user.schema";
+import { ArticlesService } from "./articles.service";
+import { CreateArticleDto } from "./dto/create-article.dto";
+import { UpdateArticleDto } from "./dto/update-article.dto";
 
-@Controller('articles')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Controller("articles")
+@UseGuards(AuthGuard("jwt"), RolesGuard)
 export class ArticlesController {
   constructor(private readonly articlesService: ArticlesService) {}
 
@@ -29,10 +29,13 @@ export class ArticlesController {
     return this.articlesService.findAccessible(req.user);
   }
 
-  @Get('next-number')
+  @Get("next-number")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  getNextArticleNumber(@Request() req, @Query('companyId') companyId?: string) {
-    return this.articlesService.getNextArticleNumberForUser(req.user, companyId);
+  getNextArticleNumber(@Request() req, @Query("companyId") companyId?: string) {
+    return this.articlesService.getNextArticleNumberForUser(
+      req.user,
+      companyId,
+    );
   }
 
   @Post()
@@ -41,25 +44,25 @@ export class ArticlesController {
     return this.articlesService.create(createArticleDto, req.user);
   }
 
-  @Get(':id')
+  @Get(":id")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  findOne(@Request() req, @Param('id') id: string) {
+  findOne(@Request() req, @Param("id") id: string) {
     return this.articlesService.findOne(id, req.user);
   }
 
-  @Put(':id')
+  @Put(":id")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   update(
     @Request() req,
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() updateArticleDto: UpdateArticleDto,
   ) {
     return this.articlesService.update(id, updateArticleDto, req.user);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  remove(@Request() req, @Param('id') id: string) {
+  remove(@Request() req, @Param("id") id: string) {
     return this.articlesService.remove(id, req.user);
   }
 }

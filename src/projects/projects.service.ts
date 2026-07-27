@@ -5,17 +5,17 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
-} from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { cronsDisabled } from '../common/cron.util';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Project, ProjectDocument } from './schemas/project.schema';
-import { Client, ClientDocument } from '../clients/schemas/client.schema';
-import { CreateProjectDto } from './dto/create-project.dto';
-import { UsersService } from '../users/users.service';
-import { CompanyService } from '../company/company.service';
-import { User, UserRole } from '../users/schemas/user.schema';
+} from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { cronsDisabled } from "../common/cron.util";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { Project, ProjectDocument } from "./schemas/project.schema";
+import { Client, ClientDocument } from "../clients/schemas/client.schema";
+import { CreateProjectDto } from "./dto/create-project.dto";
+import { UsersService } from "../users/users.service";
+import { CompanyService } from "../company/company.service";
+import { User, UserRole } from "../users/schemas/user.schema";
 
 type ProjectAuthUser = {
   userId?: string;
@@ -29,11 +29,10 @@ export class ProjectsService {
   private isReconcilingStatuses = false;
 
   private readonly geocoderHeaders = {
-    Accept: 'application/json',
-    'Accept-Language': 'en',
-    'User-Agent':
-      process.env.GEOCODER_USER_AGENT ||
-      'ByggExp/1.0 (server geocoding proxy)',
+    Accept: "application/json",
+    "Accept-Language": "en",
+    "User-Agent":
+      process.env.GEOCODER_USER_AGENT || "ByggExp/1.0 (server geocoding proxy)",
   };
 
   constructor(
@@ -57,7 +56,7 @@ export class ProjectsService {
     const client = await this.clientModel.findById(clientId).exec();
     if (!client || String(client.companyId) !== String(companyId)) {
       throw new BadRequestException(
-        'Selected client does not belong to this company',
+        "Selected client does not belong to this company",
       );
     }
 
@@ -66,15 +65,15 @@ export class ProjectsService {
 
   private getEntityId(value: unknown): string {
     if (!value) {
-      return '';
+      return "";
     }
 
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       return value;
     }
 
     const entity = value as { _id?: unknown; id?: unknown };
-    return String(entity._id ?? entity.id ?? '');
+    return String(entity._id ?? entity.id ?? "");
   }
 
   private pickUserIdByRole(users: User[], roles: UserRole[]): string {
@@ -86,7 +85,7 @@ export class ProjectsService {
       }
     }
 
-    return '';
+    return "";
   }
 
   // ---- Tenant / project-scope access control ----
@@ -99,7 +98,7 @@ export class ProjectsService {
   ): string {
     // Every actor (superadmin included) is scoped to its own company.
     if (!user.companyId) {
-      throw new ForbiddenException('Your account is not attached to a company');
+      throw new ForbiddenException("Your account is not attached to a company");
     }
     return String(user.companyId);
   }
@@ -119,16 +118,22 @@ export class ProjectsService {
     );
   }
 
-  private assertCanAccessProject(project: Project, user: ProjectAuthUser): void {
-    if (!user.companyId || String(project.companyId) !== String(user.companyId)) {
-      throw new ForbiddenException('You do not have access to this project');
+  private assertCanAccessProject(
+    project: Project,
+    user: ProjectAuthUser,
+  ): void {
+    if (
+      !user.companyId ||
+      String(project.companyId) !== String(user.companyId)
+    ) {
+      throw new ForbiddenException("You do not have access to this project");
     }
     // ProjectAdmin / Worker are further limited to projects they belong to.
     if (
       (user.role === UserRole.ProjectAdmin || user.role === UserRole.Worker) &&
       !this.isProjectMember(project, user.userId)
     ) {
-      throw new ForbiddenException('You do not have access to this project');
+      throw new ForbiddenException("You do not have access to this project");
     }
   }
 
@@ -184,7 +189,7 @@ export class ProjectsService {
   }): string {
     const address = match.address;
     if (!address) {
-      return match.display_name?.trim() || '';
+      return match.display_name?.trim() || "";
     }
 
     const houseNumber = address.house_number?.trim();
@@ -195,7 +200,7 @@ export class ProjectsService {
       address.footway
     )?.trim();
 
-    let streetLine = '';
+    let streetLine = "";
     if (road && houseNumber) {
       streetLine = `${road} ${houseNumber}`;
     } else if (road) {
@@ -211,27 +216,36 @@ export class ProjectsService {
       address.municipality ||
       address.suburb;
 
-    const parts = [streetLine, locality, address.postcode, address.country].filter(
-      Boolean,
-    );
+    const parts = [
+      streetLine,
+      locality,
+      address.postcode,
+      address.country,
+    ].filter(Boolean);
 
     if (parts.length) {
-      return parts.join(', ');
+      return parts.join(", ");
     }
 
-    return match.display_name?.trim() || '';
+    return match.display_name?.trim() || "";
   }
 
   private async resolveCreatePayload(
     createProjectDto: CreateProjectDto,
-    currentUser?: { userId?: string; role?: UserRole; companyId?: string | null },
+    currentUser?: {
+      userId?: string;
+      role?: UserRole;
+      companyId?: string | null;
+    },
   ): Promise<CreateProjectDto> {
     // Every actor (superadmin included) creates projects only in its own
     // company; any companyId/clientCompanyId in the body is ignored (anti-tamper).
-    const companyId: string = currentUser?.companyId || '';
+    const companyId: string = currentUser?.companyId || "";
 
     if (!companyId) {
-      throw new BadRequestException('No company available for project creation');
+      throw new BadRequestException(
+        "No company available for project creation",
+      );
     }
 
     const company = await this.companyService.findOne(companyId);
@@ -241,18 +255,17 @@ export class ProjectsService {
       candidateUsers = await this.usersService.findAll();
     }
 
-    const currentUserId = currentUser?.userId || '';
+    const currentUserId = currentUser?.userId || "";
     const currentCompanyUserId = candidateUsers.find(
       (user) => this.getEntityId(user) === currentUserId,
     )
       ? currentUserId
-      : '';
+      : "";
 
     const primaryCompanyAdminId =
       (Array.isArray(company.companyAdmins)
         ? company.companyAdmins.find(Boolean)
-        : '') ||
-      this.pickUserIdByRole(candidateUsers, [UserRole.CompanyAdmin]);
+        : "") || this.pickUserIdByRole(candidateUsers, [UserRole.CompanyAdmin]);
 
     const fallbackOwnerId =
       primaryCompanyAdminId ||
@@ -273,7 +286,7 @@ export class ProjectsService {
 
     if (!ownerId || !projectManagerId) {
       throw new BadRequestException(
-        'No suitable users available to assign project ownership',
+        "No suitable users available to assign project ownership",
       );
     }
 
@@ -293,7 +306,11 @@ export class ProjectsService {
 
   async create(
     createProjectDto: CreateProjectDto,
-    currentUser?: { userId?: string; role?: UserRole; companyId?: string | null },
+    currentUser?: {
+      userId?: string;
+      role?: UserRole;
+      companyId?: string | null;
+    },
   ): Promise<Project> {
     const resolvedProjectDto = await this.resolveCreatePayload(
       createProjectDto,
@@ -313,7 +330,10 @@ export class ProjectsService {
 
     if (resolvedProjectDto.projectAdmins) {
       for (const adminId of resolvedProjectDto.projectAdmins) {
-        await this.usersService.addUserToProject(adminId, project._id.toString());
+        await this.usersService.addUserToProject(
+          adminId,
+          project._id.toString(),
+        );
       }
     }
 
@@ -334,15 +354,17 @@ export class ProjectsService {
       ? user.projectIds.filter(Boolean).map((projectId) => String(projectId))
       : [];
 
-    return this.projectModel.find({
-      $or: [
-        { ownerId: userId },
-        { projectManagerId: userId },
-        { projectAdmins: userId },
-        { workers: userId },
-        ...(userProjectIds.length ? [{ _id: { $in: userProjectIds } }] : []),
-      ],
-    }).exec();
+    return this.projectModel
+      .find({
+        $or: [
+          { ownerId: userId },
+          { projectManagerId: userId },
+          { projectAdmins: userId },
+          { workers: userId },
+          ...(userProjectIds.length ? [{ _id: { $in: userProjectIds } }] : []),
+        ],
+      })
+      .exec();
   }
 
   async findByIds(ids: string[], user?: ProjectAuthUser): Promise<Project[]> {
@@ -350,18 +372,17 @@ export class ProjectsService {
     // Non-superadmin callers only ever get projects from their own company.
     // Superadmin is scoped to its own company like any other actor.
     if (user) {
-      query.companyId = user.companyId || '__no_company__';
+      query.companyId = user.companyId || "__no_company__";
     }
-    return this.projectModel.find(query)
+    return this.projectModel
+      .find(query)
       .select(
-        'companyId ownerId projectManagerId name status location locationLatitude locationLongitude locationRadiusMeters shiftSchedule',
+        "companyId ownerId projectManagerId name status location locationLatitude locationLongitude locationRadiusMeters shiftSchedule",
       )
       .exec();
   }
 
-  async findProjectById(
-    id: string,
-  ): Promise<{
+  async findProjectById(id: string): Promise<{
     id: string;
     name: string;
     status: string;
@@ -370,12 +391,12 @@ export class ProjectsService {
     locationLatitude?: number;
     locationLongitude?: number;
     locationRadiusMeters?: number;
-    shiftSchedule?: Project['shiftSchedule'];
+    shiftSchedule?: Project["shiftSchedule"];
   } | null> {
     const project = await this.projectModel
       .findById(id)
       .select(
-        'name status companyId location locationLatitude locationLongitude locationRadiusMeters shiftSchedule',
+        "name status companyId location locationLatitude locationLongitude locationRadiusMeters shiftSchedule",
       )
       .exec();
     if (!project) return null;
@@ -384,7 +405,7 @@ export class ProjectsService {
       name: project.name,
       status: project.status,
       companyId: project.companyId,
-      location: project.location || '',
+      location: project.location || "",
       locationLatitude: project.locationLatitude,
       locationLongitude: project.locationLongitude,
       locationRadiusMeters: project.locationRadiusMeters,
@@ -399,9 +420,9 @@ export class ProjectsService {
     }
 
     const normalizedLimit = Math.max(1, Math.min(limit, 10));
-    const data = await this.fetchGeocoderJson('/search', {
-      format: 'jsonv2',
-      addressdetails: '1',
+    const data = await this.fetchGeocoderJson("/search", {
+      format: "jsonv2",
+      addressdetails: "1",
       limit: String(normalizedLimit),
       q: normalizedQuery,
     });
@@ -459,12 +480,14 @@ export class ProjectsService {
 
   async reverseGeocodeCoordinate(latitude: number, longitude: number) {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      throw new BadRequestException('Latitude and longitude must be valid numbers');
+      throw new BadRequestException(
+        "Latitude and longitude must be valid numbers",
+      );
     }
 
-    const data = (await this.fetchGeocoderJson('/reverse', {
-      format: 'jsonv2',
-      addressdetails: '1',
+    const data = (await this.fetchGeocoderJson("/reverse", {
+      format: "jsonv2",
+      addressdetails: "1",
       lat: String(latitude),
       lon: String(longitude),
     })) as {
@@ -486,7 +509,7 @@ export class ProjectsService {
     };
 
     return {
-      label: this.formatNominatimAddressLabel(data) || data?.display_name || '',
+      label: this.formatNominatimAddressLabel(data) || data?.display_name || "",
     };
   }
 
@@ -501,18 +524,21 @@ export class ProjectsService {
   async findOneWithPopulated(id: string): Promise<Project> {
     const project = await this.projectModel
       .findById(id)
-      .populate('ownerId', 'name email role avatarUrl')
-      .populate('projectManagerId', 'name email role avatarUrl')
-      .populate('companyId', 'name email')
-      .populate('clientId', 'clientType companyName firstName lastName contactPerson email phone')
-      .populate('projectAdmins', 'name email role avatarUrl')
+      .populate("ownerId", "name email role avatarUrl")
+      .populate("projectManagerId", "name email role avatarUrl")
+      .populate("companyId", "name email")
       .populate(
-        'workers',
-        'name email role profession avatarUrl workStatus workStatusProjectId workStatusUpdatedAt',
+        "clientId",
+        "clientType companyName firstName lastName contactPerson email phone",
+      )
+      .populate("projectAdmins", "name email role avatarUrl")
+      .populate(
+        "workers",
+        "name email role profession avatarUrl workStatus workStatusProjectId workStatusUpdatedAt",
       )
       .populate(
-        'tasks',
-        'taskTitle taskDescription startDate dueDate documents status completedAt completedByUserId assigneeUserId assigneeUserName',
+        "tasks",
+        "taskTitle taskDescription startDate dueDate documents status completedAt completedByUserId assigneeUserId assigneeUserName",
       )
       .exec();
     if (!project) {
@@ -568,7 +594,18 @@ export class ProjectsService {
 
   async uploadDocuments(
     id: string,
-    documents: Array<string | { name: string; url: string; mimeType?: string; size?: number; uploadedAt?: Date; uploadedBy?: string; uploadedByName?: string }>,
+    documents: Array<
+      | string
+      | {
+          name: string;
+          url: string;
+          mimeType?: string;
+          size?: number;
+          uploadedAt?: Date;
+          uploadedBy?: string;
+          uploadedByName?: string;
+        }
+    >,
     actorUserId?: string,
   ): Promise<Project> {
     const existingProject = await this.findOne(id);
@@ -579,25 +616,28 @@ export class ProjectsService {
       uploadedByName = actor?.name || actor?.email;
     }
 
-    const enrichedDocuments = (documents || []).map((document) => (
-      typeof document === 'string'
+    const enrichedDocuments = (documents || []).map((document) =>
+      typeof document === "string"
         ? document
         : {
-          ...document,
-          ...(actorUserId
-            ? {
-              uploadedBy: actorUserId,
-              uploadedByName: document.uploadedByName || uploadedByName,
-            }
-            : {}),
-        }
-    ));
+            ...document,
+            ...(actorUserId
+              ? {
+                  uploadedBy: actorUserId,
+                  uploadedByName: document.uploadedByName || uploadedByName,
+                }
+              : {}),
+          },
+    );
 
     const updatedProject = await this.projectModel
       .findByIdAndUpdate(
         id,
         {
-          documents: [...(existingProject.documents || []), ...enrichedDocuments],
+          documents: [
+            ...(existingProject.documents || []),
+            ...enrichedDocuments,
+          ],
         },
         { new: true },
       )
@@ -610,10 +650,14 @@ export class ProjectsService {
     return this.findOneWithPopulated(id);
   }
 
-  async update(id: string, updateProjectDto: Partial<CreateProjectDto>): Promise<Project> {
+  async update(
+    id: string,
+    updateProjectDto: Partial<CreateProjectDto>,
+  ): Promise<Project> {
     const existingProject = await this.findOne(id);
     const nextDocuments =
-      Array.isArray(updateProjectDto.documents) && updateProjectDto.documents.length > 0
+      Array.isArray(updateProjectDto.documents) &&
+      updateProjectDto.documents.length > 0
         ? [...(existingProject.documents || []), ...updateProjectDto.documents]
         : existingProject.documents;
 
@@ -621,7 +665,7 @@ export class ProjectsService {
     // when the caller actually sends the field, so unrelated updates are left
     // untouched. An explicit null clears the reference.
     const clientPatch =
-      'clientId' in updateProjectDto
+      "clientId" in updateProjectDto
         ? {
             clientId: await this.resolveClientId(
               updateProjectDto.clientId,
@@ -684,19 +728,21 @@ export class ProjectsService {
     try {
       const now = new Date();
       const dueProjects = await this.projectModel
-        .find({ status: 'planning', beginningDate: { $lte: now } })
+        .find({ status: "planning", beginningDate: { $lte: now } })
         .exec();
 
       for (const project of dueProjects) {
         const nextStatus =
-          project.endDate && project.endDate < now ? 'completed' : 'in_progress';
+          project.endDate && project.endDate < now
+            ? "completed"
+            : "in_progress";
 
         await this.projectModel
           .findByIdAndUpdate(project._id, { status: nextStatus })
           .exec();
       }
     } catch (error) {
-      this.logger.error('Failed to reconcile project statuses', error);
+      this.logger.error("Failed to reconcile project statuses", error);
     } finally {
       this.isReconcilingStatuses = false;
     }
@@ -727,28 +773,30 @@ export class ProjectsService {
     return this.projectModel
       .find(filter)
       .populate({
-        path: 'ownerId',
-        select: 'name email role avatarUrl',
+        path: "ownerId",
+        select: "name email role avatarUrl",
       })
       .populate({
-        path: 'projectManagerId',
-        select: 'name email role avatarUrl',
+        path: "projectManagerId",
+        select: "name email role avatarUrl",
       })
       .populate({
-        path: 'companyId',
-        select: 'name email',
+        path: "companyId",
+        select: "name email",
       })
       .populate({
-        path: 'clientId',
-        select: 'clientType companyName firstName lastName contactPerson email phone',
+        path: "clientId",
+        select:
+          "clientType companyName firstName lastName contactPerson email phone",
       })
       .populate({
-        path: 'projectAdmins',
-        select: 'name email role avatarUrl',
+        path: "projectAdmins",
+        select: "name email role avatarUrl",
       })
       .populate({
-        path: 'workers',
-        select: 'name email role profession avatarUrl workStatus workStatusProjectId workStatusUpdatedAt',
+        path: "workers",
+        select:
+          "name email role profession avatarUrl workStatus workStatusProjectId workStatusUpdatedAt",
       })
       .lean();
   }

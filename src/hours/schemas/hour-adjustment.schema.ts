@@ -1,5 +1,5 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
 
 export type HourAdjustmentDocument = HourAdjustment & Document;
 
@@ -7,13 +7,13 @@ export type HourAdjustmentDocument = HourAdjustment & Document;
 // Keeps the original (schedule-derived) value so the edit trail survives.
 @Schema({ timestamps: true })
 export class HourAdjustment {
-  @Prop({ ref: 'Company', required: true, index: true })
+  @Prop({ ref: "Company", required: true, index: true })
   companyId: string;
 
-  @Prop({ ref: 'Project', required: true, index: true })
+  @Prop({ ref: "Project", required: true, index: true })
   projectId: string;
 
-  @Prop({ ref: 'User', required: true, index: true })
+  @Prop({ ref: "User", required: true, index: true })
   workerId: string;
 
   // Day key in YYYY-MM-DD, matching Shift.shiftDate.
@@ -28,14 +28,15 @@ export class HourAdjustment {
   @Prop({ type: Number, required: true })
   originalPlannedHours: number;
 
-  @Prop({ ref: 'User' })
+  @Prop({ ref: "User" })
   updatedByUserId?: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   note?: string;
 }
 
-export const HourAdjustmentSchema = SchemaFactory.createForClass(HourAdjustment);
+export const HourAdjustmentSchema =
+  SchemaFactory.createForClass(HourAdjustment);
 
 // One adjustment per worker-day-project within a company.
 HourAdjustmentSchema.index(

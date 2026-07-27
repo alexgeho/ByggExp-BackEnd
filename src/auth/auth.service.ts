@@ -1,15 +1,20 @@
-import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
-import { UsersService } from '../users/users.service';
-import { CompanyService } from '../company/company.service';
-import { RegisterCompanyWithAdminDto } from '../company/dto/register-company-with-admin.dto';
-import { RegisterCompanyPublicDto } from './dto/register-company-public.dto';
-import { CreateUserDto } from '../users/dto/create-user.dto';
-import { JwtPayload } from './interfaces/jwt-payload.interface';
-import { UserAccountStatus, UserRole } from '../users/schemas/user.schema';
-import { UserActivityLogLevel } from '../users/schemas/user-activity-log.schema';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  Logger,
+} from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import * as bcrypt from "bcrypt";
+import { randomBytes } from "crypto";
+import { UsersService } from "../users/users.service";
+import { CompanyService } from "../company/company.service";
+import { RegisterCompanyWithAdminDto } from "../company/dto/register-company-with-admin.dto";
+import { RegisterCompanyPublicDto } from "./dto/register-company-public.dto";
+import { CreateUserDto } from "../users/dto/create-user.dto";
+import { JwtPayload } from "./interfaces/jwt-payload.interface";
+import { UserAccountStatus, UserRole } from "../users/schemas/user.schema";
+import { UserActivityLogLevel } from "../users/schemas/user-activity-log.schema";
 
 @Injectable()
 export class AuthService {
@@ -25,7 +30,10 @@ export class AuthService {
     return bcrypt.hash(password, 10);
   }
 
-  private async comparePasswords(plain: string, hashed: string): Promise<boolean> {
+  private async comparePasswords(
+    plain: string,
+    hashed: string,
+  ): Promise<boolean> {
     return bcrypt.compare(plain, hashed);
   }
 
@@ -46,11 +54,11 @@ export class AuthService {
     } = createUserDto;
 
     if (!password) {
-      throw new ConflictException('Password is required');
+      throw new ConflictException("Password is required");
     }
 
     const existing = await this.usersService.findByEmail(email);
-    if (existing) throw new ConflictException('Email already exists');
+    if (existing) throw new ConflictException("Email already exists");
 
     const hashedPassword = await this.hashPassword(password);
 
@@ -69,14 +77,15 @@ export class AuthService {
   async registerCompany(dto: RegisterCompanyPublicDto) {
     const fullDto: RegisterCompanyWithAdminDto = {
       name: dto.companyName.trim(),
-      address: '—',
+      address: "—",
       email: dto.email.trim().toLowerCase(),
       adminName: dto.userName.trim(),
       adminEmail: dto.email.trim().toLowerCase(),
-      adminPassword: randomBytes(18).toString('base64url'),
+      adminPassword: randomBytes(18).toString("base64url"),
     };
 
-    const { admin } = await this.companyService.registerCompanyWithAdmin(fullDto);
+    const { admin } =
+      await this.companyService.registerCompanyWithAdmin(fullDto);
     return this.generateTokens(admin);
   }
 
@@ -85,16 +94,20 @@ export class AuthService {
     const { email, password, ...userData } = createUserDto;
 
     if (!password) {
-      throw new ConflictException('Password is required');
+      throw new ConflictException("Password is required");
     }
 
     const existing = await this.usersService.findByEmail(email);
-    if (existing) throw new ConflictException('Email already exists');
+    if (existing) throw new ConflictException("Email already exists");
 
     // Проверяем, есть ли уже супер-admin
-    const superAdmins = await this.usersService.findAllByRole(UserRole.SuperAdmin);
+    const superAdmins = await this.usersService.findAllByRole(
+      UserRole.SuperAdmin,
+    );
     if (superAdmins.length > 0) {
-      throw new ConflictException('SuperAdmin already exists. Use existing SuperAdmin to create new companies.');
+      throw new ConflictException(
+        "SuperAdmin already exists. Use existing SuperAdmin to create new companies.",
+      );
     }
 
     const hashedPassword = await this.hashPassword(password);
@@ -122,7 +135,7 @@ export class AuthService {
       (await this.comparePasswords(normalizedPassword, user.password));
 
     if (!user || !isMatch) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     // Invite users start as waiting_for_approval. Allow email+password login
@@ -134,17 +147,19 @@ export class AuthService {
 
     try {
       await this.usersService.logActivity(user._id.toString(), {
-        category: 'auth',
-        type: 'login_succeeded',
+        category: "auth",
+        type: "login_succeeded",
         level: UserActivityLogLevel.Info,
-        message: 'User logged in successfully.',
-        source: 'backend',
+        message: "User logged in successfully.",
+        source: "backend",
         details: {
-          method: 'password',
+          method: "password",
         },
       });
     } catch (error) {
-      this.logger.warn(`Failed to store login activity for user ${user._id.toString()}`);
+      this.logger.warn(
+        `Failed to store login activity for user ${user._id.toString()}`,
+      );
     }
 
     return this.generateTokens(user);
@@ -152,12 +167,12 @@ export class AuthService {
 
   async refresh(refreshToken: string) {
     try {
-      const payload = this.jwtService.verify(refreshToken) as JwtPayload;
+      const payload = this.jwtService.verify(refreshToken);
       const user = await this.usersService.findOne(payload.sub);
       if (!user) throw new UnauthorizedException();
       return this.generateTokens(user);
     } catch {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException("Invalid refresh token");
     }
   }
 
@@ -168,8 +183,8 @@ export class AuthService {
     const companyId = user.companyId;
 
     const payload: JwtPayload = { sub: id, email, role };
-    const access_token = this.jwtService.sign(payload, { expiresIn: '15m' });
-    const refresh_token = this.jwtService.sign(payload, { expiresIn: '7d' });
+    const access_token = this.jwtService.sign(payload, { expiresIn: "15m" });
+    const refresh_token = this.jwtService.sign(payload, { expiresIn: "7d" });
 
     return {
       user: {
@@ -194,8 +209,7 @@ export class AuthService {
 
     return {
       success: true,
-      message:
-        'Email confirmed. Opening ByggExp to sign you in automatically.',
+      message: "Email confirmed. Opening ByggExp to sign you in automatically.",
       magicLoginCode,
       user: {
         id: user._id.toString(),
@@ -210,11 +224,11 @@ export class AuthService {
 
     try {
       await this.usersService.logActivity(user._id.toString(), {
-        category: 'auth',
-        type: 'magic_login_succeeded',
+        category: "auth",
+        type: "magic_login_succeeded",
         level: UserActivityLogLevel.Info,
-        message: 'User signed in via email verification link.',
-        source: 'backend',
+        message: "User signed in via email verification link.",
+        source: "backend",
       });
     } catch (error) {
       this.logger.warn(
@@ -227,7 +241,7 @@ export class AuthService {
 
   async validateUserForLocal(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
-    if (user && await this.comparePasswords(password, user.password)) {
+    if (user && (await this.comparePasswords(password, user.password))) {
       const { password: _, ...safeUser } = user.toObject
         ? user.toObject()
         : { ...user };

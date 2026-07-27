@@ -1,13 +1,13 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
-import { UserRole } from '../../users/schemas/user.schema';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
+import { UserRole } from "../../users/schemas/user.schema";
 
 export type BugReportDocument = BugReport & Document;
 
 export enum BugReportStatus {
-  Open = 'open',
-  InProgress = 'in_progress',
-  Resolved = 'resolved',
+  Open = "open",
+  InProgress = "in_progress",
+  Resolved = "resolved",
 }
 
 export type BugReportAttachment = {
@@ -19,7 +19,7 @@ export type BugReportAttachment = {
 
 @Schema({ timestamps: true })
 export class BugReport {
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   message: string;
 
   @Prop({
@@ -33,13 +33,13 @@ export class BugReport {
   @Prop({ required: true })
   createdByUserId: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   reporterEmail: string;
 
   @Prop({ type: String, enum: UserRole })
   reporterRole: UserRole;
 
-  @Prop({ type: String, ref: 'Company', default: null, index: true })
+  @Prop({ type: String, ref: "Company", default: null, index: true })
   companyId?: string | null;
 
   @Prop({ type: Object, default: null })

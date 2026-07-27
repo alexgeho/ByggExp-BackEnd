@@ -4,7 +4,7 @@
  */
 const puppeteer = {
   async launch(): Promise<never> {
-    throw new Error('puppeteer-core is stubbed in tests');
+    throw new Error("puppeteer-core is stubbed in tests");
   },
 };
 

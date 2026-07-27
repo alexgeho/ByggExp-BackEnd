@@ -1,12 +1,12 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
 
 export type ShiftDocument = Shift & Document;
 
 export enum ShiftStatus {
-  Active = 'active',
-  Paused = 'paused',
-  Completed = 'completed',
+  Active = "active",
+  Paused = "paused",
+  Completed = "completed",
 }
 
 export class ShiftSegment {
@@ -25,16 +25,16 @@ export class ShiftPhotoFile {
 
 @Schema({ timestamps: true })
 export class Shift {
-  @Prop({ required: true, ref: 'User', index: true })
+  @Prop({ required: true, ref: "User", index: true })
   workerId: string;
 
-  @Prop({ required: true, ref: 'Project', index: true })
+  @Prop({ required: true, ref: "Project", index: true })
   projectId: string;
 
   @Prop({ required: true })
   projectNameSnapshot: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   locationSnapshot: string;
 
   @Prop({ required: true, index: true })
@@ -49,14 +49,19 @@ export class Shift {
   @Prop({ type: Date, default: null })
   lastResumedAt?: Date | null;
 
-  @Prop({ required: true, enum: ShiftStatus, default: ShiftStatus.Active, index: true })
+  @Prop({
+    required: true,
+    enum: ShiftStatus,
+    default: ShiftStatus.Active,
+    index: true,
+  })
   status: ShiftStatus;
 
   // Why a shift was paused automatically ('offline' | 'outside_project_area').
   // Empty when the shift is active or the worker paused it manually. Used to
   // auto-resume the shift once the device is seen again, without resuming a
   // deliberate manual pause.
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   autoPausedReason?: string;
 
   @Prop({
@@ -75,10 +80,10 @@ export class Shift {
   @Prop({ type: Number, default: 0 })
   durationMs: number;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   completionReason?: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   completionSource?: string;
 
   @Prop({ type: Date, default: null })

@@ -3,18 +3,18 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { UserRole } from '../users/schemas/user.schema';
-import { CreateBugReportDto } from './dto/create-bug-report.dto';
-import { UpdateBugReportDto } from './dto/update-bug-report.dto';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { UserRole } from "../users/schemas/user.schema";
+import { CreateBugReportDto } from "./dto/create-bug-report.dto";
+import { UpdateBugReportDto } from "./dto/update-bug-report.dto";
 import {
   BugReport,
   BugReportAttachment,
   BugReportDocument,
   BugReportStatus,
-} from './schemas/bug-report.schema';
+} from "./schemas/bug-report.schema";
 
 type AuthUser = {
   role: UserRole;
@@ -35,17 +35,19 @@ export class BugReportsService {
     user: AuthUser,
     attachment?: BugReportAttachment | null,
   ): Promise<BugReport> {
-    const message = dto.message?.trim() || '';
+    const message = dto.message?.trim() || "";
 
     if (!message && !attachment) {
-      throw new BadRequestException('Add a message or attach an image or video');
+      throw new BadRequestException(
+        "Add a message or attach an image or video",
+      );
     }
 
     const bugReport = new this.bugReportModel({
       message,
       status: BugReportStatus.Open,
       createdByUserId: user.userId,
-      reporterEmail: user.email || '',
+      reporterEmail: user.email || "",
       reporterRole: user.role,
       companyId: user.companyId || null,
       attachment: attachment || null,
@@ -66,7 +68,7 @@ export class BugReportsService {
         .exec();
     }
 
-    throw new ForbiddenException('You do not have access to bug reports');
+    throw new ForbiddenException("You do not have access to bug reports");
   }
 
   async updateStatus(
@@ -101,7 +103,9 @@ export class BugReportsService {
     }
 
     if (!message && !nextAttachment) {
-      throw new BadRequestException('Add a message or attach an image or video');
+      throw new BadRequestException(
+        "Add a message or attach an image or video",
+      );
     }
 
     bugReport.message = message;
@@ -151,6 +155,6 @@ export class BugReportsService {
       return;
     }
 
-    throw new ForbiddenException('You do not have access to this bug report');
+    throw new ForbiddenException("You do not have access to this bug report");
   }
 }
