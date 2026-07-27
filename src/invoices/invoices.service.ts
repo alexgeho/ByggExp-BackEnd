@@ -10,6 +10,7 @@ import { readFile } from 'fs/promises';
 import { Model } from 'mongoose';
 import path from 'path';
 import { Company, CompanyDocument } from '../company/schemas/company.schema';
+import { MailService } from '../mail/mail.service';
 import { UserRole } from '../users/schemas/user.schema';
 import { CreateInvoiceDto, InvoiceItemDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
@@ -38,7 +39,31 @@ export class InvoicesService {
   constructor(
     @InjectModel(Invoice.name) private invoiceModel: Model<InvoiceDocument>,
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
+    private readonly mailService: MailService,
   ) {}
+
+  async sendByEmail(
+    id: string,
+    user: AuthUser,
+    email?: string,
+    message?: string,
+  ): Promise<{ sent: boolean; to: string }> {
+    const invoice = await this.findOne(id, user);
+    const to = (email || invoice.email || '').trim();
+    if (!to) {
+      throw new BadRequestException(
+        'No recipient email — set the customer email or provide one',
+      );
+    }
+    const pdf = await this.buildInvoicePdf(id, user);
+    return this.mailService.sendInvoiceEmail(to, {
+      invoiceNumber: invoice.invoiceNumber,
+      senderName: invoice.companyFooter?.name,
+      dueDate: invoice.dueDate,
+      message,
+      pdf,
+    });
+  }
 
   async create(dto: CreateInvoiceDto, user: AuthUser): Promise<Invoice> {
     const companyId = this.resolveCompanyId(dto.companyId, user);

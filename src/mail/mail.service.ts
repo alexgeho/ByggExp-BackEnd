@@ -173,6 +173,56 @@ export class MailService {
     });
   }
 
+  async sendInvoiceEmail(
+    to: string,
+    opts: {
+      invoiceNumber: string | number;
+      senderName?: string;
+      dueDate?: string;
+      message?: string;
+      pdf: Buffer;
+    },
+  ): Promise<{ sent: boolean; to: string }> {
+    const nr = String(opts.invoiceNumber);
+    const subject = `Faktura ${nr}${opts.senderName ? ` — ${opts.senderName}` : ''}`;
+    const text = [
+      'Hej,',
+      '',
+      `Bifogat finner du faktura ${nr}${opts.senderName ? ` från ${opts.senderName}` : ''}.`,
+      opts.dueDate ? `Förfallodatum: ${opts.dueDate}.` : '',
+      opts.message || '',
+      '',
+      'Med vänliga hälsningar',
+      opts.senderName || '',
+    ]
+      .filter((line, i, arr) => line !== '' || (arr[i - 1] !== '' && i !== 0))
+      .join('\n');
+    const html = `
+      <p>Hej,</p>
+      <p>Bifogat finner du <strong>faktura ${this.escapeHtml(nr)}</strong>${opts.senderName ? ` från <strong>${this.escapeHtml(opts.senderName)}</strong>` : ''}.</p>
+      ${opts.dueDate ? `<p>Förfallodatum: ${this.escapeHtml(opts.dueDate)}.</p>` : ''}
+      ${opts.message ? `<p>${this.escapeHtml(opts.message)}</p>` : ''}
+      <p>Med vänliga hälsningar<br>${this.escapeHtml(opts.senderName || '')}</p>
+    `;
+
+    if (!this.transporter) {
+      this.logger.log(`Invoice email for ${to} (faktura ${nr}) — SMTP not configured, skipped`);
+      return { sent: false, to };
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to,
+      subject,
+      text,
+      html,
+      attachments: [
+        { filename: `faktura-${nr}.pdf`, content: opts.pdf, contentType: 'application/pdf' },
+      ],
+    });
+    return { sent: true, to };
+  }
+
   async sendDemoRequestEmail(payload: DemoRequestPayload): Promise<void> {
     const recipients = this.getDemoRequestRecipients();
     const subject = 'New demo request from byggexp.se';

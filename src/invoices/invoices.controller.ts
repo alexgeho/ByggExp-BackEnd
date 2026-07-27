@@ -71,6 +71,16 @@ export class InvoicesController {
     res.end(pdfBuffer);
   }
 
+  @Post(':id/send')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  sendByEmail(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() body: { email?: string; message?: string },
+  ) {
+    return this.invoicesService.sendByEmail(id, req.user, body?.email, body?.message);
+  }
+
   @Get(':id')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   findOne(@Request() req, @Param('id') id: string) {

@@ -4,6 +4,7 @@ import { Company, CompanySchema } from '../company/schemas/company.schema';
 import { InvoicesController } from './invoices.controller';
 import { InvoicesService } from './invoices.service';
 import { Invoice, InvoiceSchema } from './schemas/invoice.schema';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { Invoice, InvoiceSchema } from './schemas/invoice.schema';
       { name: Invoice.name, schema: InvoiceSchema },
       { name: Company.name, schema: CompanySchema },
     ]),
+    MailModule,
   ],
   controllers: [InvoicesController],
   providers: [InvoicesService],
