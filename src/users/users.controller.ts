@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { BulkCreateUsersDto } from './dto/bulk-create-users.dto';
 import { CreateWorkerNoteDto } from './dto/create-worker-note.dto';
 import { User, UserAccountStatus, UserRole } from './schemas/user.schema';
 import { UserActivityLogLevel } from './schemas/user-activity-log.schema';
@@ -107,6 +108,60 @@ export class UsersController {
       password: hashedPassword,
       accountStatus: UserAccountStatus.Active,
     });
+  }
+
+  @Post('bulk')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  async createBulk(
+    @Body() body: BulkCreateUsersDto,
+    @Request() req,
+  ): Promise<{
+    created: number;
+    failed: Array<{ index: number; email: string; reason: string }>;
+  }> {
+    const failed: Array<{ index: number; email: string; reason: string }> = [];
+    let created = 0;
+
+    for (let i = 0; i < body.users.length; i += 1) {
+      const row = body.users[i];
+      try {
+        // Same role rules as the single create endpoint.
+        let role = row.role ?? UserRole.Worker;
+        if (req.user.role === UserRole.ProjectAdmin) {
+          role = UserRole.Worker;
+        } else if (
+          req.user.role === UserRole.CompanyAdmin &&
+          (role === UserRole.SuperAdmin || role === UserRole.CompanyAdmin)
+        ) {
+          role = UserRole.Worker;
+        }
+
+        // Tenant isolation: non-superadmin always imports into its own company.
+        const companyId =
+          req.user.role === UserRole.SuperAdmin ? row.companyId : req.user.companyId;
+
+        await this.usersService.createUserPendingApproval({
+          ...row,
+          role,
+          companyId,
+          inviteViaEmail: true,
+        });
+        created += 1;
+      } catch (error) {
+        const isDuplicate =
+          (error as { code?: number })?.code === 11000 ||
+          /duplicate key/i.test((error as Error)?.message || '');
+        failed.push({
+          index: i,
+          email: row?.email || '',
+          reason: isDuplicate
+            ? 'A user with this email already exists'
+            : (error as Error)?.message || 'Failed to create user',
+        });
+      }
+    }
+
+    return { created, failed };
   }
 
   @Get()
