@@ -451,7 +451,7 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
   const totalLabel = hasSettlement ? 'Totalbelopp' : 'Att betala';
   const settlementLines = `
     <dt>${totalLabel}</dt><dd>${formatInvoiceAmount(total)}</dd>
-    ${rotDeduction ? `<dt>ROT-avdrag</dt><dd>-${formatInvoiceAmount(rotDeduction)}</dd>` : ''}
+    ${rotDeduction ? `<dt>ROT-avdrag</dt><dd>${formatInvoiceAmount(-rotDeduction)}</dd>` : ''}
     ${rounding ? `<dt>Öresavrundning</dt><dd>${formatInvoiceAmount(rounding)}</dd>` : ''}
     ${hasSettlement
       ? `<dt class="invoice-total-box__total">Att betala</dt><dd class="invoice-total-box__total">${formatInvoiceAmount(roundedTotal)}</dd>`

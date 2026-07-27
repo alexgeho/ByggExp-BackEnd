@@ -274,6 +274,16 @@ export class InvoicesService {
       (k) => delete raw[k],
     );
 
+    // Everything is negated (it reverses the original). ROT settlement is
+    // recomputed from the negated total + negated labour so the deduction,
+    // rounding and "Att betala" all carry the right sign consistently.
+    const negTotal = neg(source.total);
+    const rotLaborAmount = neg(source.rotLaborAmount);
+    const settlement = this.deriveSettlement(negTotal, {
+      rotEnabled: source.rotEnabled,
+      rotLaborAmount,
+    });
+
     const creditNote = new this.invoiceModel({
       ...raw,
       invoiceNumber,
@@ -289,10 +299,11 @@ export class InvoicesService {
       })),
       subtotal: neg(source.subtotal),
       vat: neg(source.vat),
-      total: neg(source.total),
-      rotDeduction: neg(source.rotDeduction),
-      rounding: neg(source.rounding),
-      roundedTotal: neg(source.roundedTotal),
+      total: negTotal,
+      rotLaborAmount,
+      rotDeduction: settlement.rotDeduction,
+      rounding: settlement.rounding,
+      roundedTotal: settlement.roundedTotal,
     });
 
     return creditNote.save();
