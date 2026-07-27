@@ -37,6 +37,17 @@ export class CreateUserDto {
   @IsOptional()
   profession?: string;
 
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+
+    return typeof value === 'string' ? parseFloat(value.replace(',', '.')) : value;
+  })
+  @IsNumber()
+  @IsOptional()
+  hourlyRate?: number;
+
   @IsString()
   @IsOptional()
   avatarUrl?: string;
