@@ -39,6 +39,13 @@ export type InvoicePdfData = {
   subtotal?: number;
   vat?: number;
   total?: number;
+  rotEnabled?: boolean;
+  rotPersonalNumber?: string;
+  rotProperty?: string;
+  rotDeduction?: number;
+  rounding?: number;
+  roundedTotal?: number;
+  creditOfNumber?: number | null;
   dueDate?: string;
   ocr?: string;
   companyFooter?: InvoicePdfCompanyFooter;
@@ -190,7 +197,7 @@ body {
 `;
 
 export function formatInvoiceAmount(value: number): string {
-  return new Intl.NumberFormat("sv-SE", {
+  return new Intl.NumberFormat('sv-SE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
@@ -198,32 +205,32 @@ export function formatInvoiceAmount(value: number): string {
 
 function escapeHtml(value: string): string {
   return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function text(value?: string | number | null): string {
   if (value === null || value === undefined) {
-    return "";
+    return '';
   }
   return escapeHtml(String(value));
 }
 
 function multilineText(value?: string): string {
-  return text(value).replaceAll("\n", "<br>");
+  return text(value).replaceAll('\n', '<br>');
 }
 
 function groupVatByRate(items: InvoicePdfItem[]): VatGroup[] {
   const map = new Map<number, { base: number; amount: number }>();
 
   for (const item of items) {
-    const price = typeof item.price === "number" ? item.price : 0;
-    const discount = typeof item.discount === "number" ? item.discount : 0;
-    const quantity = typeof item.quantity === "number" ? item.quantity : 0;
-    const rate = typeof item.vatRate === "number" ? item.vatRate : 25;
+    const price = typeof item.price === 'number' ? item.price : 0;
+    const discount = typeof item.discount === 'number' ? item.discount : 0;
+    const quantity = typeof item.quantity === 'number' ? item.quantity : 0;
+    const rate = typeof item.vatRate === 'number' ? item.vatRate : 25;
     const lineTotal = quantity * price * (1 - discount / 100);
     const existing = map.get(rate) || { base: 0, amount: 0 };
 
@@ -237,37 +244,38 @@ function groupVatByRate(items: InvoicePdfItem[]): VatGroup[] {
     .sort((a, b) => b.rate - a.rate);
 }
 
-function buildHeader(data: InvoicePdfData, logoDataUrl = ""): string {
-  const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : "";
+function buildHeader(data: InvoicePdfData, logoDataUrl = ''): string {
+  const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : '';
 
   return `
     <header class="invoice-header">
       <div class="invoice-header__top">
         <div class="invoice-header__logo">${logo}</div>
         <div>
-          <div class="invoice-header__title">Faktura</div>
+          <div class="invoice-header__title">${data.creditOfNumber ? 'Kreditfaktura' : 'Faktura'}</div>
           <div class="invoice-header__address">
-            ${text(data.companyName) || "&nbsp;"}<br>
-            ${text(data.address) || "&nbsp;"}<br>
-            ${text(data.postalCode) || "&nbsp;"}
+            ${text(data.companyName) || '&nbsp;'}<br>
+            ${text(data.address) || '&nbsp;'}<br>
+            ${text(data.postalCode) || '&nbsp;'}
           </div>
         </div>
         <dl class="invoice-header__meta">
-          <dt>Fakturadatum</dt><dd>${text(data.date) || "&nbsp;"}</dd>
-          <dt>Fakturanr</dt><dd>${text(data.invoiceNumber) || "&nbsp;"}</dd>
-          <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || "&nbsp;"}</dd>
+          <dt>Fakturadatum</dt><dd>${text(data.date) || '&nbsp;'}</dd>
+          <dt>Fakturanr</dt><dd>${text(data.invoiceNumber) || '&nbsp;'}</dd>
+          ${data.creditOfNumber ? `<dt>Avser faktura</dt><dd>${text(data.creditOfNumber)}</dd>` : ''}
+          <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || '&nbsp;'}</dd>
         </dl>
       </div>
       <div class="invoice-header__bottom">
         <dl class="invoice-header__details">
-          <dt>Kundnr</dt><dd>${text(data.customerNumber) || "&nbsp;"}</dd>
-          <dt>Er referens</dt><dd>${text(data.yourReference) || "&nbsp;"}</dd>
-          <dt>Er orderreferens</dt><dd>${text(data.orderReference) || "&nbsp;"}</dd>
+          <dt>Kundnr</dt><dd>${text(data.customerNumber) || '&nbsp;'}</dd>
+          <dt>Er referens</dt><dd>${text(data.yourReference) || '&nbsp;'}</dd>
+          <dt>Er orderreferens</dt><dd>${text(data.orderReference) || '&nbsp;'}</dd>
         </dl>
         <dl class="invoice-header__details">
-          <dt>Vår referens</dt><dd>${text(data.ourReference) || "&nbsp;"}</dd>
-          <dt>Leveransdatum</dt><dd>${text(data.deliveryDate) || "&nbsp;"}</dd>
-          <dt>Förfallodatum</dt><dd>${text(data.dueDate) || "&nbsp;"}</dd>
+          <dt>Vår referens</dt><dd>${text(data.ourReference) || '&nbsp;'}</dd>
+          <dt>Leveransdatum</dt><dd>${text(data.deliveryDate) || '&nbsp;'}</dd>
+          <dt>Förfallodatum</dt><dd>${text(data.dueDate) || '&nbsp;'}</dd>
         </dl>
       </div>
     </header>
@@ -281,9 +289,9 @@ function buildItemRows(items: InvoicePdfItem[]): string {
 
   return items
     .map((item) => {
-      const price = typeof item.price === "number" ? item.price : 0;
-      const discount = typeof item.discount === "number" ? item.discount : 0;
-      const quantity = typeof item.quantity === "number" ? item.quantity : 0;
+      const price = typeof item.price === 'number' ? item.price : 0;
+      const discount = typeof item.discount === 'number' ? item.discount : 0;
+      const quantity = typeof item.quantity === 'number' ? item.quantity : 0;
       const total = quantity * price * (1 - discount / 100);
 
       return `
@@ -291,13 +299,13 @@ function buildItemRows(items: InvoicePdfItem[]): string {
           <td>${text(item.articleNumber)}</td>
           <td class="description">${multilineText(item.description)}</td>
           <td class="r nowrap quantity">${formatInvoiceAmount(quantity)}</td>
-          <td class="nowrap unit">${text(item.unit || "st")}</td>
+          <td class="nowrap unit">${text(item.unit || 'st')}</td>
           <td class="r nowrap amount">${formatInvoiceAmount(price)}</td>
           <td class="r nowrap amount">${formatInvoiceAmount(total)}</td>
         </tr>
       `;
     })
-    .join("");
+    .join('');
 }
 
 const MM_TO_PX = 96 / 25.4;
@@ -306,19 +314,17 @@ const BODY_FONT_SIZE_PX = 15;
 const BODY_LINE_HEIGHT = 1.3;
 const BODY_LINE_HEIGHT_PX = BODY_FONT_SIZE_PX * BODY_LINE_HEIGHT;
 const TABLE_CELL_VERTICAL_PADDING_PX = 10;
-const TABLE_ROW_HEIGHT_PX = Math.ceil(
-  BODY_LINE_HEIGHT_PX + TABLE_CELL_VERTICAL_PADDING_PX,
-);
+const TABLE_ROW_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + TABLE_CELL_VERTICAL_PADDING_PX);
 const TABLE_HEADER_HEIGHT_PX = TABLE_ROW_HEIGHT_PX;
 const REVERSE_VAT_NOTICE_HEIGHT_PX = TABLE_ROW_HEIGHT_PX;
 const HEADER_TOP_SECTION_HEIGHT_PX = 150 + Math.ceil(7 * MM_TO_PX);
 const HEADER_DETAILS_ROWS = 7;
 const HEADER_DETAILS_GAP_PX = Math.ceil(3 * MM_TO_PX);
 const INVOICE_HEADER_HEIGHT_PX = Math.ceil(
-  HEADER_TOP_SECTION_HEIGHT_PX +
-    HEADER_DETAILS_ROWS * BODY_LINE_HEIGHT_PX +
-    HEADER_DETAILS_GAP_PX +
-    1,
+  HEADER_TOP_SECTION_HEIGHT_PX
+    + (HEADER_DETAILS_ROWS * BODY_LINE_HEIGHT_PX)
+    + HEADER_DETAILS_GAP_PX
+    + 1,
 );
 const FOOTER_LINE_COUNT = 4;
 const FOOTER_MARGIN_TOP_PX = 8;
@@ -326,34 +332,25 @@ const FOOTER_BOTTOM_PADDING_PX = Math.ceil(8 * MM_TO_PX);
 const FOOTER_TABLE_PADDING_PX = 14;
 const FOOTER_TABLE_ROW_GAP_PX = 4;
 const INVOICE_FOOTER_HEIGHT_PX = Math.ceil(
-  FOOTER_MARGIN_TOP_PX +
-    FOOTER_BOTTOM_PADDING_PX +
-    FOOTER_TABLE_PADDING_PX +
-    FOOTER_TABLE_ROW_GAP_PX +
-    FOOTER_LINE_COUNT * BODY_LINE_HEIGHT_PX,
+  FOOTER_MARGIN_TOP_PX
+    + FOOTER_BOTTOM_PADDING_PX
+    + FOOTER_TABLE_PADDING_PX
+    + FOOTER_TABLE_ROW_GAP_PX
+    + (FOOTER_LINE_COUNT * BODY_LINE_HEIGHT_PX),
 );
 const INVOICE_TABLE_HEIGHT_PX = Math.max(
   TABLE_ROW_HEIGHT_PX,
   A4_PAGE_HEIGHT_PX - INVOICE_HEADER_HEIGHT_PX - INVOICE_FOOTER_HEIGHT_PX,
 );
 
-function calculateSummaryHeightPx(
-  data: InvoicePdfData,
-  isReverseVAT: boolean,
-): number {
+function calculateSummaryHeightPx(data: InvoicePdfData, isReverseVAT: boolean): number {
   const vatGroups = groupVatByRate(data.items || []);
   const leftLineCount = 1 + (isReverseVAT ? 1 : Math.max(1, vatGroups.length));
   const rightLineCount = 3;
-  const leftBlockHeight =
-    12 +
-    4 +
-    leftLineCount * BODY_LINE_HEIGHT_PX +
-    Math.max(0, leftLineCount - 1) * 4;
-  const rightBlockHeight =
-    1 +
-    8 +
-    rightLineCount * BODY_LINE_HEIGHT_PX +
-    Math.max(0, rightLineCount - 1) * 6;
+  const leftBlockHeight = 12 + 4 + (leftLineCount * BODY_LINE_HEIGHT_PX)
+    + Math.max(0, leftLineCount - 1) * 4;
+  const rightBlockHeight = 1 + 8 + (rightLineCount * BODY_LINE_HEIGHT_PX)
+    + Math.max(0, rightLineCount - 1) * 6;
 
   return Math.ceil(Math.max(leftBlockHeight, rightBlockHeight));
 }
@@ -364,9 +361,9 @@ function calculateReservedTableHeightPx(
   isReverseVAT: boolean,
 ): number {
   return (
-    TABLE_HEADER_HEIGHT_PX +
-    (showSummary && isReverseVAT ? REVERSE_VAT_NOTICE_HEIGHT_PX : 0) +
-    (showSummary ? calculateSummaryHeightPx(data, isReverseVAT) : 0)
+    TABLE_HEADER_HEIGHT_PX
+    + (showSummary && isReverseVAT ? REVERSE_VAT_NOTICE_HEIGHT_PX : 0)
+    + (showSummary ? calculateSummaryHeightPx(data, isReverseVAT) : 0)
   );
 }
 
@@ -375,14 +372,8 @@ function calculateItemsCapacity(
   showSummary: boolean,
   isReverseVAT: boolean,
 ): number {
-  const reservedHeight = calculateReservedTableHeightPx(
-    data,
-    showSummary,
-    isReverseVAT,
-  );
-  return Math.floor(
-    Math.max(0, INVOICE_TABLE_HEIGHT_PX - reservedHeight) / TABLE_ROW_HEIGHT_PX,
-  );
+  const reservedHeight = calculateReservedTableHeightPx(data, showSummary, isReverseVAT);
+  return Math.floor(Math.max(0, INVOICE_TABLE_HEIGHT_PX - reservedHeight) / TABLE_ROW_HEIGHT_PX);
 }
 
 function calculateFillerHeightPx(
@@ -391,14 +382,10 @@ function calculateFillerHeightPx(
   showSummary: boolean,
   isReverseVAT: boolean,
 ): number {
-  const reservedHeight = calculateReservedTableHeightPx(
-    data,
-    showSummary,
-    isReverseVAT,
-  );
+  const reservedHeight = calculateReservedTableHeightPx(data, showSummary, isReverseVAT);
   return Math.max(
     0,
-    INVOICE_TABLE_HEIGHT_PX - reservedHeight - itemCount * TABLE_ROW_HEIGHT_PX,
+    INVOICE_TABLE_HEIGHT_PX - reservedHeight - (itemCount * TABLE_ROW_HEIGHT_PX),
   );
 }
 
@@ -407,15 +394,9 @@ function paginateInvoiceItemsByCount(data: InvoicePdfData): Array<{
   showSummary: boolean;
 }> {
   const items = data.items || [];
-  const isReverseVAT = data.reverseVAT === "true";
-  const fullPageCapacity = Math.max(
-    1,
-    calculateItemsCapacity(data, false, isReverseVAT),
-  );
-  const lastPageCapacity = Math.max(
-    1,
-    calculateItemsCapacity(data, true, isReverseVAT),
-  );
+  const isReverseVAT = data.reverseVAT === 'true';
+  const fullPageCapacity = Math.max(1, calculateItemsCapacity(data, false, isReverseVAT));
+  const lastPageCapacity = Math.max(1, calculateItemsCapacity(data, true, isReverseVAT));
 
   if (items.length === 0) {
     return [{ items: [], showSummary: true }];
@@ -452,24 +433,34 @@ function paginateInvoiceItemsByCount(data: InvoicePdfData): Array<{
 function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
   const items = data.items || [];
   const vatGroups = groupVatByRate(items);
-  const subtotal =
-    data.subtotal ?? vatGroups.reduce((sum, group) => sum + group.base, 0);
-  const totalVat = isReverseVAT
-    ? 0
-    : vatGroups.reduce((sum, group) => sum + group.amount, 0);
+  const subtotal = data.subtotal ?? vatGroups.reduce((sum, group) => sum + group.base, 0);
+  const totalVat = isReverseVAT ? 0 : vatGroups.reduce((sum, group) => sum + group.amount, 0);
   const total = data.total ?? subtotal + totalVat;
+  const rotDeduction = Number(data.rotDeduction) || 0;
+  const rounding = Number(data.rounding) || 0;
+  const roundedTotal = data.roundedTotal ?? Math.round(total - rotDeduction);
   const vatLines = isReverseVAT
-    ? "<dt>Moms (0%)</dt><dd>0,00</dd>"
+    ? '<dt>Moms (0%)</dt><dd>0,00</dd>'
     : vatGroups
-        .map(
-          (group) =>
-            `<dt>Moms (${group.rate}%)</dt><dd>${formatInvoiceAmount(group.amount)}</dd>`,
-        )
-        .join("");
+      .map((group) => `<dt>Moms (${group.rate}%)</dt><dd>${formatInvoiceAmount(group.amount)}</dd>`)
+      .join('');
+
+  // Extra settlement lines: ROT deduction and öresavrundning only show when set,
+  // and are only meaningful when "Att betala" differs from the raw total.
+  const hasSettlement = rotDeduction !== 0 || rounding !== 0;
+  const totalLabel = hasSettlement ? 'Totalbelopp' : 'Att betala';
+  const settlementLines = `
+    <dt>${totalLabel}</dt><dd>${formatInvoiceAmount(total)}</dd>
+    ${rotDeduction ? `<dt>ROT-avdrag</dt><dd>${formatInvoiceAmount(-rotDeduction)}</dd>` : ''}
+    ${rounding ? `<dt>Öresavrundning</dt><dd>${formatInvoiceAmount(rounding)}</dd>` : ''}
+    ${hasSettlement
+      ? `<dt class="invoice-total-box__total">Att betala</dt><dd class="invoice-total-box__total">${formatInvoiceAmount(roundedTotal)}</dd>`
+      : ''}`;
 
   return `
     <tfoot class="invoice-lines__footer">
-      ${isReverseVAT ? '<tr><td colspan="6" style="font-style: italic;">Omvänd skattskyldighet för byggtjänster gäller</td></tr>' : ""}
+      ${isReverseVAT ? '<tr><td colspan="6" style="font-style: italic;">Omvänd skattskyldighet för byggtjänster gäller</td></tr>' : ''}
+      ${data.rotEnabled ? `<tr><td colspan="6" style="font-style: italic;">ROT-avdrag: personnr ${text(data.rotPersonalNumber) || '—'}${data.rotProperty ? `, fastighet ${text(data.rotProperty)}` : ''}</td></tr>` : ''}
       <tr>
         <td colspan="2" style="vertical-align: bottom; width: 40%;">
           <dl class="invoice-summary">
@@ -482,8 +473,7 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
             <dl>
               <dt>Förfallodatum</dt><dd>${text(data.dueDate)}</dd>
               <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber)}</dd>
-              <dt class="invoice-total-box__total">Totalbelopp</dt>
-              <dd class="invoice-total-box__total">${formatInvoiceAmount(total)}</dd>
+              ${settlementLines}
             </dl>
           </div>
         </td>
@@ -498,21 +488,14 @@ function buildLinesTable(
   showSummary: boolean,
   isReverseVAT: boolean,
 ): string {
-  const noteRow =
-    showSummary && isReverseVAT
-      ? '<tr><td colspan="6" style="font-style: italic;">Omvänd skattskyldighet för byggtjänster gäller</td></tr>'
-      : "";
-  const fillerHeightPx = calculateFillerHeightPx(
-    data,
-    items.length,
-    showSummary,
-    isReverseVAT,
-  );
-  const fillerRow =
-    fillerHeightPx > 0
-      ? `<tr class="invoice-lines__filler" style="height:${fillerHeightPx}px;"><td colspan="6"></td></tr>`
-      : "";
-  const summaryFooter = showSummary ? buildSummary(data, isReverseVAT) : "";
+  const noteRow = showSummary && isReverseVAT
+    ? '<tr><td colspan="6" style="font-style: italic;">Omvänd skattskyldighet för byggtjänster gäller</td></tr>'
+    : '';
+  const fillerHeightPx = calculateFillerHeightPx(data, items.length, showSummary, isReverseVAT);
+  const fillerRow = fillerHeightPx > 0
+    ? `<tr class="invoice-lines__filler" style="height:${fillerHeightPx}px;"><td colspan="6"></td></tr>`
+    : '';
+  const summaryFooter = showSummary ? buildSummary(data, isReverseVAT) : '';
 
   return `
     <table class="invoice-lines" style="height:${INVOICE_TABLE_HEIGHT_PX}px;">
@@ -550,7 +533,7 @@ function buildInvoicePdfPage(
   items: InvoicePdfItem[],
   opts: { showSummary: boolean },
 ): string {
-  const isReverseVAT = data.reverseVAT === "true";
+  const isReverseVAT = data.reverseVAT === 'true';
 
   return `
     <section class="invoice-page">
@@ -574,18 +557,13 @@ function buildFooter(footer: InvoicePdfCompanyFooter = {}): string {
   `;
 }
 
-export function buildInvoicePdfHtmlPuppeteer(
-  data: InvoicePdfData,
-  logoDataUrl = "",
-): string {
+export function buildInvoicePdfHtmlPuppeteer(data: InvoicePdfData, logoDataUrl = ''): string {
   const pages = paginateInvoiceItemsByCount(data);
   const pagesHtml = pages
-    .map((page) =>
-      buildInvoicePdfPage(data, logoDataUrl, page.items, {
-        showSummary: page.showSummary,
-      }),
-    )
-    .join("");
+    .map((page) => buildInvoicePdfPage(data, logoDataUrl, page.items, {
+      showSummary: page.showSummary,
+    }))
+    .join('');
 
   return `<!DOCTYPE html>
 <html lang="sv">

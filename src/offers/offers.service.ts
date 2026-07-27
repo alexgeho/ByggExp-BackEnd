@@ -3,22 +3,20 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from "@nestjs/common";
-import { InjectModel } from "@nestjs/mongoose";
-import { Model } from "mongoose";
-import { existsSync } from "fs";
-import { readFile } from "fs/promises";
-import path from "path";
-import { UserRole } from "../users/schemas/user.schema";
-import { Company, CompanyDocument } from "../company/schemas/company.schema";
-import { launchForInvoicePdf } from "../invoices/puppeteer-launch";
-import {
-  buildOfferPdfHtml,
-  OfferPdfData,
-} from "./templates/offer-pdf.template";
-import { CreateOfferDto } from "./dto/create-offer.dto";
-import { UpdateOfferDto } from "./dto/update-offer.dto";
-import { Offer, OfferDocument, OfferStatus } from "./schemas/offer.schema";
+} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { existsSync } from 'fs';
+import { readFile } from 'fs/promises';
+import path from 'path';
+import { UserRole } from '../users/schemas/user.schema';
+import { Company, CompanyDocument } from '../company/schemas/company.schema';
+import { launchForInvoicePdf } from '../invoices/puppeteer-launch';
+import { buildOfferPdfHtml, OfferPdfData } from './templates/offer-pdf.template';
+import { computeOfferTotals as computeOfferTotalsMath } from './offer-math';
+import { CreateOfferDto } from './dto/create-offer.dto';
+import { UpdateOfferDto } from './dto/update-offer.dto';
+import { Offer, OfferDocument, OfferStatus } from './schemas/offer.schema';
 
 type AuthUser = {
   role: UserRole;
@@ -35,13 +33,27 @@ export class OffersService {
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
   ) {}
 
+  // Totals are computed from the line items server-side so the offer PDF and a
+  // converted invoice always agree; the pure math lives in ./offer-math.
+  private computeOfferTotals(
+    items: Array<{
+      quantity?: number;
+      price?: number;
+      discount?: number;
+      vatRate?: number;
+    }> = [],
+  ): { subtotal: number; vat: number; total: number } {
+    return computeOfferTotalsMath(items);
+  }
+
   async create(dto: CreateOfferDto, user: AuthUser): Promise<Offer> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
     const offerNumber = await this.getNextOfferNumber(companyId);
+    const totals = this.computeOfferTotals(dto.items || []);
     // Snapshot the company logo so the offer PDF shows it.
     const company = await this.companyModel
       .findById(companyId)
-      .select("logoUrl")
+      .select('logoUrl')
       .lean()
       .exec();
 
@@ -53,9 +65,9 @@ export class OffersService {
       date: dto.date || today(),
       contactPersons: dto.contactPersons || [],
       items: dto.items || [],
-      subtotal: dto.subtotal ?? 0,
-      vat: dto.vat ?? 0,
-      total: dto.total ?? 0,
+      subtotal: totals.subtotal,
+      vat: totals.vat,
+      total: totals.total,
       status: dto.status || OfferStatus.Draft,
       logoUrl: dto.logoUrl ?? company?.logoUrl ?? null,
     });
@@ -79,6 +91,17 @@ export class OffersService {
       description: offer.description,
       clarifications: offer.clarifications,
       contactPersons: offer.contactPersons,
+      items: (offer.items || []).map((it) => ({
+        description: it?.description,
+        quantity: it?.quantity,
+        unit: it?.unit,
+        price: it?.price,
+        discount: it?.discount,
+        vatRate: it?.vatRate,
+      })),
+      subtotal: offer.subtotal,
+      vat: offer.vat,
+      total: offer.total,
       companyFooter,
     };
 
@@ -91,11 +114,11 @@ export class OffersService {
 
     try {
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: "load" });
+      await page.setContent(html, { waitUntil: 'load' });
       const pdfBuffer = await page.pdf({
-        format: "A4",
+        format: 'A4',
         printBackground: true,
-        margin: { top: "0", bottom: "0", left: "0", right: "0" },
+        margin: { top: '0', bottom: '0', left: '0', right: '0' },
         preferCSSPageSize: true,
       });
 
@@ -109,38 +132,34 @@ export class OffersService {
     const company = await this.companyModel.findById(companyId).lean().exec();
     const fskatt = company?.vatStatus;
     const vatStatus =
-      fskatt === "true"
-        ? "Godkänd för F-skatt"
-        : !fskatt || fskatt === "false"
-          ? ""
+      fskatt === 'true'
+        ? 'Godkänd för F-skatt'
+        : !fskatt || fskatt === 'false'
+          ? ''
           : fskatt;
 
     return {
-      name: company?.name || "",
-      address: company?.address || "",
-      city: company?.city || "",
-      phone: company?.phone || "",
-      email: company?.email || "",
-      website: company?.website || "",
-      orgNumber: company?.orgNumber || "",
-      vatNumber: company?.vatNumber || "",
+      name: company?.name || '',
+      address: company?.address || '',
+      city: company?.city || '',
+      phone: company?.phone || '',
+      email: company?.email || '',
+      website: company?.website || '',
+      orgNumber: company?.orgNumber || '',
+      vatNumber: company?.vatNumber || '',
       vatStatus,
     };
   }
 
   private async getLogoDataUrl(logoUrl?: string | null): Promise<string> {
-    if (
-      !logoUrl ||
-      logoUrl.startsWith("http://") ||
-      logoUrl.startsWith("https://")
-    ) {
-      return "";
+    if (!logoUrl || logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
+      return '';
     }
 
-    const relativePath = logoUrl.startsWith("/") ? logoUrl.slice(1) : logoUrl;
+    const relativePath = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
     const candidates = [
       path.join(process.cwd(), relativePath),
-      path.join(process.cwd(), "public", relativePath),
+      path.join(process.cwd(), 'public', relativePath),
     ];
 
     for (const filePath of candidates) {
@@ -148,11 +167,11 @@ export class OffersService {
         continue;
       }
       const buffer = await readFile(filePath);
-      const ext = path.extname(filePath).slice(1) || "png";
-      return `data:image/${ext};base64,${buffer.toString("base64")}`;
+      const ext = path.extname(filePath).slice(1) || 'png';
+      return `data:image/${ext};base64,${buffer.toString('base64')}`;
     }
 
-    return "";
+    return '';
   }
 
   async findAccessible(user: AuthUser): Promise<Offer[]> {
@@ -179,12 +198,11 @@ export class OffersService {
     return offer;
   }
 
-  async update(
-    id: string,
-    dto: UpdateOfferDto,
-    user: AuthUser,
-  ): Promise<OfferDocument> {
+  async update(id: string, dto: UpdateOfferDto, user: AuthUser): Promise<OfferDocument> {
     const offer = await this.findOne(id, user);
+
+    const items = dto.items ?? offer.items;
+    const totals = this.computeOfferTotals(items || []);
 
     Object.assign(offer, {
       ...dto,
@@ -192,10 +210,10 @@ export class OffersService {
       createdByUserId: offer.createdByUserId,
       offerNumber: offer.offerNumber,
       contactPersons: dto.contactPersons ?? offer.contactPersons,
-      items: dto.items ?? offer.items,
-      subtotal: dto.subtotal ?? offer.subtotal,
-      vat: dto.vat ?? offer.vat,
-      total: dto.total ?? offer.total,
+      items,
+      subtotal: totals.subtotal,
+      vat: totals.vat,
+      total: totals.total,
     });
 
     await offer.save();
@@ -210,7 +228,7 @@ export class OffersService {
 
   async copy(id: string, user: AuthUser): Promise<Offer> {
     const source = await this.findOne(id, user);
-    const raw = source.toObject();
+    const raw = (source as OfferDocument).toObject();
     const offerNumber = await this.getNextOfferNumber(source.companyId);
     const payload = { ...raw } as Record<string, unknown>;
 
@@ -234,31 +252,25 @@ export class OffersService {
     const latest = await this.offerModel
       .findOne({ companyId })
       .sort({ offerNumber: -1 })
-      .select("offerNumber")
+      .select('offerNumber')
       .lean()
       .exec();
 
     const last = latest?.offerNumber;
-    return typeof last === "number" && !Number.isNaN(last) ? last + 1 : 1;
+    return typeof last === 'number' && !Number.isNaN(last) ? last + 1 : 1;
   }
 
-  async getNextOfferNumberForUser(
-    user: AuthUser,
-    companyId?: string,
-  ): Promise<{ offerNumber: number }> {
+  async getNextOfferNumberForUser(user: AuthUser, companyId?: string): Promise<{ offerNumber: number }> {
     const resolvedCompanyId = this.resolveCompanyId(companyId, user);
     const offerNumber = await this.getNextOfferNumber(resolvedCompanyId);
 
     return { offerNumber };
   }
 
-  private resolveCompanyId(
-    _companyId: string | undefined,
-    user: AuthUser,
-  ): string {
+  private resolveCompanyId(_companyId: string | undefined, user: AuthUser): string {
     // Every actor (superadmin included) creates only within its own company.
     if (!user.companyId) {
-      throw new ForbiddenException("Your account is not attached to a company");
+      throw new ForbiddenException('Your account is not attached to a company');
     }
 
     return user.companyId;
@@ -266,7 +278,7 @@ export class OffersService {
 
   private assertCanAccess(offer: Offer, user: AuthUser): void {
     if (!user.companyId || String(offer.companyId) !== String(user.companyId)) {
-      throw new ForbiddenException("You do not have access to this offer");
+      throw new ForbiddenException('You do not have access to this offer');
     }
   }
 }

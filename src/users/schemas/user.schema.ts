@@ -77,6 +77,11 @@ export class User {
   @Prop({ default: "" })
   profession: string;
 
+  // Hourly wage in SEK, used by the payroll module to turn worked hours into a
+  // salary amount. Null until an admin sets it.
+  @Prop({ type: Number, default: null })
+  hourlyRate?: number | null;
+
   @Prop({ default: "" })
   avatarUrl: string;
 

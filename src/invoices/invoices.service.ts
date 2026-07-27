@@ -2,29 +2,28 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
-} from "@nestjs/common";
-import { InjectModel } from "@nestjs/mongoose";
-import { existsSync } from "fs";
-import { readFile } from "fs/promises";
-import { Model } from "mongoose";
-import path from "path";
-import { Company, CompanyDocument } from "../company/schemas/company.schema";
-import { MailService } from "../mail/mail.service";
-import { UserRole } from "../users/schemas/user.schema";
-import { CreateInvoiceDto, InvoiceItemDto } from "./dto/create-invoice.dto";
-import { UpdateInvoiceDto } from "./dto/update-invoice.dto";
-import { generateOCR } from "./generate-ocr";
-import {
-  Invoice,
-  InvoiceDocument,
-  InvoiceStatus,
-} from "./schemas/invoice.schema";
-import { launchForInvoicePdf } from "./puppeteer-launch";
+} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { existsSync } from 'fs';
+import { readFile } from 'fs/promises';
+import { Model } from 'mongoose';
+import path from 'path';
+import { Company, CompanyDocument } from '../company/schemas/company.schema';
+import { MailService } from '../mail/mail.service';
+import { UserRole } from '../users/schemas/user.schema';
+import { CreateInvoiceDto, InvoiceItemDto } from './dto/create-invoice.dto';
+import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { generateOCR } from './generate-ocr';
+import { calculateInvoiceTotals, deriveInvoiceSettlement } from './invoice-math';
+import { Invoice, InvoiceDocument, InvoiceStatus } from './schemas/invoice.schema';
+import { launchForInvoicePdf } from './puppeteer-launch';
 import {
   buildInvoicePdfHtmlPuppeteer,
   InvoicePdfData,
-} from "./templates/invoice-pdf.template";
+} from './templates/invoice-pdf.template';
 
 type AuthUser = {
   role: UserRole;
@@ -40,11 +39,28 @@ type InvoiceTotals = {
 
 @Injectable()
 export class InvoicesService {
+  private readonly logger = new Logger(InvoicesService.name);
+
   constructor(
     @InjectModel(Invoice.name) private invoiceModel: Model<InvoiceDocument>,
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
     private readonly mailService: MailService,
   ) {}
+
+  // Flip "sent" invoices to "overdue" once their due date has passed. dueDate is
+  // stored as a plain YYYY-MM-DD string, so a lexicographic `$lt` against today
+  // is a correct date comparison. `$gt: ''` skips invoices with no due date.
+  @Cron(CronExpression.EVERY_HOUR)
+  async markOverdueInvoices(): Promise<void> {
+    const today = new Date().toISOString().slice(0, 10);
+    const result = await this.invoiceModel.updateMany(
+      { status: InvoiceStatus.Sent, dueDate: { $gt: '', $lt: today } },
+      { $set: { status: InvoiceStatus.Overdue } },
+    );
+    if (result.modifiedCount) {
+      this.logger.log(`Marked ${result.modifiedCount} invoice(s) overdue`);
+    }
+  }
 
   async sendByEmail(
     id: string,
@@ -53,35 +69,69 @@ export class InvoicesService {
     message?: string,
   ): Promise<{ sent: boolean; to: string }> {
     const invoice = await this.findOne(id, user);
-    const to = (email || invoice.email || "").trim();
+    const to = (email || invoice.email || '').trim();
     if (!to) {
       throw new BadRequestException(
-        "No recipient email — set the customer email or provide one",
+        'No recipient email — set the customer email or provide one',
       );
     }
     const pdf = await this.buildInvoicePdf(id, user);
-    return this.mailService.sendInvoiceEmail(to, {
+    const result = await this.mailService.sendInvoiceEmail(to, {
       invoiceNumber: invoice.invoiceNumber,
       senderName: invoice.companyFooter?.name,
       dueDate: invoice.dueDate,
       message,
       pdf,
     });
+
+    // Emailing a draft moves it to "sent" (a paid invoice stays paid).
+    if (result.sent && invoice.status === InvoiceStatus.Draft) {
+      invoice.status = InvoiceStatus.Sent;
+      invoice.sentAt = new Date();
+      await invoice.save();
+    }
+
+    return result;
+  }
+
+  async setStatus(
+    id: string,
+    user: AuthUser,
+    status: InvoiceStatus,
+  ): Promise<InvoiceDocument> {
+    const invoice = await this.findOne(id, user);
+    invoice.status = status;
+    if (status === InvoiceStatus.Sent) {
+      invoice.sentAt = invoice.sentAt || new Date();
+    } else if (status === InvoiceStatus.Paid) {
+      invoice.paidAt = invoice.paidAt || new Date();
+    } else if (status === InvoiceStatus.Draft) {
+      invoice.sentAt = null;
+      invoice.paidAt = null;
+    }
+    await invoice.save();
+    return invoice;
+  }
+
+  // ROT-avdrag + öresavrundning; the pure math lives in ./invoice-math.
+  private deriveSettlement(
+    total: number,
+    dto: { rotEnabled?: boolean; rotLaborAmount?: number },
+  ): { rotDeduction: number; rounding: number; roundedTotal: number } {
+    return deriveInvoiceSettlement(total, dto);
   }
 
   async create(dto: CreateInvoiceDto, user: AuthUser): Promise<Invoice> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
     const invoiceNumber = await this.getNextInvoiceNumber(companyId);
-    const totals = this.calculateTotals(
-      dto.items || [],
-      dto.reverseVAT === "true",
-    );
+    const totals = this.calculateTotals(dto.items || [], dto.reverseVAT === 'true');
+    const settlement = this.deriveSettlement(totals.total, dto);
     const companyFooter = await this.resolveCompanyFooter(companyId, dto);
     // Snapshot the company logo onto the invoice so the PDF shows it (and stays
     // fixed even if the company later changes its logo).
     const company = await this.companyModel
       .findById(companyId)
-      .select("logoUrl")
+      .select('logoUrl')
       .lean()
       .exec();
     const logoUrl = dto.logoUrl ?? company?.logoUrl ?? null;
@@ -93,9 +143,12 @@ export class InvoicesService {
       invoiceNumber,
       ocr: generateOCR(invoiceNumber),
       items: dto.items || [],
-      subtotal: dto.subtotal ?? totals.subtotal,
-      vat: dto.vat ?? totals.vat,
-      total: dto.total ?? totals.total,
+      subtotal: totals.subtotal,
+      vat: totals.vat,
+      total: totals.total,
+      rotDeduction: settlement.rotDeduction,
+      rounding: settlement.rounding,
+      roundedTotal: settlement.roundedTotal,
       status: dto.status || InvoiceStatus.Draft,
       companyFooter,
       logoUrl,
@@ -128,15 +181,28 @@ export class InvoicesService {
     return invoice;
   }
 
-  async update(
-    id: string,
-    dto: UpdateInvoiceDto,
-    user: AuthUser,
-  ): Promise<InvoiceDocument> {
+  // A sent/paid invoice is a booked accounting record — its content is
+  // immutable (Bokföringslagen). Only drafts may be edited or deleted, which
+  // also keeps the invoice number series gap-free. Corrections go through a
+  // credit note.
+  private assertDraft(invoice: InvoiceDocument, action: string): void {
+    if (invoice.status !== InvoiceStatus.Draft) {
+      throw new BadRequestException(
+        `A ${invoice.status} invoice cannot be ${action}. Issue a credit note instead.`,
+      );
+    }
+  }
+
+  async update(id: string, dto: UpdateInvoiceDto, user: AuthUser): Promise<InvoiceDocument> {
     const invoice = await this.findOne(id, user);
+    this.assertDraft(invoice, 'edited');
     const items = dto.items ?? invoice.items;
-    const isReverseVAT = (dto.reverseVAT ?? invoice.reverseVAT) === "true";
+    const isReverseVAT = (dto.reverseVAT ?? invoice.reverseVAT) === 'true';
     const totals = this.calculateTotals(items || [], isReverseVAT);
+    const settlement = this.deriveSettlement(totals.total, {
+      rotEnabled: dto.rotEnabled ?? invoice.rotEnabled,
+      rotLaborAmount: dto.rotLaborAmount ?? invoice.rotLaborAmount,
+    });
 
     Object.assign(invoice, {
       ...dto,
@@ -145,9 +211,12 @@ export class InvoicesService {
       invoiceNumber: invoice.invoiceNumber,
       ocr: invoice.ocr,
       items,
-      subtotal: dto.subtotal ?? totals.subtotal,
-      vat: dto.vat ?? totals.vat,
-      total: dto.total ?? totals.total,
+      subtotal: totals.subtotal,
+      vat: totals.vat,
+      total: totals.total,
+      rotDeduction: settlement.rotDeduction,
+      rounding: settlement.rounding,
+      roundedTotal: settlement.roundedTotal,
     });
 
     await invoice.save();
@@ -156,13 +225,14 @@ export class InvoicesService {
 
   async remove(id: string, user: AuthUser): Promise<Invoice> {
     const invoice = await this.findOne(id, user);
+    this.assertDraft(invoice, 'deleted');
     await this.invoiceModel.findByIdAndDelete(id).exec();
     return invoice;
   }
 
   async copy(id: string, user: AuthUser): Promise<Invoice> {
     const source = await this.findOne(id, user);
-    const raw = source.toObject();
+    const raw = (source as InvoiceDocument).toObject();
     const invoiceNumber = await this.getNextInvoiceNumber(source.companyId);
     const payload = { ...raw } as Record<string, unknown>;
 
@@ -183,22 +253,75 @@ export class InvoicesService {
     return copy.save();
   }
 
+  // A credit note (kreditfaktura) reverses a booked invoice with negated
+  // amounts instead of editing/deleting it. It starts as a draft you can send.
+  async createCreditNote(id: string, user: AuthUser): Promise<Invoice> {
+    const source = await this.findOne(id, user);
+    if (source.status === InvoiceStatus.Draft) {
+      throw new BadRequestException(
+        'A draft invoice can be edited directly — no credit note needed',
+      );
+    }
+    if (source.creditOfNumber) {
+      throw new BadRequestException('A credit note cannot itself be credited');
+    }
+
+    const raw = (source as InvoiceDocument).toObject() as Record<string, unknown>;
+    const invoiceNumber = await this.getNextInvoiceNumber(source.companyId);
+    const neg = (n: unknown) => -(Number(n) || 0);
+
+    ['_id', 'id', 'createdAt', 'updatedAt', '__v', 'sentAt', 'paidAt'].forEach(
+      (k) => delete raw[k],
+    );
+
+    // Everything is negated (it reverses the original). ROT settlement is
+    // recomputed from the negated total + negated labour so the deduction,
+    // rounding and "Att betala" all carry the right sign consistently.
+    const negTotal = neg(source.total);
+    const rotLaborAmount = neg(source.rotLaborAmount);
+    const settlement = this.deriveSettlement(negTotal, {
+      rotEnabled: source.rotEnabled,
+      rotLaborAmount,
+    });
+
+    const creditNote = new this.invoiceModel({
+      ...raw,
+      invoiceNumber,
+      ocr: generateOCR(invoiceNumber),
+      status: InvoiceStatus.Draft,
+      createdByUserId: user.userId,
+      creditOfId: String((source as InvoiceDocument)._id),
+      creditOfNumber: source.invoiceNumber,
+      date: new Date().toISOString().slice(0, 10),
+      items: (source.items || []).map((it) => ({
+        ...(it as Record<string, unknown>),
+        quantity: neg((it as { quantity?: number }).quantity),
+      })),
+      subtotal: neg(source.subtotal),
+      vat: neg(source.vat),
+      total: negTotal,
+      rotLaborAmount,
+      rotDeduction: settlement.rotDeduction,
+      rounding: settlement.rounding,
+      roundedTotal: settlement.roundedTotal,
+    });
+
+    return creditNote.save();
+  }
+
   async getNextInvoiceNumber(companyId: string): Promise<number> {
     const latest = await this.invoiceModel
       .findOne({ companyId })
       .sort({ invoiceNumber: -1 })
-      .select("invoiceNumber")
+      .select('invoiceNumber')
       .lean()
       .exec();
 
     const last = latest?.invoiceNumber;
-    return typeof last === "number" && !Number.isNaN(last) ? last + 1 : 1;
+    return typeof last === 'number' && !Number.isNaN(last) ? last + 1 : 1;
   }
 
-  async getNextInvoiceNumberForUser(
-    user: AuthUser,
-    companyId?: string,
-  ): Promise<{ invoiceNumber: number; ocr: string }> {
+  async getNextInvoiceNumberForUser(user: AuthUser, companyId?: string): Promise<{ invoiceNumber: number; ocr: string }> {
     const resolvedCompanyId = this.resolveCompanyId(companyId, user);
     const invoiceNumber = await this.getNextInvoiceNumber(resolvedCompanyId);
 
@@ -222,11 +345,11 @@ export class InvoicesService {
 
     try {
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: "load" });
+      await page.setContent(html, { waitUntil: 'load' });
       const pdfBuffer = await page.pdf({
-        format: "A4",
+        format: 'A4',
         printBackground: true,
-        margin: { top: "0", bottom: "0", left: "0", right: "0" },
+        margin: { top: '0', bottom: '0', left: '0', right: '0' },
         preferCSSPageSize: true,
       });
 
@@ -236,56 +359,23 @@ export class InvoicesService {
     }
   }
 
-  private resolveCompanyId(
-    _companyId: string | undefined,
-    user: AuthUser,
-  ): string {
+  private resolveCompanyId(_companyId: string | undefined, user: AuthUser): string {
     // Every actor (superadmin included) creates only within its own company.
     if (!user.companyId) {
-      throw new ForbiddenException("Your account is not attached to a company");
+      throw new ForbiddenException('Your account is not attached to a company');
     }
 
     return user.companyId;
   }
 
   private assertCanAccess(invoice: Invoice, user: AuthUser): void {
-    if (
-      !user.companyId ||
-      String(invoice.companyId) !== String(user.companyId)
-    ) {
-      throw new ForbiddenException("You do not have access to this invoice");
+    if (!user.companyId || String(invoice.companyId) !== String(user.companyId)) {
+      throw new ForbiddenException('You do not have access to this invoice');
     }
   }
 
-  private calculateTotals(
-    items: InvoiceItemDto[],
-    reverseVAT: boolean,
-  ): InvoiceTotals {
-    const subtotal = items.reduce((sum, item) => {
-      const quantity = Number(item.quantity ?? 0);
-      const price = Number(item.price ?? 0);
-      const discount = Number(item.discount ?? 0);
-
-      return sum + quantity * price * (1 - discount / 100);
-    }, 0);
-    const vat = reverseVAT
-      ? 0
-      : items.reduce((sum, item) => {
-          const quantity = Number(item.quantity ?? 0);
-          const price = Number(item.price ?? 0);
-          const discount = Number(item.discount ?? 0);
-          const vatRate = Number(item.vatRate ?? 25);
-
-          return (
-            sum + quantity * price * (1 - discount / 100) * (vatRate / 100)
-          );
-        }, 0);
-
-    return {
-      subtotal,
-      vat,
-      total: subtotal + vat,
-    };
+  private calculateTotals(items: InvoiceItemDto[], reverseVAT: boolean): InvoiceTotals {
+    return calculateInvoiceTotals(items, reverseVAT);
   }
 
   private async resolveCompanyFooter(
@@ -302,21 +392,21 @@ export class InvoicesService {
     // it into the label the invoice footer should print.
     const fskatt = company?.vatStatus;
     const vatStatus =
-      fskatt === "true"
-        ? "Godkänd för F-skatt"
-        : !fskatt || fskatt === "false"
-          ? ""
+      fskatt === 'true'
+        ? 'Godkänd för F-skatt'
+        : !fskatt || fskatt === 'false'
+          ? ''
           : fskatt;
 
     return {
-      name: company?.name || "",
-      address: company?.address || "",
-      city: company?.city || "",
-      phone: company?.phone || "",
-      email: company?.email || "",
-      website: company?.website || "",
-      orgNumber: company?.orgNumber || "",
-      vatNumber: company?.vatNumber || "",
+      name: company?.name || '',
+      address: company?.address || '',
+      city: company?.city || '',
+      phone: company?.phone || '',
+      email: company?.email || '',
+      website: company?.website || '',
+      orgNumber: company?.orgNumber || '',
+      vatNumber: company?.vatNumber || '',
       vatStatus,
     };
   }
@@ -341,6 +431,13 @@ export class InvoicesService {
       subtotal: invoice.subtotal,
       vat: invoice.vat,
       total: invoice.total,
+      rotEnabled: invoice.rotEnabled,
+      rotPersonalNumber: invoice.rotPersonalNumber,
+      rotProperty: invoice.rotProperty,
+      rotDeduction: invoice.rotDeduction,
+      rounding: invoice.rounding,
+      roundedTotal: invoice.roundedTotal,
+      creditOfNumber: invoice.creditOfNumber,
       dueDate: invoice.dueDate,
       ocr: invoice.ocr,
       companyFooter: invoice.companyFooter,
@@ -348,18 +445,14 @@ export class InvoicesService {
   }
 
   private async getLogoDataUrl(logoUrl?: string | null): Promise<string> {
-    if (
-      !logoUrl ||
-      logoUrl.startsWith("http://") ||
-      logoUrl.startsWith("https://")
-    ) {
-      return "";
+    if (!logoUrl || logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
+      return '';
     }
 
-    const relativePath = logoUrl.startsWith("/") ? logoUrl.slice(1) : logoUrl;
+    const relativePath = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
     const candidates = [
       path.join(process.cwd(), relativePath),
-      path.join(process.cwd(), "public", relativePath),
+      path.join(process.cwd(), 'public', relativePath),
     ];
 
     for (const filePath of candidates) {
@@ -368,10 +461,10 @@ export class InvoicesService {
       }
 
       const buffer = await readFile(filePath);
-      const ext = path.extname(filePath).slice(1) || "png";
-      return `data:image/${ext};base64,${buffer.toString("base64")}`;
+      const ext = path.extname(filePath).slice(1) || 'png';
+      return `data:image/${ext};base64,${buffer.toString('base64')}`;
     }
 
-    return "";
+    return '';
   }
 }

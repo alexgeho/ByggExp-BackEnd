@@ -22,6 +22,29 @@ export class OfferContactPerson {
 const OfferContactPersonSchema =
   SchemaFactory.createForClass(OfferContactPerson);
 
+@Schema({ _id: false })
+export class OfferItem {
+  @Prop({ default: '' })
+  description?: string;
+
+  @Prop({ type: Number, default: 1 })
+  quantity?: number;
+
+  @Prop({ default: 'st' })
+  unit?: string;
+
+  @Prop({ type: Number, default: 0 })
+  price?: number;
+
+  @Prop({ type: Number, default: 0 })
+  discount?: number;
+
+  @Prop({ type: Number, default: 25 })
+  vatRate?: number;
+}
+
+const OfferItemSchema = SchemaFactory.createForClass(OfferItem);
+
 @Schema({ timestamps: true, strict: false })
 export class Offer {
   @Prop({ ref: "Company", required: true, index: true })
@@ -63,8 +86,8 @@ export class Offer {
   @Prop({ type: String, default: null })
   logoUrl?: string | null;
 
-  @Prop({ type: Array, default: [] })
-  items: unknown[];
+  @Prop({ type: [OfferItemSchema], default: [] })
+  items: OfferItem[];
 
   @Prop({ type: Number, default: 0 })
   subtotal: number;

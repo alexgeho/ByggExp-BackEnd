@@ -19,6 +19,32 @@ export class OfferContactPersonDto {
   name?: string;
 }
 
+export class OfferItemDto {
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsNumber()
+  quantity?: number;
+
+  @IsOptional()
+  @IsString()
+  unit?: string;
+
+  @IsOptional()
+  @IsNumber()
+  price?: number;
+
+  @IsOptional()
+  @IsNumber()
+  discount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  vatRate?: number;
+}
+
 export class CreateOfferDto {
   @IsOptional()
   @IsString()
@@ -68,7 +94,9 @@ export class CreateOfferDto {
 
   @IsOptional()
   @IsArray()
-  items?: unknown[];
+  @ValidateNested({ each: true })
+  @Type(() => OfferItemDto)
+  items?: OfferItemDto[];
 
   @IsOptional()
   @IsNumber()

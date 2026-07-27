@@ -19,6 +19,7 @@ import { NotificationsModule } from "./notifications/notifications.module";
 import { TaskRemindersModule } from "./task-reminders/task-reminders.module";
 import { ToolsModule } from "./tools/tools.module";
 import { InvoicesModule } from "./invoices/invoices.module";
+import { PayrollModule } from "./payroll/payroll.module";
 import { ClientsModule } from "./clients/clients.module";
 import { ArticlesModule } from "./articles/articles.module";
 import { OffersModule } from "./offers/offers.module";
@@ -46,6 +47,7 @@ import { BlogPostsModule } from "./blog-posts/blog-posts.module";
     TaskRemindersModule,
     ToolsModule,
     InvoicesModule,
+    PayrollModule,
     OffersModule,
     ClientsModule,
     ArticlesModule,

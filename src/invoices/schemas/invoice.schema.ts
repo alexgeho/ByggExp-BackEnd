@@ -153,8 +153,46 @@ export class Invoice {
   @Prop({ type: Number, default: 0 })
   total: number;
 
+  // Öresavrundning: rounding of the grand total to the nearest whole krona and
+  // the resulting rounded amount to pay.
+  @Prop({ type: Number, default: 0 })
+  rounding: number;
+
+  @Prop({ type: Number, default: 0 })
+  roundedTotal: number;
+
+  // ROT-avdrag (tax deduction for labour on private homes). rotDeduction is the
+  // amount subtracted from what the customer pays; the state pays it to you.
+  @Prop({ type: Boolean, default: false })
+  rotEnabled: boolean;
+
+  @Prop({ default: '' })
+  rotPersonalNumber: string;
+
+  @Prop({ default: '' })
+  rotProperty: string;
+
+  @Prop({ type: Number, default: 0 })
+  rotLaborAmount: number;
+
+  @Prop({ type: Number, default: 0 })
+  rotDeduction: number;
+
+  // Credit note (kreditfaktura): when set, this invoice reverses another.
+  @Prop({ type: String, ref: 'Invoice', default: null })
+  creditOfId?: string | null;
+
+  @Prop({ type: Number, default: null })
+  creditOfNumber?: number | null;
+
   @Prop({ enum: InvoiceStatus, default: InvoiceStatus.Draft })
   status: InvoiceStatus;
+
+  @Prop({ type: Date, default: null })
+  sentAt?: Date | null;
+
+  @Prop({ type: Date, default: null })
+  paidAt?: Date | null;
 
   @Prop({ type: InvoiceCompanyFooterSchema, default: () => ({}) })
   companyFooter: InvoiceCompanyFooter;

@@ -15,6 +15,15 @@ export type OfferPdfContactPerson = {
   name?: string;
 };
 
+export type OfferPdfItem = {
+  description?: string;
+  quantity?: number;
+  unit?: string;
+  price?: number;
+  discount?: number;
+  vatRate?: number;
+};
+
 export type OfferPdfData = {
   offerNumber?: string;
   companyName?: string;
@@ -26,6 +35,10 @@ export type OfferPdfData = {
   description?: string;
   clarifications?: string;
   contactPersons?: OfferPdfContactPerson[];
+  items?: OfferPdfItem[];
+  subtotal?: number;
+  vat?: number;
+  total?: number;
   companyFooter?: OfferPdfCompanyFooter;
 };
 
@@ -75,6 +88,17 @@ body {
   margin: 0 0 18px;
   white-space: pre-wrap;
 }
+.offer-items { width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 13px; }
+.offer-items th {
+  text-align: left; border-bottom: 1.5px solid #1b2a3a; padding: 6px 8px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b;
+}
+.offer-items td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+.offer-items .num { text-align: right; white-space: nowrap; }
+.offer-totals { width: 100%; margin: 0 0 18px; }
+.offer-totals table { margin-left: auto; border-collapse: collapse; font-size: 14px; }
+.offer-totals td { padding: 3px 0 3px 24px; text-align: right; }
+.offer-totals .grand td { border-top: 1.5px solid #1b2a3a; font-size: 17px; font-weight: bold; padding-top: 7px; }
 .offer-contacts { margin: 0 0 18px; }
 .offer-contacts__row { font-size: 14px; }
 .offer-footer {
@@ -91,15 +115,15 @@ body {
 
 function escapeHtml(value: string): string {
   return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function text(value?: string | number | null): string {
-  if (value === null || value === undefined) return "";
+  if (value === null || value === undefined) return '';
   return escapeHtml(String(value));
 }
 
@@ -108,13 +132,60 @@ function multiline(value?: string): string {
 }
 
 function section(title: string, body: string): string {
-  if (!body || !body.trim()) return "";
+  if (!body || !body.trim()) return '';
   return `
     <div class="offer-section">
       <p class="offer-section__title">${title}</p>
       <div class="offer-section__text">${multiline(body)}</div>
     </div>
   `;
+}
+
+function money(value?: number): string {
+  return new Intl.NumberFormat('sv-SE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0);
+}
+
+function buildItemsHtml(items: OfferPdfItem[], data: OfferPdfData): string {
+  const rows = items
+    .map((it) => {
+      const q = Number(it.quantity || 0);
+      const p = Number(it.price || 0);
+      const d = Number(it.discount || 0);
+      const amount = q * p * (1 - d / 100);
+      return `
+        <tr>
+          <td>${multiline(it.description || '')}</td>
+          <td class="num">${money(q).replace(',00', '')}</td>
+          <td>${text(it.unit || 'st')}</td>
+          <td class="num">${money(p)}</td>
+          <td class="num">${money(amount)}</td>
+        </tr>`;
+    })
+    .join('');
+
+  return `
+    <table class="offer-items">
+      <thead>
+        <tr>
+          <th>Beskrivning</th>
+          <th class="num">Antal</th>
+          <th>Enhet</th>
+          <th class="num">Á-pris</th>
+          <th class="num">Belopp</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="offer-totals">
+      <table>
+        <tr><td>Summa exkl. moms</td><td>${money(data.subtotal)} kr</td></tr>
+        <tr><td>Moms</td><td>${money(data.vat)} kr</td></tr>
+        <tr class="grand"><td>Att betala</td><td>${money(data.total)} kr</td></tr>
+      </table>
+    </div>`;
 }
 
 function buildFooter(footer: OfferPdfCompanyFooter = {}): string {
@@ -130,14 +201,9 @@ function buildFooter(footer: OfferPdfCompanyFooter = {}): string {
   `;
 }
 
-export function buildOfferPdfHtml(
-  data: OfferPdfData,
-  logoDataUrl = "",
-): string {
-  const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : "";
-  const contacts = (data.contactPersons || []).filter(
-    (c) => c && (c.name || c.role),
-  );
+export function buildOfferPdfHtml(data: OfferPdfData, logoDataUrl = ''): string {
+  const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : '';
+  const contacts = (data.contactPersons || []).filter((c) => c && (c.name || c.role));
   const contactsHtml = contacts.length
     ? `
       <div class="offer-contacts">
@@ -145,16 +211,21 @@ export function buildOfferPdfHtml(
         ${contacts
           .map(
             (c) =>
-              `<div class="offer-contacts__row">${text(c.name)}${c.role ? ` — ${text(c.role)}` : ""}</div>`,
+              `<div class="offer-contacts__row">${text(c.name)}${c.role ? ` — ${text(c.role)}` : ''}</div>`,
           )
-          .join("")}
+          .join('')}
       </div>`
-    : "";
+    : '';
 
-  const priceHtml =
-    data.priceText && data.priceText.trim()
+  const items = (data.items || []).filter(
+    (it) => it && (String(it.description || '').trim() || Number(it.price) || Number(it.quantity)),
+  );
+
+  const priceHtml = items.length
+    ? buildItemsHtml(items, data)
+    : data.priceText && data.priceText.trim()
       ? `<div class="offer-price">${multiline(data.priceText)}</div>`
-      : "";
+      : '';
 
   return `<!DOCTYPE html>
 <html lang="sv">
@@ -170,22 +241,22 @@ export function buildOfferPdfHtml(
       <div>
         <div class="offer-header__title">Offert</div>
         <div class="offer-header__recipient">
-          ${text(data.companyName) || "&nbsp;"}<br>
-          ${text(data.email) || "&nbsp;"}
+          ${text(data.companyName) || '&nbsp;'}<br>
+          ${text(data.email) || '&nbsp;'}
         </div>
       </div>
       <dl class="offer-header__meta">
-        <dt>Offertnr</dt><dd>${text(data.offerNumber) || "&nbsp;"}</dd>
-        <dt>Datum</dt><dd>${text(data.date) || "&nbsp;"}</dd>
-        <dt>Giltig till</dt><dd>${text(data.validUntil) || "&nbsp;"}</dd>
+        <dt>Offertnr</dt><dd>${text(data.offerNumber) || '&nbsp;'}</dd>
+        <dt>Datum</dt><dd>${text(data.date) || '&nbsp;'}</dd>
+        <dt>Giltig till</dt><dd>${text(data.validUntil) || '&nbsp;'}</dd>
       </dl>
     </header>
 
     <div class="offer-body">
-      ${data.subtitle ? `<h1 class="offer-subtitle">${text(data.subtitle)}</h1>` : ""}
-      ${section("Beskrivning", data.description || "")}
+      ${data.subtitle ? `<h1 class="offer-subtitle">${text(data.subtitle)}</h1>` : ''}
+      ${section('Beskrivning', data.description || '')}
       ${priceHtml}
-      ${section("Förtydliganden", data.clarifications || "")}
+      ${section('Förtydliganden', data.clarifications || '')}
       ${contactsHtml}
     </div>
 

@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsNumber,
   IsOptional,
@@ -153,6 +154,23 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsString()
   reverseVAT?: string;
+
+  // ROT-avdrag inputs; rotDeduction/rounding/roundedTotal are derived server-side.
+  @IsOptional()
+  @IsBoolean()
+  rotEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  rotPersonalNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  rotProperty?: string;
+
+  @IsOptional()
+  @IsNumber()
+  rotLaborAmount?: number;
 
   @IsOptional()
   @IsString()
