@@ -2,9 +2,11 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { Model } from 'mongoose';
@@ -36,11 +38,28 @@ type InvoiceTotals = {
 
 @Injectable()
 export class InvoicesService {
+  private readonly logger = new Logger(InvoicesService.name);
+
   constructor(
     @InjectModel(Invoice.name) private invoiceModel: Model<InvoiceDocument>,
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
     private readonly mailService: MailService,
   ) {}
+
+  // Flip "sent" invoices to "overdue" once their due date has passed. dueDate is
+  // stored as a plain YYYY-MM-DD string, so a lexicographic `$lt` against today
+  // is a correct date comparison. `$gt: ''` skips invoices with no due date.
+  @Cron(CronExpression.EVERY_HOUR)
+  async markOverdueInvoices(): Promise<void> {
+    const today = new Date().toISOString().slice(0, 10);
+    const result = await this.invoiceModel.updateMany(
+      { status: InvoiceStatus.Sent, dueDate: { $gt: '', $lt: today } },
+      { $set: { status: InvoiceStatus.Overdue } },
+    );
+    if (result.modifiedCount) {
+      this.logger.log(`Marked ${result.modifiedCount} invoice(s) overdue`);
+    }
+  }
 
   async sendByEmail(
     id: string,
