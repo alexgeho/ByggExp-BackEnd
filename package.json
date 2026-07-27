@@ -28,6 +28,7 @@
     "fix:passwords": "ts-node scripts/fix-passwords.ts",
     "check:all-passwords": "ts-node scripts/check-all-passwords.ts",
     "backfill:project-worker-ids": "ts-node scripts/backfill-project-worker-ids.ts",
+    "backfill:company-id": "ts-node scripts/backfill-company-id.ts",
     "clean:company": "ts-node scripts/clean-company-data.ts",
     "clean:orphan-projects": "ts-node scripts/clean-orphan-projects.ts"
   },
