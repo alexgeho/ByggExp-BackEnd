@@ -8,9 +8,11 @@ import {
   Patch,
   Post,
   Request,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import type { Response } from 'express';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../users/schemas/user.schema';
@@ -37,6 +39,22 @@ export class PayrollController {
   @Get(':id')
   findOne(@Request() req, @Param('id') id: string) {
     return this.payrollService.findOne(id, req.user);
+  }
+
+  @Get(':id/payslip/:userId')
+  async payslip(
+    @Request() req,
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Res() res: Response,
+  ) {
+    const pdf = await this.payrollService.buildPayslipPdf(id, userId, req.user);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=lonespec-${userId}.pdf`,
+      'Content-Length': pdf.length,
+    });
+    res.end(pdf);
   }
 
   @Patch(':id/status')

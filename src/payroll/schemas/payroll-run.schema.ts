@@ -23,8 +23,22 @@ export class PayrollLine {
   @Prop({ type: Number, default: 0 })
   rate: number;
 
+  // Pay multiplier for the hour type: 1 = normal, >1 = OB-tillägg / overtime.
+  @Prop({ type: Number, default: 1 })
+  multiplier: number;
+
+  @Prop({ default: 'normal' })
+  hourType: string;
+
+  // amount = gross = hours × rate × multiplier.
   @Prop({ type: Number, default: 0 })
   amount: number;
+
+  @Prop({ type: Number, default: 0 })
+  tax: number;
+
+  @Prop({ type: Number, default: 0 })
+  net: number;
 }
 
 export const PayrollLineSchema = SchemaFactory.createForClass(PayrollLine);
@@ -62,6 +76,29 @@ export class PayrollRun {
 
   @Prop({ type: Number, default: 0 })
   totalAmount: number;
+
+  // Preliminär skatt (simplified flat rate applied to every line's gross).
+  @Prop({ type: Number, default: 30 })
+  taxRate: number;
+
+  @Prop({ type: Number, default: 0 })
+  totalGross: number;
+
+  @Prop({ type: Number, default: 0 })
+  totalTax: number;
+
+  @Prop({ type: Number, default: 0 })
+  totalNet: number;
+
+  // Arbetsgivaravgift (employer social fees) — default 31.42% of gross.
+  @Prop({ type: Number, default: 31.42 })
+  employerRate: number;
+
+  @Prop({ type: Number, default: 0 })
+  employerContribution: number;
+
+  @Prop({ type: Number, default: 0 })
+  totalEmployerCost: number;
 
   @Prop({ type: String, ref: 'User', default: null })
   createdByUserId?: string | null;

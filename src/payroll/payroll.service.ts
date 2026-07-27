@@ -7,6 +7,9 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
+import { Company, CompanyDocument } from '../company/schemas/company.schema';
+import { launchForInvoicePdf } from '../invoices/puppeteer-launch';
+import { buildPayslipHtml } from './templates/payslip-pdf.template';
 import { CreatePayrollRunDto } from './dto/create-payroll-run.dto';
 import {
   PayrollRun,
@@ -28,7 +31,45 @@ export class PayrollService {
     @InjectModel(PayrollRun.name)
     private payrollModel: Model<PayrollRunDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
   ) {}
+
+  // A per-worker lönespecifikation PDF for one line of a run.
+  async buildPayslipPdf(
+    id: string,
+    userId: string,
+    user: AuthUser,
+  ): Promise<Buffer> {
+    const run = await this.findOne(id, user);
+    const line = (run.lines || []).find((l) => String(l.userId) === String(userId));
+    if (!line) {
+      throw new NotFoundException('No payslip for that worker in this run');
+    }
+    const company = await this.companyModel
+      .findById(run.companyId)
+      .select('name orgNumber')
+      .lean()
+      .exec();
+
+    const html = buildPayslipHtml({
+      companyName: company?.name,
+      orgNumber: company?.orgNumber,
+      periodFrom: run.periodFrom,
+      periodTo: run.periodTo,
+      taxRate: run.taxRate,
+      employerRate: run.employerRate,
+      line,
+    });
+
+    const browser = await launchForInvoicePdf();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'load' });
+      return Buffer.from(await page.pdf({ format: 'A4', printBackground: true }));
+    } finally {
+      await browser.close();
+    }
+  }
 
   async create(
     dto: CreatePayrollRunDto,
@@ -46,18 +87,28 @@ export class PayrollService {
       .exec();
     const byId = new Map(users.map((u) => [String(u._id), u]));
 
+    const taxRate = dto.taxRate ?? 30;
+    const employerRate = 31.42;
+
     const lines = dto.lines
       .filter((l) => byId.has(String(l.userId)))
       .map((l) => {
         const u = byId.get(String(l.userId));
         const rate = round2(u?.hourlyRate ?? l.rate ?? 0);
         const hours = round2(l.hours);
+        const multiplier = Number(l.multiplier) > 0 ? Number(l.multiplier) : 1;
+        const gross = round2(hours * rate * multiplier);
+        const tax = round2(gross * (taxRate / 100));
         return {
           userId: String(l.userId),
           name: u?.name || l.name || '',
           hours,
           rate,
-          amount: round2(hours * rate),
+          multiplier,
+          hourType: l.hourType || 'normal',
+          amount: gross,
+          tax,
+          net: round2(gross - tax),
         };
       });
 
@@ -68,7 +119,10 @@ export class PayrollService {
     }
 
     const totalHours = round2(lines.reduce((s, l) => s + l.hours, 0));
-    const totalAmount = round2(lines.reduce((s, l) => s + l.amount, 0));
+    const totalGross = round2(lines.reduce((s, l) => s + l.amount, 0));
+    const totalTax = round2(lines.reduce((s, l) => s + l.tax, 0));
+    const totalNet = round2(lines.reduce((s, l) => s + l.net, 0));
+    const employerContribution = round2(totalGross * (employerRate / 100));
 
     const run = new this.payrollModel({
       companyId,
@@ -79,7 +133,14 @@ export class PayrollService {
       status: PayrollStatus.Draft,
       lines,
       totalHours,
-      totalAmount,
+      totalAmount: totalGross,
+      taxRate,
+      totalGross,
+      totalTax,
+      totalNet,
+      employerRate,
+      employerContribution,
+      totalEmployerCost: round2(totalGross + employerContribution),
       createdByUserId: user.userId || null,
     });
     return run.save();

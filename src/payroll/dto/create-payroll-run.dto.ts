@@ -25,6 +25,15 @@ export class PayrollLineInputDto {
   @IsNumber()
   @IsOptional()
   rate?: number;
+
+  // OB-tillägg / overtime multiplier (1 = normal).
+  @IsNumber()
+  @IsOptional()
+  multiplier?: number;
+
+  @IsString()
+  @IsOptional()
+  hourType?: string;
 }
 
 export class CreatePayrollRunDto {
@@ -41,6 +50,11 @@ export class CreatePayrollRunDto {
   @IsString()
   @IsOptional()
   projectId?: string;
+
+  // Preliminär skatt % applied to gross (simplified). Defaults to 30.
+  @IsNumber()
+  @IsOptional()
+  taxRate?: number;
 
   @IsArray()
   @ArrayNotEmpty()
