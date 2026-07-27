@@ -32,9 +32,35 @@ export class OffersService {
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
   ) {}
 
+  // Totals are computed from the line items server-side so the offer PDF and a
+  // converted invoice always agree, regardless of what the client sends.
+  private computeOfferTotals(
+    items: Array<{
+      quantity?: number;
+      price?: number;
+      discount?: number;
+      vatRate?: number;
+    }> = [],
+  ): { subtotal: number; vat: number; total: number } {
+    const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+    let subtotal = 0;
+    let vat = 0;
+    for (const it of items) {
+      const q = Number(it?.quantity || 0);
+      const p = Number(it?.price || 0);
+      const d = Number(it?.discount || 0);
+      const r = Number(it?.vatRate ?? 25);
+      const net = q * p * (1 - d / 100);
+      subtotal += net;
+      vat += net * (r / 100);
+    }
+    return { subtotal: round2(subtotal), vat: round2(vat), total: round2(subtotal + vat) };
+  }
+
   async create(dto: CreateOfferDto, user: AuthUser): Promise<Offer> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
     const offerNumber = await this.getNextOfferNumber(companyId);
+    const totals = this.computeOfferTotals(dto.items || []);
     // Snapshot the company logo so the offer PDF shows it.
     const company = await this.companyModel
       .findById(companyId)
@@ -50,9 +76,9 @@ export class OffersService {
       date: dto.date || today(),
       contactPersons: dto.contactPersons || [],
       items: dto.items || [],
-      subtotal: dto.subtotal ?? 0,
-      vat: dto.vat ?? 0,
-      total: dto.total ?? 0,
+      subtotal: totals.subtotal,
+      vat: totals.vat,
+      total: totals.total,
       status: dto.status || OfferStatus.Draft,
       logoUrl: dto.logoUrl ?? company?.logoUrl ?? null,
     });
@@ -76,6 +102,17 @@ export class OffersService {
       description: offer.description,
       clarifications: offer.clarifications,
       contactPersons: offer.contactPersons,
+      items: (offer.items || []).map((it) => ({
+        description: it?.description,
+        quantity: it?.quantity,
+        unit: it?.unit,
+        price: it?.price,
+        discount: it?.discount,
+        vatRate: it?.vatRate,
+      })),
+      subtotal: offer.subtotal,
+      vat: offer.vat,
+      total: offer.total,
       companyFooter,
     };
 
@@ -175,16 +212,19 @@ export class OffersService {
   async update(id: string, dto: UpdateOfferDto, user: AuthUser): Promise<OfferDocument> {
     const offer = await this.findOne(id, user);
 
+    const items = dto.items ?? offer.items;
+    const totals = this.computeOfferTotals(items || []);
+
     Object.assign(offer, {
       ...dto,
       companyId: offer.companyId,
       createdByUserId: offer.createdByUserId,
       offerNumber: offer.offerNumber,
       contactPersons: dto.contactPersons ?? offer.contactPersons,
-      items: dto.items ?? offer.items,
-      subtotal: dto.subtotal ?? offer.subtotal,
-      vat: dto.vat ?? offer.vat,
-      total: dto.total ?? offer.total,
+      items,
+      subtotal: totals.subtotal,
+      vat: totals.vat,
+      total: totals.total,
     });
 
     await offer.save();
