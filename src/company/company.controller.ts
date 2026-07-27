@@ -10,7 +10,14 @@ import {
   Request,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import * as fs from 'fs';
 import { CompanyService } from './company.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { RegisterCompanyWithAdminDto } from './dto/register-company-with-admin.dto';
@@ -19,6 +26,22 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { UserRole } from '../users/schemas/user.schema';
+
+const companyLogoStorage = diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = './uploads/company-logos';
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const base =
+      (file.originalname || 'logo')
+        .replace(/\.[^.]+$/, '')
+        .replace(/[^a-zA-Z0-9-_]/g, '-')
+        .slice(0, 60) || 'logo';
+    cb(null, `${base}-${Date.now()}${extname(file.originalname) || '.png'}`);
+  },
+});
 
 @Controller('company')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -115,6 +138,34 @@ export class CompanyController {
       throw new Error('Access denied');
     }
     return this.companyService.update(id, updateCompanyDto);
+  }
+
+  @Post(':id/logo')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @UseInterceptors(
+    FileInterceptor('logo', {
+      storage: companyLogoStorage,
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        cb(null, /^image\//.test(file.mimetype));
+      },
+    }),
+  )
+  async uploadLogo(
+    @Param('id') id: string,
+    @UploadedFile() file: { filename: string } | undefined,
+    @Request() req,
+  ): Promise<Company> {
+    // CompanyAdmin can only touch its own company.
+    if (req.user.role === UserRole.CompanyAdmin && req.user.companyId !== id) {
+      throw new ForbiddenException('Access denied');
+    }
+    if (!file) {
+      throw new BadRequestException('No image file uploaded');
+    }
+    return this.companyService.update(id, {
+      logoUrl: `/uploads/company-logos/${file.filename}`,
+    });
   }
 
   @Delete(':id')

@@ -45,6 +45,14 @@ export class InvoicesService {
     const invoiceNumber = await this.getNextInvoiceNumber(companyId);
     const totals = this.calculateTotals(dto.items || [], dto.reverseVAT === 'true');
     const companyFooter = await this.resolveCompanyFooter(companyId, dto);
+    // Snapshot the company logo onto the invoice so the PDF shows it (and stays
+    // fixed even if the company later changes its logo).
+    const company = await this.companyModel
+      .findById(companyId)
+      .select('logoUrl')
+      .lean()
+      .exec();
+    const logoUrl = dto.logoUrl ?? company?.logoUrl ?? null;
 
     const invoice = new this.invoiceModel({
       ...dto,
@@ -58,6 +66,7 @@ export class InvoicesService {
       total: dto.total ?? totals.total,
       status: dto.status || InvoiceStatus.Draft,
       companyFooter,
+      logoUrl,
     });
 
     return invoice.save();

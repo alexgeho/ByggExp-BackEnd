@@ -39,6 +39,10 @@ export class CreateCompanyDto {
   @IsOptional()
   vatStatus?: string;
 
+  @IsString()
+  @IsOptional()
+  logoUrl?: string;
+
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
