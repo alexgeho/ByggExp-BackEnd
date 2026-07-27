@@ -38,15 +38,21 @@ export class CreateUserDto {
   profession?: string;
 
   @Transform(({ value }) => {
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null || value === "") {
       return undefined;
     }
 
-    return typeof value === 'string' ? parseFloat(value.replace(',', '.')) : value;
+    return typeof value === "string"
+      ? parseFloat(value.replace(",", "."))
+      : value;
   })
   @IsNumber()
   @IsOptional()
   hourlyRate?: number;
+
+  @IsString()
+  @IsOptional()
+  personalNumber?: string;
 
   @IsString()
   @IsOptional()

@@ -13,6 +13,12 @@ import { Model } from "mongoose";
 import { NotificationsService } from "../notifications/notifications.service";
 import PDFDocument from "pdfkit";
 import { Project, ProjectDocument } from "../projects/schemas/project.schema";
+import { Company, CompanyDocument } from "../company/schemas/company.schema";
+import { launchForInvoicePdf } from "../invoices/puppeteer-launch";
+import {
+  buildPersonalliggareHtml,
+  PersonalliggareRow,
+} from "./templates/personalliggare-pdf.template";
 import { UsersService } from "../users/users.service";
 import { UserActivityLogLevel } from "../users/schemas/user-activity-log.schema";
 import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
@@ -94,9 +100,99 @@ export class ShiftsService {
     @InjectModel(Project.name)
     private readonly projectModel: Model<ProjectDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @InjectModel(Company.name)
+    private readonly companyModel: Model<CompanyDocument>,
     private readonly notificationsService: NotificationsService,
     private readonly usersService: UsersService,
   ) {}
+
+  // Assemble the electronic personalliggare (attendance register) for one
+  // construction site over a period, from the workers' shift check-in/out times.
+  async getPersonalliggare(
+    user: AuthenticatedUser,
+    projectId: string,
+    from: string,
+    to: string,
+  ) {
+    const project = await this.ensureProjectAccess(user, projectId);
+
+    const shifts = await this.shiftModel
+      .find({ projectId, shiftDate: { $gte: from, $lte: to } })
+      .sort({ startedAt: 1 })
+      .lean()
+      .exec();
+
+    const userIds = [...new Set(shifts.map((s) => String(s.workerId)))];
+    const users = await this.userModel
+      .find({ _id: { $in: userIds } })
+      .select("name personalNumber companyId")
+      .lean()
+      .exec();
+    const userById = new Map(users.map((u) => [String(u._id), u]));
+
+    const companyIds = [
+      ...new Set(
+        users
+          .map((u) => u.companyId)
+          .filter(Boolean)
+          .map(String),
+      ),
+    ];
+    const companies = await this.companyModel
+      .find({ _id: { $in: companyIds } })
+      .select("name orgNumber")
+      .lean()
+      .exec();
+    const companyById = new Map(companies.map((c) => [String(c._id), c]));
+
+    const fmtTime = (d?: Date | null) =>
+      d ? new Date(d).toISOString().slice(11, 16) : "";
+
+    const rows: PersonalliggareRow[] = shifts.map((s) => {
+      const u = userById.get(String(s.workerId));
+      const c = u?.companyId ? companyById.get(String(u.companyId)) : undefined;
+      return {
+        date: s.shiftDate,
+        workerName: u?.name || (s as { workerName?: string }).workerName || "",
+        personalNumber: u?.personalNumber || "",
+        companyName: c?.name || "",
+        orgNumber: c?.orgNumber || "",
+        checkIn: fmtTime(s.startedAt),
+        checkOut: fmtTime(s.endedAt),
+      };
+    });
+
+    return {
+      projectName: project.name,
+      location: project.location,
+      from,
+      to,
+      rows,
+    };
+  }
+
+  async buildPersonalliggarePdf(
+    user: AuthenticatedUser,
+    projectId: string,
+    from: string,
+    to: string,
+  ): Promise<Buffer> {
+    const data = await this.getPersonalliggare(user, projectId, from, to);
+    const html = buildPersonalliggareHtml({
+      ...data,
+      generatedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
+    });
+    const browser = await launchForInvoicePdf();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "load" });
+      return Buffer.from(
+        await page.pdf({ format: "A4", printBackground: true }),
+      );
+    } finally {
+      await browser.close();
+    }
+  }
 
   async start(user: AuthenticatedUser, dto: StartShiftDto) {
     await this.finalizeStaleShifts(user.userId);

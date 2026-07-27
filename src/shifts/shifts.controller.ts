@@ -65,6 +65,40 @@ export class ShiftsController {
     return this.shiftsService.start(req.user, dto);
   }
 
+  @Get("personalliggare/:projectId")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  getPersonalliggare(
+    @Request() req,
+    @Param("projectId") projectId: string,
+    @Query("from") from: string,
+    @Query("to") to: string,
+  ) {
+    return this.shiftsService.getPersonalliggare(req.user, projectId, from, to);
+  }
+
+  @Get("personalliggare/:projectId/pdf")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  async getPersonalliggarePdf(
+    @Request() req,
+    @Param("projectId") projectId: string,
+    @Query("from") from: string,
+    @Query("to") to: string,
+    @Res() res: ExpressResponse,
+  ) {
+    const pdf = await this.shiftsService.buildPersonalliggarePdf(
+      req.user,
+      projectId,
+      from,
+      to,
+    );
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename=personalliggare-${from}_${to}.pdf`,
+      "Content-Length": pdf.length,
+    });
+    res.end(pdf);
+  }
+
   @Post(":id/pause")
   @Roles(
     UserRole.SuperAdmin,

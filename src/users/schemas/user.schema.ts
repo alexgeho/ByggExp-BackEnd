@@ -82,6 +82,11 @@ export class User {
   @Prop({ type: Number, default: null })
   hourlyRate?: number | null;
 
+  // Swedish personnummer / samordningsnummer. Sensitive PII, stored only to
+  // build the legally required electronic personalliggare (attendance log).
+  @Prop({ default: "" })
+  personalNumber?: string;
+
   @Prop({ default: "" })
   avatarUrl: string;
 
