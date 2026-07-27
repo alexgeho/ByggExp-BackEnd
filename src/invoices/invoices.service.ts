@@ -239,11 +239,26 @@ export class InvoicesService {
 
     const company = await this.companyModel.findById(companyId).lean().exec();
 
+    // The F-skatt toggle is stored as a boolean-ish flag ("true"/"false"); turn
+    // it into the label the invoice footer should print.
+    const fskatt = company?.vatStatus;
+    const vatStatus =
+      fskatt === 'true'
+        ? 'Godkänd för F-skatt'
+        : !fskatt || fskatt === 'false'
+          ? ''
+          : fskatt;
+
     return {
       name: company?.name || '',
       address: company?.address || '',
+      city: company?.city || '',
+      phone: company?.phone || '',
       email: company?.email || '',
-      vatStatus: 'Godkänd för F-skatt',
+      website: company?.website || '',
+      orgNumber: company?.orgNumber || '',
+      vatNumber: company?.vatNumber || '',
+      vatStatus,
     };
   }
 
