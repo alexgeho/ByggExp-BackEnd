@@ -13,6 +13,7 @@ import { UserRole } from '../users/schemas/user.schema';
 import { Company, CompanyDocument } from '../company/schemas/company.schema';
 import { launchForInvoicePdf } from '../invoices/puppeteer-launch';
 import { buildOfferPdfHtml, OfferPdfData } from './templates/offer-pdf.template';
+import { computeOfferTotals as computeOfferTotalsMath } from './offer-math';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
 import { Offer, OfferDocument, OfferStatus } from './schemas/offer.schema';
@@ -33,7 +34,7 @@ export class OffersService {
   ) {}
 
   // Totals are computed from the line items server-side so the offer PDF and a
-  // converted invoice always agree, regardless of what the client sends.
+  // converted invoice always agree; the pure math lives in ./offer-math.
   private computeOfferTotals(
     items: Array<{
       quantity?: number;
@@ -42,19 +43,7 @@ export class OffersService {
       vatRate?: number;
     }> = [],
   ): { subtotal: number; vat: number; total: number } {
-    const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
-    let subtotal = 0;
-    let vat = 0;
-    for (const it of items) {
-      const q = Number(it?.quantity || 0);
-      const p = Number(it?.price || 0);
-      const d = Number(it?.discount || 0);
-      const r = Number(it?.vatRate ?? 25);
-      const net = q * p * (1 - d / 100);
-      subtotal += net;
-      vat += net * (r / 100);
-    }
-    return { subtotal: round2(subtotal), vat: round2(vat), total: round2(subtotal + vat) };
+    return computeOfferTotalsMath(items);
   }
 
   async create(dto: CreateOfferDto, user: AuthUser): Promise<Offer> {

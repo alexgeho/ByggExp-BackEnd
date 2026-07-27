@@ -10,6 +10,7 @@ import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
 import { Company, CompanyDocument } from '../company/schemas/company.schema';
 import { launchForInvoicePdf } from '../invoices/puppeteer-launch';
 import { buildPayslipHtml } from './templates/payslip-pdf.template';
+import { computeLineAmounts, computeRunTotals } from './payroll-math';
 import { CreatePayrollRunDto } from './dto/create-payroll-run.dto';
 import {
   PayrollRun,
@@ -97,8 +98,7 @@ export class PayrollService {
         const rate = round2(u?.hourlyRate ?? l.rate ?? 0);
         const hours = round2(l.hours);
         const multiplier = Number(l.multiplier) > 0 ? Number(l.multiplier) : 1;
-        const gross = round2(hours * rate * multiplier);
-        const tax = round2(gross * (taxRate / 100));
+        const { gross, tax, net } = computeLineAmounts(hours, rate, multiplier, taxRate);
         return {
           userId: String(l.userId),
           name: u?.name || l.name || '',
@@ -108,7 +108,7 @@ export class PayrollService {
           hourType: l.hourType || 'normal',
           amount: gross,
           tax,
-          net: round2(gross - tax),
+          net,
         };
       });
 
@@ -118,11 +118,7 @@ export class PayrollService {
       );
     }
 
-    const totalHours = round2(lines.reduce((s, l) => s + l.hours, 0));
-    const totalGross = round2(lines.reduce((s, l) => s + l.amount, 0));
-    const totalTax = round2(lines.reduce((s, l) => s + l.tax, 0));
-    const totalNet = round2(lines.reduce((s, l) => s + l.net, 0));
-    const employerContribution = round2(totalGross * (employerRate / 100));
+    const totals = computeRunTotals(lines, employerRate);
 
     const run = new this.payrollModel({
       companyId,
@@ -132,15 +128,15 @@ export class PayrollService {
       projectId: dto.projectId || null,
       status: PayrollStatus.Draft,
       lines,
-      totalHours,
-      totalAmount: totalGross,
+      totalHours: totals.totalHours,
+      totalAmount: totals.totalGross,
       taxRate,
-      totalGross,
-      totalTax,
-      totalNet,
+      totalGross: totals.totalGross,
+      totalTax: totals.totalTax,
+      totalNet: totals.totalNet,
       employerRate,
-      employerContribution,
-      totalEmployerCost: round2(totalGross + employerContribution),
+      employerContribution: totals.employerContribution,
+      totalEmployerCost: totals.totalEmployerCost,
       createdByUserId: user.userId || null,
     });
     return run.save();

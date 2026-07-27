@@ -17,6 +17,7 @@ import { UserRole } from '../users/schemas/user.schema';
 import { CreateInvoiceDto, InvoiceItemDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { generateOCR } from './generate-ocr';
+import { calculateInvoiceTotals, deriveInvoiceSettlement } from './invoice-math';
 import { Invoice, InvoiceDocument, InvoiceStatus } from './schemas/invoice.schema';
 import { launchForInvoicePdf } from './puppeteer-launch';
 import {
@@ -112,26 +113,12 @@ export class InvoicesService {
     return invoice;
   }
 
-  // ROT-avdrag is 30% of the labour cost (incl VAT), capped at 50 000 kr per
-  // person and year. What's left after the deduction is rounded to the nearest
-  // whole krona (öresavrundning) — that rounded amount is what the customer pays.
-  private static readonly ROT_RATE = 0.3;
-  private static readonly ROT_MAX = 50000;
-
+  // ROT-avdrag + öresavrundning; the pure math lives in ./invoice-math.
   private deriveSettlement(
     total: number,
     dto: { rotEnabled?: boolean; rotLaborAmount?: number },
   ): { rotDeduction: number; rounding: number; roundedTotal: number } {
-    const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
-    const rotDeduction = dto.rotEnabled
-      ? Math.min(
-          round2(InvoicesService.ROT_RATE * (Number(dto.rotLaborAmount) || 0)),
-          InvoicesService.ROT_MAX,
-        )
-      : 0;
-    const payable = total - rotDeduction;
-    const roundedTotal = Math.round(payable);
-    return { rotDeduction, rounding: round2(roundedTotal - payable), roundedTotal };
+    return deriveInvoiceSettlement(total, dto);
   }
 
   async create(dto: CreateInvoiceDto, user: AuthUser): Promise<Invoice> {
@@ -377,29 +364,7 @@ export class InvoicesService {
   }
 
   private calculateTotals(items: InvoiceItemDto[], reverseVAT: boolean): InvoiceTotals {
-    const subtotal = items.reduce((sum, item) => {
-      const quantity = Number(item.quantity ?? 0);
-      const price = Number(item.price ?? 0);
-      const discount = Number(item.discount ?? 0);
-
-      return sum + quantity * price * (1 - discount / 100);
-    }, 0);
-    const vat = reverseVAT
-      ? 0
-      : items.reduce((sum, item) => {
-        const quantity = Number(item.quantity ?? 0);
-        const price = Number(item.price ?? 0);
-        const discount = Number(item.discount ?? 0);
-        const vatRate = Number(item.vatRate ?? 25);
-
-        return sum + quantity * price * (1 - discount / 100) * (vatRate / 100);
-      }, 0);
-
-    return {
-      subtotal,
-      vat,
-      total: subtotal + vat,
-    };
+    return calculateInvoiceTotals(items, reverseVAT);
   }
 
   private async resolveCompanyFooter(
