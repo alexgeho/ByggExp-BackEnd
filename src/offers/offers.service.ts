@@ -6,7 +6,13 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { existsSync } from 'fs';
+import { readFile } from 'fs/promises';
+import path from 'path';
 import { UserRole } from '../users/schemas/user.schema';
+import { Company, CompanyDocument } from '../company/schemas/company.schema';
+import { launchForInvoicePdf } from '../invoices/puppeteer-launch';
+import { buildOfferPdfHtml, OfferPdfData } from './templates/offer-pdf.template';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
 import { Offer, OfferDocument, OfferStatus } from './schemas/offer.schema';
@@ -23,11 +29,18 @@ const today = () => new Date().toISOString().slice(0, 10);
 export class OffersService {
   constructor(
     @InjectModel(Offer.name) private offerModel: Model<OfferDocument>,
+    @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
   ) {}
 
   async create(dto: CreateOfferDto, user: AuthUser): Promise<Offer> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
     const offerNumber = await this.getNextOfferNumber(companyId);
+    // Snapshot the company logo so the offer PDF shows it.
+    const company = await this.companyModel
+      .findById(companyId)
+      .select('logoUrl')
+      .lean()
+      .exec();
 
     const offer = new this.offerModel({
       ...dto,
@@ -41,9 +54,98 @@ export class OffersService {
       vat: dto.vat ?? 0,
       total: dto.total ?? 0,
       status: dto.status || OfferStatus.Draft,
+      logoUrl: dto.logoUrl ?? company?.logoUrl ?? null,
     });
 
     return offer.save();
+  }
+
+  async buildOfferHtml(id: string, user: AuthUser): Promise<string> {
+    const offer = await this.findOne(id, user);
+    const companyFooter = await this.resolveCompanyFooter(offer.companyId);
+    const logoDataUrl = await this.getLogoDataUrl(offer.logoUrl);
+
+    const data: OfferPdfData = {
+      offerNumber: String(offer.offerNumber),
+      companyName: offer.companyName,
+      email: offer.email,
+      date: offer.date,
+      validUntil: offer.validUntil,
+      subtitle: offer.subtitle,
+      priceText: offer.priceText,
+      description: offer.description,
+      clarifications: offer.clarifications,
+      contactPersons: offer.contactPersons,
+      companyFooter,
+    };
+
+    return buildOfferPdfHtml(data, logoDataUrl);
+  }
+
+  async buildOfferPdf(id: string, user: AuthUser): Promise<Buffer> {
+    const html = await this.buildOfferHtml(id, user);
+    const browser = await launchForInvoicePdf();
+
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'load' });
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '0', bottom: '0', left: '0', right: '0' },
+        preferCSSPageSize: true,
+      });
+
+      return Buffer.from(pdfBuffer);
+    } finally {
+      await browser.close();
+    }
+  }
+
+  private async resolveCompanyFooter(companyId: string) {
+    const company = await this.companyModel.findById(companyId).lean().exec();
+    const fskatt = company?.vatStatus;
+    const vatStatus =
+      fskatt === 'true'
+        ? 'Godkänd för F-skatt'
+        : !fskatt || fskatt === 'false'
+          ? ''
+          : fskatt;
+
+    return {
+      name: company?.name || '',
+      address: company?.address || '',
+      city: company?.city || '',
+      phone: company?.phone || '',
+      email: company?.email || '',
+      website: company?.website || '',
+      orgNumber: company?.orgNumber || '',
+      vatNumber: company?.vatNumber || '',
+      vatStatus,
+    };
+  }
+
+  private async getLogoDataUrl(logoUrl?: string | null): Promise<string> {
+    if (!logoUrl || logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
+      return '';
+    }
+
+    const relativePath = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
+    const candidates = [
+      path.join(process.cwd(), relativePath),
+      path.join(process.cwd(), 'public', relativePath),
+    ];
+
+    for (const filePath of candidates) {
+      if (!existsSync(filePath)) {
+        continue;
+      }
+      const buffer = await readFile(filePath);
+      const ext = path.extname(filePath).slice(1) || 'png';
+      return `data:image/${ext};base64,${buffer.toString('base64')}`;
+    }
+
+    return '';
   }
 
   async findAccessible(user: AuthUser): Promise<Offer[]> {
