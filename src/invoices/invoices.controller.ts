@@ -53,6 +53,12 @@ export class InvoicesController {
     return this.invoicesService.copy(id, req.user);
   }
 
+  @Post(':id/credit')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  creditNote(@Request() req, @Param('id') id: string) {
+    return this.invoicesService.createCreditNote(id, req.user);
+  }
+
   @Get(':id/html')
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   @Header('Content-Type', 'text/html; charset=utf-8')

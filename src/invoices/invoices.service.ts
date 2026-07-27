@@ -112,10 +112,33 @@ export class InvoicesService {
     return invoice;
   }
 
+  // ROT-avdrag is 30% of the labour cost (incl VAT), capped at 50 000 kr per
+  // person and year. What's left after the deduction is rounded to the nearest
+  // whole krona (öresavrundning) — that rounded amount is what the customer pays.
+  private static readonly ROT_RATE = 0.3;
+  private static readonly ROT_MAX = 50000;
+
+  private deriveSettlement(
+    total: number,
+    dto: { rotEnabled?: boolean; rotLaborAmount?: number },
+  ): { rotDeduction: number; rounding: number; roundedTotal: number } {
+    const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+    const rotDeduction = dto.rotEnabled
+      ? Math.min(
+          round2(InvoicesService.ROT_RATE * (Number(dto.rotLaborAmount) || 0)),
+          InvoicesService.ROT_MAX,
+        )
+      : 0;
+    const payable = total - rotDeduction;
+    const roundedTotal = Math.round(payable);
+    return { rotDeduction, rounding: round2(roundedTotal - payable), roundedTotal };
+  }
+
   async create(dto: CreateInvoiceDto, user: AuthUser): Promise<Invoice> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
     const invoiceNumber = await this.getNextInvoiceNumber(companyId);
     const totals = this.calculateTotals(dto.items || [], dto.reverseVAT === 'true');
+    const settlement = this.deriveSettlement(totals.total, dto);
     const companyFooter = await this.resolveCompanyFooter(companyId, dto);
     // Snapshot the company logo onto the invoice so the PDF shows it (and stays
     // fixed even if the company later changes its logo).
@@ -133,9 +156,12 @@ export class InvoicesService {
       invoiceNumber,
       ocr: generateOCR(invoiceNumber),
       items: dto.items || [],
-      subtotal: dto.subtotal ?? totals.subtotal,
-      vat: dto.vat ?? totals.vat,
-      total: dto.total ?? totals.total,
+      subtotal: totals.subtotal,
+      vat: totals.vat,
+      total: totals.total,
+      rotDeduction: settlement.rotDeduction,
+      rounding: settlement.rounding,
+      roundedTotal: settlement.roundedTotal,
       status: dto.status || InvoiceStatus.Draft,
       companyFooter,
       logoUrl,
@@ -168,11 +194,28 @@ export class InvoicesService {
     return invoice;
   }
 
+  // A sent/paid invoice is a booked accounting record — its content is
+  // immutable (Bokföringslagen). Only drafts may be edited or deleted, which
+  // also keeps the invoice number series gap-free. Corrections go through a
+  // credit note.
+  private assertDraft(invoice: InvoiceDocument, action: string): void {
+    if (invoice.status !== InvoiceStatus.Draft) {
+      throw new BadRequestException(
+        `A ${invoice.status} invoice cannot be ${action}. Issue a credit note instead.`,
+      );
+    }
+  }
+
   async update(id: string, dto: UpdateInvoiceDto, user: AuthUser): Promise<InvoiceDocument> {
     const invoice = await this.findOne(id, user);
+    this.assertDraft(invoice, 'edited');
     const items = dto.items ?? invoice.items;
     const isReverseVAT = (dto.reverseVAT ?? invoice.reverseVAT) === 'true';
     const totals = this.calculateTotals(items || [], isReverseVAT);
+    const settlement = this.deriveSettlement(totals.total, {
+      rotEnabled: dto.rotEnabled ?? invoice.rotEnabled,
+      rotLaborAmount: dto.rotLaborAmount ?? invoice.rotLaborAmount,
+    });
 
     Object.assign(invoice, {
       ...dto,
@@ -181,9 +224,12 @@ export class InvoicesService {
       invoiceNumber: invoice.invoiceNumber,
       ocr: invoice.ocr,
       items,
-      subtotal: dto.subtotal ?? totals.subtotal,
-      vat: dto.vat ?? totals.vat,
-      total: dto.total ?? totals.total,
+      subtotal: totals.subtotal,
+      vat: totals.vat,
+      total: totals.total,
+      rotDeduction: settlement.rotDeduction,
+      rounding: settlement.rounding,
+      roundedTotal: settlement.roundedTotal,
     });
 
     await invoice.save();
@@ -192,6 +238,7 @@ export class InvoicesService {
 
   async remove(id: string, user: AuthUser): Promise<Invoice> {
     const invoice = await this.findOne(id, user);
+    this.assertDraft(invoice, 'deleted');
     await this.invoiceModel.findByIdAndDelete(id).exec();
     return invoice;
   }
@@ -217,6 +264,51 @@ export class InvoicesService {
     });
 
     return copy.save();
+  }
+
+  // A credit note (kreditfaktura) reverses a booked invoice with negated
+  // amounts instead of editing/deleting it. It starts as a draft you can send.
+  async createCreditNote(id: string, user: AuthUser): Promise<Invoice> {
+    const source = await this.findOne(id, user);
+    if (source.status === InvoiceStatus.Draft) {
+      throw new BadRequestException(
+        'A draft invoice can be edited directly — no credit note needed',
+      );
+    }
+    if (source.creditOfNumber) {
+      throw new BadRequestException('A credit note cannot itself be credited');
+    }
+
+    const raw = (source as InvoiceDocument).toObject() as Record<string, unknown>;
+    const invoiceNumber = await this.getNextInvoiceNumber(source.companyId);
+    const neg = (n: unknown) => -(Number(n) || 0);
+
+    ['_id', 'id', 'createdAt', 'updatedAt', '__v', 'sentAt', 'paidAt'].forEach(
+      (k) => delete raw[k],
+    );
+
+    const creditNote = new this.invoiceModel({
+      ...raw,
+      invoiceNumber,
+      ocr: generateOCR(invoiceNumber),
+      status: InvoiceStatus.Draft,
+      createdByUserId: user.userId,
+      creditOfId: String((source as InvoiceDocument)._id),
+      creditOfNumber: source.invoiceNumber,
+      date: new Date().toISOString().slice(0, 10),
+      items: (source.items || []).map((it) => ({
+        ...(it as Record<string, unknown>),
+        quantity: neg((it as { quantity?: number }).quantity),
+      })),
+      subtotal: neg(source.subtotal),
+      vat: neg(source.vat),
+      total: neg(source.total),
+      rotDeduction: neg(source.rotDeduction),
+      rounding: neg(source.rounding),
+      roundedTotal: neg(source.roundedTotal),
+    });
+
+    return creditNote.save();
   }
 
   async getNextInvoiceNumber(companyId: string): Promise<number> {
@@ -363,6 +455,13 @@ export class InvoicesService {
       subtotal: invoice.subtotal,
       vat: invoice.vat,
       total: invoice.total,
+      rotEnabled: invoice.rotEnabled,
+      rotPersonalNumber: invoice.rotPersonalNumber,
+      rotProperty: invoice.rotProperty,
+      rotDeduction: invoice.rotDeduction,
+      rounding: invoice.rounding,
+      roundedTotal: invoice.roundedTotal,
+      creditOfNumber: invoice.creditOfNumber,
       dueDate: invoice.dueDate,
       ocr: invoice.ocr,
       companyFooter: invoice.companyFooter,

@@ -39,6 +39,13 @@ export type InvoicePdfData = {
   subtotal?: number;
   vat?: number;
   total?: number;
+  rotEnabled?: boolean;
+  rotPersonalNumber?: string;
+  rotProperty?: string;
+  rotDeduction?: number;
+  rounding?: number;
+  roundedTotal?: number;
+  creditOfNumber?: number | null;
   dueDate?: string;
   ocr?: string;
   companyFooter?: InvoicePdfCompanyFooter;
@@ -245,7 +252,7 @@ function buildHeader(data: InvoicePdfData, logoDataUrl = ''): string {
       <div class="invoice-header__top">
         <div class="invoice-header__logo">${logo}</div>
         <div>
-          <div class="invoice-header__title">Faktura</div>
+          <div class="invoice-header__title">${data.creditOfNumber ? 'Kreditfaktura' : 'Faktura'}</div>
           <div class="invoice-header__address">
             ${text(data.companyName) || '&nbsp;'}<br>
             ${text(data.address) || '&nbsp;'}<br>
@@ -255,6 +262,7 @@ function buildHeader(data: InvoicePdfData, logoDataUrl = ''): string {
         <dl class="invoice-header__meta">
           <dt>Fakturadatum</dt><dd>${text(data.date) || '&nbsp;'}</dd>
           <dt>Fakturanr</dt><dd>${text(data.invoiceNumber) || '&nbsp;'}</dd>
+          ${data.creditOfNumber ? `<dt>Avser faktura</dt><dd>${text(data.creditOfNumber)}</dd>` : ''}
           <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || '&nbsp;'}</dd>
         </dl>
       </div>
@@ -428,15 +436,31 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
   const subtotal = data.subtotal ?? vatGroups.reduce((sum, group) => sum + group.base, 0);
   const totalVat = isReverseVAT ? 0 : vatGroups.reduce((sum, group) => sum + group.amount, 0);
   const total = data.total ?? subtotal + totalVat;
+  const rotDeduction = Number(data.rotDeduction) || 0;
+  const rounding = Number(data.rounding) || 0;
+  const roundedTotal = data.roundedTotal ?? Math.round(total - rotDeduction);
   const vatLines = isReverseVAT
     ? '<dt>Moms (0%)</dt><dd>0,00</dd>'
     : vatGroups
       .map((group) => `<dt>Moms (${group.rate}%)</dt><dd>${formatInvoiceAmount(group.amount)}</dd>`)
       .join('');
 
+  // Extra settlement lines: ROT deduction and öresavrundning only show when set,
+  // and are only meaningful when "Att betala" differs from the raw total.
+  const hasSettlement = rotDeduction !== 0 || rounding !== 0;
+  const totalLabel = hasSettlement ? 'Totalbelopp' : 'Att betala';
+  const settlementLines = `
+    <dt>${totalLabel}</dt><dd>${formatInvoiceAmount(total)}</dd>
+    ${rotDeduction ? `<dt>ROT-avdrag</dt><dd>-${formatInvoiceAmount(rotDeduction)}</dd>` : ''}
+    ${rounding ? `<dt>Öresavrundning</dt><dd>${formatInvoiceAmount(rounding)}</dd>` : ''}
+    ${hasSettlement
+      ? `<dt class="invoice-total-box__total">Att betala</dt><dd class="invoice-total-box__total">${formatInvoiceAmount(roundedTotal)}</dd>`
+      : ''}`;
+
   return `
     <tfoot class="invoice-lines__footer">
       ${isReverseVAT ? '<tr><td colspan="6" style="font-style: italic;">Omvänd skattskyldighet för byggtjänster gäller</td></tr>' : ''}
+      ${data.rotEnabled ? `<tr><td colspan="6" style="font-style: italic;">ROT-avdrag: personnr ${text(data.rotPersonalNumber) || '—'}${data.rotProperty ? `, fastighet ${text(data.rotProperty)}` : ''}</td></tr>` : ''}
       <tr>
         <td colspan="2" style="vertical-align: bottom; width: 40%;">
           <dl class="invoice-summary">
@@ -449,8 +473,7 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
             <dl>
               <dt>Förfallodatum</dt><dd>${text(data.dueDate)}</dd>
               <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber)}</dd>
-              <dt class="invoice-total-box__total">Totalbelopp</dt>
-              <dd class="invoice-total-box__total">${formatInvoiceAmount(total)}</dd>
+              ${settlementLines}
             </dl>
           </div>
         </td>
