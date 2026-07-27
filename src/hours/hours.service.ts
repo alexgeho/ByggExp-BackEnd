@@ -151,7 +151,14 @@ export class HoursService {
       .exec();
     const userById = new Map(users.map((u) => [this.getEntityId(u), u]));
 
-    const workers = workerIds.map((workerId) => {
+    // The Hours grid is about billable workers — never surface a company admin
+    // or a superadmin here, even if a stray shift is attributed to them.
+    const isStaffRole = (id: string) => {
+      const role = userById.get(id)?.role;
+      return role !== UserRole.SuperAdmin && role !== UserRole.CompanyAdmin;
+    };
+
+    const workers = workerIds.filter(isStaffRole).map((workerId) => {
       const u = userById.get(workerId);
       const days = byWorker.get(workerId)!;
       const cells: Record<string, unknown> = {};
