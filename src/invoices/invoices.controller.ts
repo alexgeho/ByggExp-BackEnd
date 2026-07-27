@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Header,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -19,6 +21,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../users/schemas/user.schema';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { InvoiceStatus } from './schemas/invoice.schema';
 import { InvoicesService } from './invoices.service';
 
 @Controller('invoices')
@@ -79,6 +82,19 @@ export class InvoicesController {
     @Body() body: { email?: string; message?: string },
   ) {
     return this.invoicesService.sendByEmail(id, req.user, body?.email, body?.message);
+  }
+
+  @Patch(':id/status')
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  setStatus(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() body: { status: InvoiceStatus },
+  ) {
+    if (!Object.values(InvoiceStatus).includes(body?.status)) {
+      throw new BadRequestException('Invalid status');
+    }
+    return this.invoicesService.setStatus(id, req.user, body.status);
   }
 
   @Get(':id')

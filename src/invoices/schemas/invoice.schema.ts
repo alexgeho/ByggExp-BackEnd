@@ -155,6 +155,12 @@ export class Invoice {
   @Prop({ enum: InvoiceStatus, default: InvoiceStatus.Draft })
   status: InvoiceStatus;
 
+  @Prop({ type: Date, default: null })
+  sentAt?: Date | null;
+
+  @Prop({ type: Date, default: null })
+  paidAt?: Date | null;
+
   @Prop({ type: InvoiceCompanyFooterSchema, default: () => ({}) })
   companyFooter: InvoiceCompanyFooter;
 }

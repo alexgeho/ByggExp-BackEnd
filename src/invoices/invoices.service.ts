@@ -56,13 +56,41 @@ export class InvoicesService {
       );
     }
     const pdf = await this.buildInvoicePdf(id, user);
-    return this.mailService.sendInvoiceEmail(to, {
+    const result = await this.mailService.sendInvoiceEmail(to, {
       invoiceNumber: invoice.invoiceNumber,
       senderName: invoice.companyFooter?.name,
       dueDate: invoice.dueDate,
       message,
       pdf,
     });
+
+    // Emailing a draft moves it to "sent" (a paid invoice stays paid).
+    if (result.sent && invoice.status === InvoiceStatus.Draft) {
+      invoice.status = InvoiceStatus.Sent;
+      invoice.sentAt = new Date();
+      await invoice.save();
+    }
+
+    return result;
+  }
+
+  async setStatus(
+    id: string,
+    user: AuthUser,
+    status: InvoiceStatus,
+  ): Promise<InvoiceDocument> {
+    const invoice = await this.findOne(id, user);
+    invoice.status = status;
+    if (status === InvoiceStatus.Sent) {
+      invoice.sentAt = invoice.sentAt || new Date();
+    } else if (status === InvoiceStatus.Paid) {
+      invoice.paidAt = invoice.paidAt || new Date();
+    } else if (status === InvoiceStatus.Draft) {
+      invoice.sentAt = null;
+      invoice.paidAt = null;
+    }
+    await invoice.save();
+    return invoice;
   }
 
   async create(dto: CreateInvoiceDto, user: AuthUser): Promise<Invoice> {
