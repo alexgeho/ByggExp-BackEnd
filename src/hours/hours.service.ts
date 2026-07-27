@@ -7,7 +7,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
-import { Shift, ShiftDocument } from '../shifts/schemas/shift.schema';
+import { Shift, ShiftDocument, ShiftStatus } from '../shifts/schemas/shift.schema';
 import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
 import { parseTimeToMinutes } from '../shifts/shift-schedule.util';
 import {
@@ -115,6 +115,22 @@ export class HoursService {
 
     // group shifts by worker → date → { actualMs, projectIds }
     type DayAgg = { actualMs: number; projects: Set<string> };
+    const now = Date.now();
+    // Live worked time: an active shift's currently-running segment is not yet
+    // banked into durationMs, so add the elapsed time since it last resumed —
+    // otherwise an in-progress shift reads as 0 hours until it is paused/stopped
+    // (which, since offline auto-pause was removed, no longer happens mid-day).
+    const workedMs = (shift: Shift): number => {
+      const banked = Number(shift.durationMs) || 0;
+      if (shift.status !== ShiftStatus.Active) {
+        return banked;
+      }
+      const resumedAt = shift.lastResumedAt || shift.startedAt;
+      if (!resumedAt) {
+        return banked;
+      }
+      return banked + Math.max(0, now - new Date(resumedAt).getTime());
+    };
     const byWorker = new Map<string, Map<string, DayAgg>>();
     for (const shift of shifts) {
       const workerId = String(shift.workerId);
@@ -123,7 +139,7 @@ export class HoursService {
       const days = byWorker.get(workerId)!;
       if (!days.has(date)) days.set(date, { actualMs: 0, projects: new Set() });
       const day = days.get(date)!;
-      day.actualMs += Number(shift.durationMs) || 0;
+      day.actualMs += workedMs(shift);
       day.projects.add(String(shift.projectId));
     }
 
