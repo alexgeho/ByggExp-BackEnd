@@ -32,6 +32,21 @@ export class BlogPost {
   @Prop({ default: "" })
   contentHtml: string;
 
+  @Prop({ default: "" })
+  seoTitle: string;
+
+  @Prop({ default: "" })
+  seoDescription: string;
+
+  @Prop({ default: "" })
+  seoImageUrl: string;
+
+  @Prop({ default: "" })
+  canonicalUrl: string;
+
+  @Prop({ type: Boolean, default: false })
+  noIndex: boolean;
+
   @Prop({ type: Boolean, default: false, index: true })
   isPublished: boolean;
 

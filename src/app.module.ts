@@ -27,6 +27,7 @@ import { OffersModule } from "./offers/offers.module";
 import { BugReportsModule } from "./bug-reports/bug-reports.module";
 import { MailModule } from "./mail/mail.module";
 import { BlogPostsModule } from "./blog-posts/blog-posts.module";
+import { SiteSeoModule } from "./site-seo/site-seo.module";
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { BlogPostsModule } from "./blog-posts/blog-posts.module";
     ClientsModule,
     ArticlesModule,
     BlogPostsModule,
+    SiteSeoModule,
     BugReportsModule,
     MailModule,
   ],

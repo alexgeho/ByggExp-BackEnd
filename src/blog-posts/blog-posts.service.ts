@@ -106,6 +106,11 @@ export class BlogPostsService {
       tag: dto.tag?.trim() || "",
       coverImageUrl: dto.coverImageUrl?.trim() || "",
       contentHtml: this.sanitizeContent(dto.contentHtml),
+      seoTitle: dto.seoTitle?.trim() || "",
+      seoDescription: dto.seoDescription?.trim() || "",
+      seoImageUrl: dto.seoImageUrl?.trim() || "",
+      canonicalUrl: dto.canonicalUrl?.trim() || "",
+      noIndex: Boolean(dto.noIndex),
       isPublished: Boolean(dto.isPublished),
       publishedAt: dto.isPublished ? new Date() : null,
       createdByUserId: user.userId,
@@ -139,12 +144,19 @@ export class BlogPostsService {
     post.excerpt = dto.excerpt?.trim() ?? post.excerpt;
     post.tag = dto.tag?.trim() ?? post.tag;
     post.coverImageUrl = dto.coverImageUrl?.trim() ?? post.coverImageUrl;
+    post.seoTitle = dto.seoTitle?.trim() ?? post.seoTitle;
+    post.seoDescription = dto.seoDescription?.trim() ?? post.seoDescription;
+    post.seoImageUrl = dto.seoImageUrl?.trim() ?? post.seoImageUrl;
+    post.canonicalUrl = dto.canonicalUrl?.trim() ?? post.canonicalUrl;
 
     if (typeof dto.contentHtml === "string") {
       post.contentHtml = this.sanitizeContent(dto.contentHtml);
     }
 
     post.isPublished = nextIsPublished;
+    if (typeof dto.noIndex === "boolean") {
+      post.noIndex = dto.noIndex;
+    }
     post.publishedAt = nextIsPublished ? post.publishedAt || new Date() : null;
     post.updatedByUserId = user.userId;
 

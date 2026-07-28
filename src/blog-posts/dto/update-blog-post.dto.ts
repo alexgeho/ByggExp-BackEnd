@@ -44,6 +44,30 @@ export class UpdateBlogPostDto {
   contentHtml?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  seoTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(320)
+  seoDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  seoImageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  canonicalUrl?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  noIndex?: boolean;
+
+  @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
 }
