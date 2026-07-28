@@ -30,6 +30,7 @@ import { BlogPostsModule } from "./blog-posts/blog-posts.module";
 import { SiteSeoModule } from "./site-seo/site-seo.module";
 import { AtaModule } from "./ata/ata.module";
 import { ExpensesModule } from "./expenses/expenses.module";
+import { AccountingModule } from "./accounting/accounting.module";
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { ExpensesModule } from "./expenses/expenses.module";
     SupplierInvoicesModule,
     AtaModule,
     ExpensesModule,
+    AccountingModule,
     OffersModule,
     ClientsModule,
     ArticlesModule,
