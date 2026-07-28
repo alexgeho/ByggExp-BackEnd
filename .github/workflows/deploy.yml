@@ -53,7 +53,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: DEEPL_API_KEY,ANTHROPIC_API_KEY
+          envs: DEEPL_API_KEY,ANTHROPIC_API_KEY,INBOUND_INVOICE_TOKEN
           script: |
             set -euo pipefail
             RELEASE=$(date -u +%Y%m%d-%H%M%S)
@@ -85,6 +85,7 @@ jobs:
             }
             upsert_env DEEPL_API_KEY "${DEEPL_API_KEY:-}"
             upsert_env ANTHROPIC_API_KEY "${ANTHROPIC_API_KEY:-}"
+            upsert_env INBOUND_INVOICE_TOKEN "${INBOUND_INVOICE_TOKEN:-}"
 
             cd "$DIR"
             echo "==> Installing production deps"
@@ -123,3 +124,4 @@ jobs:
         env:
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          INBOUND_INVOICE_TOKEN: ${{ secrets.INBOUND_INVOICE_TOKEN }}

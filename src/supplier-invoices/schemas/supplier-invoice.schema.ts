@@ -48,6 +48,12 @@ export class SupplierInvoice {
   @Prop({ default: "" })
   notes: string;
 
+  // How the invoice entered the system: "manual" (created/uploaded in the admin)
+  // or "email" (auto-ingested from a forwarded invoice email). Used to flag
+  // e-mailed invoices for review in the list.
+  @Prop({ default: "manual" })
+  source: string;
+
   // Uploaded scan/PDF of the supplier's invoice.
   @Prop({ type: String, default: null })
   attachmentUrl?: string | null;

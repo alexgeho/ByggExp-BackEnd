@@ -21,6 +21,7 @@ import { ToolsModule } from "./tools/tools.module";
 import { InvoicesModule } from "./invoices/invoices.module";
 import { PayrollModule } from "./payroll/payroll.module";
 import { SupplierInvoicesModule } from "./supplier-invoices/supplier-invoices.module";
+import { InboundInvoicesModule } from "./inbound-invoices/inbound-invoices.module";
 import { ClientsModule } from "./clients/clients.module";
 import { ArticlesModule } from "./articles/articles.module";
 import { OffersModule } from "./offers/offers.module";
@@ -59,6 +60,7 @@ import { ScanningModule } from "./scanning/scanning.module";
     InvoicesModule,
     PayrollModule,
     SupplierInvoicesModule,
+    InboundInvoicesModule,
     AtaModule,
     ExpensesModule,
     AccountingModule,
