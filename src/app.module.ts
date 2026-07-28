@@ -31,6 +31,7 @@ import { SiteSeoModule } from "./site-seo/site-seo.module";
 import { AtaModule } from "./ata/ata.module";
 import { ExpensesModule } from "./expenses/expenses.module";
 import { AccountingModule } from "./accounting/accounting.module";
+import { DagbokModule } from "./dagbok/dagbok.module";
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { AccountingModule } from "./accounting/accounting.module";
     AtaModule,
     ExpensesModule,
     AccountingModule,
+    DagbokModule,
     OffersModule,
     ClientsModule,
     ArticlesModule,
