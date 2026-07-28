@@ -3,6 +3,7 @@ import {
   Logger,
   ServiceUnavailableException,
 } from "@nestjs/common";
+import convert from "heic-convert";
 
 export type ScannedDocument = {
   supplierName: string;
@@ -98,12 +99,44 @@ Rules:
     return v == null ? "" : String(v).trim();
   }
 
+  // iPhone photos arrive as HEIC, which the vision API can't read — transcode
+  // to JPEG first. Detected by mime type or the ISO-BMFF "ftyp" brand.
+  private hasHeicSignature(buffer: Buffer): boolean {
+    if (buffer.length < 12) return false;
+    if (buffer.toString("ascii", 4, 8) !== "ftyp") return false;
+    const brand = buffer.toString("ascii", 8, 12).toLowerCase();
+    return (
+      brand.startsWith("hei") ||
+      brand.startsWith("mif") ||
+      brand.startsWith("msf") ||
+      brand === "hevc"
+    );
+  }
+
+  private async normalizeHeic(
+    buffer: Buffer,
+    mimetype: string,
+  ): Promise<{ buffer: Buffer; mimetype: string }> {
+    const isHeic =
+      /heic|heif/i.test(mimetype || "") || this.hasHeicSignature(buffer);
+    if (!isHeic) return { buffer, mimetype };
+    try {
+      const out = await convert({ buffer, format: "JPEG", quality: 0.9 });
+      return { buffer: Buffer.from(out), mimetype: "image/jpeg" };
+    } catch (error) {
+      this.logger.warn("HEIC conversion failed; sending original");
+      return { buffer, mimetype };
+    }
+  }
+
   async extract(buffer: Buffer, mimetype: string): Promise<ScannedDocument> {
     if (!this.enabled) {
       throw new ServiceUnavailableException(
         "Document scanning is not configured (missing ANTHROPIC_API_KEY)",
       );
     }
+
+    ({ buffer, mimetype } = await this.normalizeHeic(buffer, mimetype));
 
     const res = await fetch(this.apiUrl, {
       method: "POST",

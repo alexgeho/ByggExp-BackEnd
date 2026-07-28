@@ -3459,6 +3459,22 @@ hasown@^2.0.2:
   dependencies:
     function-bind "^1.1.2"
 
+heic-convert@^2.1.0:
+  version "2.1.0"
+  resolved "https://registry.npmjs.org/heic-convert/-/heic-convert-2.1.0.tgz"
+  integrity sha512-1qDuRvEHifTVAj3pFIgkqGgJIr0M3X7cxEPjEp0oG4mo8GFjq99DpCo8Eg3kg17Cy0MTjxpFdoBHOatj7ZVKtg==
+  dependencies:
+    heic-decode "^2.0.0"
+    jpeg-js "^0.4.4"
+    pngjs "^6.0.0"
+
+heic-decode@^2.0.0:
+  version "2.1.0"
+  resolved "https://registry.npmjs.org/heic-decode/-/heic-decode-2.1.0.tgz"
+  integrity sha512-0fB3O3WMk38+PScbHLVp66jcNhsZ/ErtQ6u2lMYu/YxXgbBtl+oKOhGQHa4RpvE68k8IzbWkABzHnyAIjR758A==
+  dependencies:
+    libheif-js "^1.19.8"
+
 html-escaper@^2.0.0:
   version "2.0.2"
   resolved "https://registry.npmjs.org/html-escaper/-/html-escaper-2.0.2.tgz"
@@ -4054,6 +4070,11 @@ jest-worker@30.2.0:
     import-local "^3.2.0"
     jest-cli "30.2.0"
 
+jpeg-js@^0.4.4:
+  version "0.4.4"
+  resolved "https://registry.npmjs.org/jpeg-js/-/jpeg-js-0.4.4.tgz"
+  integrity sha512-WZzeDOEtTOBK4Mdsar0IqEU5sMr3vSV2RqkAIzUEV2BHnUfKGyswWFPFwK5EeDo93K3FohSHbLAjj0s1Wzd+dg==
+
 js-md5@^0.8.3:
   version "0.8.3"
   resolved "https://registry.npmjs.org/js-md5/-/js-md5-0.8.3.tgz"
@@ -4209,6 +4230,11 @@ levn@^0.4.1:
   dependencies:
     prelude-ls "^1.2.1"
     type-check "~0.4.0"
+
+libheif-js@^1.19.8:
+  version "1.19.8"
+  resolved "https://registry.npmjs.org/libheif-js/-/libheif-js-1.19.8.tgz"
+  integrity sha512-vQJWusIxO7wavpON1dusciL8Go9jsIQ+EUrckauFYAiSTjcmLAsuJh3SszLpvkwPci3JcL41ek2n+LUZGFpPIQ==
 
 libphonenumber-js@^1.11.1:
   version "1.12.31"
@@ -4986,6 +5012,11 @@ png-js@^1.0.0:
   integrity sha512-PM/uYGzGdNSzqeOgly68+6wKQDL1SY0a/N+OEa/+br6LnHWOAJB0Npiamnodfq3jd2LS/i2fMeOKSAILjA+m5Q==
   dependencies:
     browserify-zlib "^0.2.0"
+
+pngjs@^6.0.0:
+  version "6.0.0"
+  resolved "https://registry.npmjs.org/pngjs/-/pngjs-6.0.0.tgz"
+  integrity sha512-TRzzuFRRmEoSW/p1KVAmiOgPco2Irlah+bGFCeNfJXxxYGwSw7YwAOAcd7X28K/m5bjBWKsC29KyoMfHbypayg==
 
 postcss@^8.3.11:
   version "8.5.23"
