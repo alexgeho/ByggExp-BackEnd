@@ -159,6 +159,27 @@ export class HoursService {
       day.projects.add(String(shift.projectId));
     }
 
+    // Seed rows from planned adjustments in range so a planned-only (e.g. future)
+    // day still shows, and from each accessible project's team so the roster is
+    // available to plan against even before any shifts exist in the period.
+    const inRange = (date: string) =>
+      (!query.from || date >= query.from) && (!query.to || date <= query.to);
+    for (const adj of adjustments) {
+      const date = String(adj.date);
+      if (!inRange(date)) continue;
+      const workerId = String(adj.workerId);
+      if (!byWorker.has(workerId)) byWorker.set(workerId, new Map());
+      const days = byWorker.get(workerId)!;
+      if (!days.has(date)) days.set(date, { actualMs: 0, projects: new Set() });
+      days.get(date)!.projects.add(String(adj.projectId));
+    }
+    for (const project of projects) {
+      for (const teamWorkerId of project.workers || []) {
+        const workerId = String(teamWorkerId);
+        if (!byWorker.has(workerId)) byWorker.set(workerId, new Map());
+      }
+    }
+
     const workerIds = [...byWorker.keys()];
     const users = await this.userModel
       .find({ _id: { $in: workerIds } })
