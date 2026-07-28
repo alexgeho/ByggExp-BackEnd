@@ -69,4 +69,12 @@ export class CreateToolDto {
   @IsString()
   @IsOptional()
   companyId?: string;
+
+  @IsString()
+  @IsOptional()
+  location?: string;
+
+  @IsString()
+  @IsOptional()
+  nextInspectionDate?: string;
 }

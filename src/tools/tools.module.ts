@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
 import { Tool, ToolSchema } from "./schemas/tool.schema";
+import { ToolEvent, ToolEventSchema } from "./schemas/tool-event.schema";
 import { ToolsController } from "./tools.controller";
 import { ToolsService } from "./tools.service";
 import { Project, ProjectSchema } from "../projects/schemas/project.schema";
@@ -9,6 +10,7 @@ import { Project, ProjectSchema } from "../projects/schemas/project.schema";
   imports: [
     MongooseModule.forFeature([
       { name: Tool.name, schema: ToolSchema },
+      { name: ToolEvent.name, schema: ToolEventSchema },
       { name: Project.name, schema: ProjectSchema },
     ]),
   ],

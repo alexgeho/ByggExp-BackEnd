@@ -63,4 +63,16 @@ export class UpdateToolDto {
   @IsString()
   @IsOptional()
   companyId?: string;
+
+  @IsString()
+  @IsOptional()
+  location?: string;
+
+  @IsString()
+  @IsOptional()
+  lastInspectionDate?: string;
+
+  @IsString()
+  @IsOptional()
+  nextInspectionDate?: string;
 }

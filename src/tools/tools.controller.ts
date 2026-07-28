@@ -20,6 +20,7 @@ import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../users/schemas/user.schema";
 import { CreateToolDto } from "./dto/create-tool.dto";
 import { UpdateToolDto } from "./dto/update-tool.dto";
+import { HandoffToolDto, InspectToolDto } from "./dto/tool-action.dto";
 import {
   AttachToolsToProjectDto,
   AttachToolsToWorkerDto,
@@ -133,6 +134,61 @@ export class ToolsController {
     normalizeToolPhotoPayload(createToolDto, collectUploadedPhotos(files));
 
     return this.toolsService.create(createToolDto, req.user);
+  }
+
+  // ---- QR + hand-off + inspection (static/specific routes before :id) ----
+
+  @Get("scan/:qrId")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  scan(@Param("qrId") qrId: string, @Request() req) {
+    return this.toolsService.findByQr(qrId, req.user);
+  }
+
+  @Post(":id/handoff")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  handoff(
+    @Param("id") id: string,
+    @Body() dto: HandoffToolDto,
+    @Request() req,
+  ) {
+    return this.toolsService.handoff(id, dto, req.user);
+  }
+
+  @Post(":id/inspection")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  inspect(
+    @Param("id") id: string,
+    @Body() dto: InspectToolDto,
+    @Request() req,
+  ) {
+    return this.toolsService.inspect(id, dto, req.user);
+  }
+
+  @Post(":id/qr")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  ensureQr(@Param("id") id: string, @Request() req) {
+    return this.toolsService.ensureQr(id, req.user);
+  }
+
+  @Get(":id/history")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  history(@Param("id") id: string, @Request() req) {
+    return this.toolsService.history(id, req.user);
   }
 
   @Put(":id")
