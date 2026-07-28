@@ -49,8 +49,14 @@ export class BlogPostsController {
   @Get()
   @UseGuards(AuthGuard("jwt"), RolesGuard)
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  findAllForAdmin() {
-    return this.blogPostsService.findAllForAdmin();
+  findAllForAdmin(
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.blogPostsService.findAllForAdmin(
+      Number(page) || 1,
+      Number(limit) || 10,
+    );
   }
 
   @Get(":id")

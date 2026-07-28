@@ -16,6 +16,14 @@ type AuthUser = {
   userId: string;
 };
 
+type PaginatedBlogPosts = {
+  items: BlogPostDocument[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
 @Injectable()
 export class BlogPostsService {
   constructor(
@@ -45,11 +53,29 @@ export class BlogPostsService {
     return post;
   }
 
-  async findAllForAdmin(): Promise<BlogPostDocument[]> {
-    return this.blogPostModel
-      .find()
-      .sort({ updatedAt: -1, createdAt: -1 })
-      .exec();
+  async findAllForAdmin(
+    page = 1,
+    limit = 10,
+  ): Promise<PaginatedBlogPosts> {
+    const safePage = Math.max(1, Math.floor(page));
+    const safeLimit = Math.min(100, Math.max(1, Math.floor(limit)));
+    const [items, total] = await Promise.all([
+      this.blogPostModel
+        .find()
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .skip((safePage - 1) * safeLimit)
+        .limit(safeLimit)
+        .exec(),
+      this.blogPostModel.countDocuments().exec(),
+    ]);
+
+    return {
+      items,
+      total,
+      page: safePage,
+      limit: safeLimit,
+      totalPages: Math.max(1, Math.ceil(total / safeLimit)),
+    };
   }
 
   async findOneForAdmin(id: string): Promise<BlogPostDocument> {
