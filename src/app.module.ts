@@ -33,6 +33,7 @@ import { ExpensesModule } from "./expenses/expenses.module";
 import { AccountingModule } from "./accounting/accounting.module";
 import { DagbokModule } from "./dagbok/dagbok.module";
 import { ChecklistsModule } from "./checklists/checklists.module";
+import { PaymentPlansModule } from "./payment-plans/payment-plans.module";
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { ChecklistsModule } from "./checklists/checklists.module";
     AccountingModule,
     DagbokModule,
     ChecklistsModule,
+    PaymentPlansModule,
     OffersModule,
     ClientsModule,
     ArticlesModule,
