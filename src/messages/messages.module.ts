@@ -6,10 +6,12 @@ import { MessagesService } from "./messages.service";
 import { Chat, ChatSchema } from "../chats/schemas/chat.schema";
 import { User, UserSchema } from "../users/schemas/user.schema";
 import { NotificationsModule } from "../notifications/notifications.module";
+import { TranslationModule } from "../translation/translation.module";
 
 @Module({
   imports: [
     NotificationsModule,
+    TranslationModule,
     MongooseModule.forFeature([
       { name: Message.name, schema: MessageSchema },
       { name: Chat.name, schema: ChatSchema },

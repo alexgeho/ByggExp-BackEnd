@@ -14,6 +14,15 @@ export class Message {
   @Prop({ required: true })
   text: string;
 
+  // Source language as detected on first translation (DeepL code, e.g. "PL").
+  @Prop({ type: String, default: "" })
+  sourceLang: string;
+
+  // Cache of machine translations keyed by target language code (e.g. { SV,
+  // EN }), so a message is only sent to the provider once per language.
+  @Prop({ type: Object, default: {} })
+  translations: Record<string, string>;
+
   @Prop({ type: Date, default: Date.now })
   timestamp: Date;
 }

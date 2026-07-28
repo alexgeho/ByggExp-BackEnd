@@ -9,6 +9,7 @@ import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { Chat, ChatDocument } from "../chats/schemas/chat.schema";
 import { NotificationsService } from "../notifications/notifications.service";
+import { TranslationService } from "../translation/translation.service";
 import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { Message, MessageDocument } from "./schemas/message.schema";
@@ -28,9 +29,10 @@ export class MessagesService {
     @InjectModel(Chat.name) private readonly chatModel: Model<ChatDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly notificationsService: NotificationsService,
+    private readonly translationService: TranslationService,
   ) {}
 
-  async findByChat(chatId: string, user: AuthenticatedUser) {
+  async findByChat(chatId: string, user: AuthenticatedUser, lang?: string) {
     await this.findAccessibleChat(chatId, user);
 
     const messages = await this.messageModel
@@ -39,7 +41,52 @@ export class MessagesService {
       .lean()
       .exec();
 
-    return this.formatMessages(messages);
+    const targetLang = (lang || "").trim().toUpperCase();
+    if (targetLang && this.translationService.enabled) {
+      await this.ensureTranslations(messages, targetLang);
+    }
+
+    return this.formatMessages(messages, targetLang);
+  }
+
+  // Translate any messages not yet available in the target language and cache
+  // the result on each message so the provider is called at most once per
+  // (message, language).
+  private async ensureTranslations(messages: any[], targetLang: string) {
+    const pending = messages.filter(
+      (m) =>
+        m.text &&
+        (m.sourceLang || "").toUpperCase() !== targetLang &&
+        !(m.translations && m.translations[targetLang]),
+    );
+    if (!pending.length) return;
+
+    const results = await this.translationService.translateBatch(
+      pending.map((m) => m.text),
+      targetLang,
+    );
+
+    const ops: any[] = [];
+    results.forEach((r, i) => {
+      if (!r.translated) return;
+      const m = pending[i];
+      const src = (r.detectedSourceLang || "").toUpperCase();
+      m.translations = { ...(m.translations || {}), [targetLang]: r.text };
+      const set: Record<string, string> = {
+        [`translations.${targetLang}`]: r.text,
+      };
+      if (src && !m.sourceLang) {
+        m.sourceLang = src;
+        set.sourceLang = src;
+      }
+      ops.push({
+        updateOne: { filter: { _id: m._id }, update: { $set: set } },
+      });
+    });
+
+    if (ops.length) {
+      await this.messageModel.bulkWrite(ops);
+    }
   }
 
   async send(
@@ -117,7 +164,7 @@ export class MessagesService {
     return chat;
   }
 
-  private async formatMessages(messages: any[]) {
+  private async formatMessages(messages: any[], targetLang = "") {
     const userIds = [
       ...new Set(
         messages.map((message) => message.userId?.toString()).filter(Boolean),
@@ -136,12 +183,22 @@ export class MessagesService {
 
     return messages.map((message) => {
       const sender = usersById.get(message.userId?.toString());
+      const sourceLang = message.sourceLang || "";
+      const cached = targetLang ? message.translations?.[targetLang] : null;
+      // Only surface a translation when the message isn't already in the
+      // reader's language.
+      const translatedText =
+        targetLang && cached && sourceLang.toUpperCase() !== targetLang
+          ? cached
+          : null;
 
       return {
         _id: message._id.toString(),
         chatId: message.chatId.toString(),
         userId: message.userId.toString(),
         text: message.text,
+        translatedText,
+        sourceLang,
         timestamp: message.timestamp,
         senderName: sender?.name || sender?.email || "Unknown user",
       };
