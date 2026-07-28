@@ -251,6 +251,48 @@ export class HoursService {
     };
   }
 
+  // Labor cost per project = Σ (worked hours × the worker's hourly rate) over
+  // all shifts on accessible projects. Workers without a rate contribute 0.
+  async laborCostByProject(user: AuthenticatedUser) {
+    const projects = await this.accessibleProjects(user);
+    const projectIds = projects.map((p) => this.getEntityId(p));
+    if (!projectIds.length) {
+      return { byProject: {}, total: 0 };
+    }
+
+    const shifts = await this.shiftModel
+      .find({ projectId: { $in: projectIds } })
+      .select("workerId projectId durationMs")
+      .lean()
+      .exec();
+
+    const workerIds = [...new Set(shifts.map((s) => String(s.workerId)))];
+    const users = await this.userModel
+      .find({ _id: { $in: workerIds } })
+      .select("hourlyRate")
+      .lean()
+      .exec();
+    const rateById = new Map(
+      users.map((u) => [this.getEntityId(u), Number(u.hourlyRate) || 0]),
+    );
+
+    const byProject: Record<string, number> = {};
+    let total = 0;
+    for (const shift of shifts) {
+      const hours = (Number(shift.durationMs) || 0) / MS_PER_HOUR;
+      const cost = hours * (rateById.get(String(shift.workerId)) || 0);
+      if (!cost) continue;
+      const projectId = String(shift.projectId);
+      byProject[projectId] = (byProject[projectId] || 0) + cost;
+      total += cost;
+    }
+
+    for (const key of Object.keys(byProject)) {
+      byProject[key] = round(byProject[key]);
+    }
+    return { byProject, total: round(total) };
+  }
+
   async saveAdjustment(user: AuthenticatedUser, dto: SaveAdjustmentDto) {
     const [project] = await this.accessibleProjects(user, dto.projectId);
     if (!project) {

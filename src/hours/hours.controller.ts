@@ -27,6 +27,14 @@ export class HoursController {
     return this.hoursService.getGrid(req.user, query);
   }
 
+  // Labor cost (worked hours × each worker's hourly rate) grouped by project,
+  // for the profitability report.
+  @Get("labor-cost")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  laborCost(@Request() req) {
+    return this.hoursService.laborCostByProject(req.user);
+  }
+
   // Upsert an admin correction of planned hours for one worker-day-project.
   @Put("adjustment")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
