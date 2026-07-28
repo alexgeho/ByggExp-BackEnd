@@ -1,0 +1,17 @@
+{
+  "name": "byggexp-invoice-mail-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Email Worker that forwards invoice e-mail attachments to the ByggExp inbound webhook.",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "postal-mime": "^2.4.4"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

@@ -1,0 +1,13 @@
+name = "byggexp-invoice-mail"
+main = "src/worker.js"
+compatibility_date = "2024-11-01"
+
+# Public (non-secret) config. Set INBOUND_COMPANY_ID to the company that owns
+# the invoices before deploying.
+[vars]
+INBOUND_WEBHOOK_URL = "https://api.byggexp.se/inbound/supplier-invoices"
+INBOUND_COMPANY_ID = "REPLACE_WITH_COMPANY_ID"
+
+# INBOUND_INVOICE_TOKEN is a secret — do NOT put it here. Set it with:
+#   npx wrangler secret put INBOUND_INVOICE_TOKEN
+# and use the exact same value as the backend's INBOUND_INVOICE_TOKEN secret.
