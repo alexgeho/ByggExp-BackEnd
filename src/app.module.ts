@@ -28,6 +28,7 @@ import { BugReportsModule } from "./bug-reports/bug-reports.module";
 import { MailModule } from "./mail/mail.module";
 import { BlogPostsModule } from "./blog-posts/blog-posts.module";
 import { SiteSeoModule } from "./site-seo/site-seo.module";
+import { AtaModule } from "./ata/ata.module";
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { SiteSeoModule } from "./site-seo/site-seo.module";
     InvoicesModule,
     PayrollModule,
     SupplierInvoicesModule,
+    AtaModule,
     OffersModule,
     ClientsModule,
     ArticlesModule,
