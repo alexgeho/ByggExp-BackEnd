@@ -29,6 +29,7 @@ import { MailModule } from "./mail/mail.module";
 import { BlogPostsModule } from "./blog-posts/blog-posts.module";
 import { SiteSeoModule } from "./site-seo/site-seo.module";
 import { AtaModule } from "./ata/ata.module";
+import { ExpensesModule } from "./expenses/expenses.module";
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { AtaModule } from "./ata/ata.module";
     PayrollModule,
     SupplierInvoicesModule,
     AtaModule,
+    ExpensesModule,
     OffersModule,
     ClientsModule,
     ArticlesModule,
