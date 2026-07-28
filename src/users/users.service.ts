@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -545,7 +546,17 @@ export class UsersService {
       emailVerificationExpiresAt: expiresAt,
     });
 
-    const savedUser = await createdUser.save();
+    let savedUser: UserDocument;
+    try {
+      savedUser = await createdUser.save();
+    } catch (error) {
+      if ((error as { code?: number })?.code === 11000) {
+        throw new ConflictException(
+          "En användare med den e-postadressen finns redan",
+        );
+      }
+      throw error;
+    }
 
     await this.syncUserProjectAssignments(
       savedUser._id.toString(),

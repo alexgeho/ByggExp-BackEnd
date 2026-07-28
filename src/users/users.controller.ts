@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Controller,
   Get,
   Post,
@@ -106,6 +107,17 @@ export class UsersController {
     }
 
     const role = createUserDto.role ?? UserRole.Worker;
+
+    // A duplicate email otherwise surfaces as a raw Mongo E11000 → 500. Check
+    // up front and return a clear conflict instead.
+    if (createUserDto.email) {
+      const existing = await this.usersService.findByEmail(createUserDto.email);
+      if (existing) {
+        throw new ConflictException(
+          "En användare med den e-postadressen finns redan",
+        );
+      }
+    }
 
     if (createUserDto.inviteViaEmail || !createUserDto.password) {
       return this.usersService.createUserPendingApproval({
