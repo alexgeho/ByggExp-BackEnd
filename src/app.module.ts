@@ -35,6 +35,7 @@ import { DagbokModule } from "./dagbok/dagbok.module";
 import { ChecklistsModule } from "./checklists/checklists.module";
 import { PaymentPlansModule } from "./payment-plans/payment-plans.module";
 import { LeaveModule } from "./leave/leave.module";
+import { ScanningModule } from "./scanning/scanning.module";
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { LeaveModule } from "./leave/leave.module";
     ChecklistsModule,
     PaymentPlansModule,
     LeaveModule,
+    ScanningModule,
     OffersModule,
     ClientsModule,
     ArticlesModule,
