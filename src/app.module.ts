@@ -32,6 +32,7 @@ import { AtaModule } from "./ata/ata.module";
 import { ExpensesModule } from "./expenses/expenses.module";
 import { AccountingModule } from "./accounting/accounting.module";
 import { DagbokModule } from "./dagbok/dagbok.module";
+import { ChecklistsModule } from "./checklists/checklists.module";
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { DagbokModule } from "./dagbok/dagbok.module";
     ExpensesModule,
     AccountingModule,
     DagbokModule,
+    ChecklistsModule,
     OffersModule,
     ClientsModule,
     ArticlesModule,
