@@ -53,6 +53,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: DEEPL_API_KEY,ANTHROPIC_API_KEY
           script: |
             set -euo pipefail
             RELEASE=$(date -u +%Y%m%d-%H%M%S)
@@ -68,6 +69,22 @@ jobs:
             ln -sf "$BASE/shared/.env" "$DIR/.env"
             rm -rf "$DIR/uploads"
             ln -s "$BASE/shared/uploads" "$DIR/uploads"
+
+            # Sync AI provider keys from GitHub Secrets into the shared env
+            # (idempotent; empty secret = leave the file untouched).
+            ENV_FILE="$BASE/shared/.env"
+            touch "$ENV_FILE"
+            upsert_env() {
+              local k="$1" v="$2"
+              [ -z "$v" ] && return 0
+              if grep -q "^${k}=" "$ENV_FILE"; then
+                sed -i "s|^${k}=.*|${k}=${v}|" "$ENV_FILE"
+              else
+                echo "${k}=${v}" >> "$ENV_FILE"
+              fi
+            }
+            upsert_env DEEPL_API_KEY "${DEEPL_API_KEY:-}"
+            upsert_env ANTHROPIC_API_KEY "${ANTHROPIC_API_KEY:-}"
 
             cd "$DIR"
             echo "==> Installing production deps"
@@ -103,3 +120,6 @@ jobs:
             ls -1dt $BASE/releases/*/ 2>/dev/null | tail -n +6 | xargs -r rm -rf
 
             echo "==> Deploy successful: $RELEASE"
+        env:
+          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
