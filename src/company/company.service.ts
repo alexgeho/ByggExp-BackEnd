@@ -25,6 +25,7 @@ import {
   ModuleResolution,
   resolveModules,
   sanitizeOverrides,
+  TOGGLEABLE_MODULES,
 } from "./modules";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -243,12 +244,37 @@ export class CompanyService {
     return resolveModules(company);
   }
 
-  // Superadmin: replace the per-company override map, then return the resolution.
+  // Set the per-company override map, then return the resolution.
+  // restrictToPlan (companyAdmin self-service): may only hide/show modules that
+  // are already in the plan — cannot enable anything beyond it, and never
+  // touches superadmin grants for out-of-plan modules.
   async setModuleOverrides(
     id: string,
     overrides: Record<string, unknown>,
+    opts: { restrictToPlan?: boolean } = {},
   ): Promise<ModuleResolution> {
-    const clean = sanitizeOverrides(overrides);
+    let clean = sanitizeOverrides(overrides);
+
+    if (opts.restrictToPlan) {
+      const current = await this.companyModel
+        .findById(id)
+        .select("plan moduleOverrides")
+        .exec();
+      if (!current) {
+        throw new NotFoundException(`Company with ID "${id}" not found`);
+      }
+      const { planModules } = resolveModules(current);
+      const planSet = new Set(planModules);
+      const existing = current.moduleOverrides || {};
+      const merged: Record<string, boolean> = { ...existing };
+      for (const key of TOGGLEABLE_MODULES) {
+        if (!planSet.has(key)) continue; // out-of-plan: untouchable, keep as-is
+        if (clean[key] === false) merged[key] = false; // hide
+        else delete merged[key]; // show (= plan default, no override)
+      }
+      clean = sanitizeOverrides(merged);
+    }
+
     const company = await this.companyModel
       .findByIdAndUpdate(id, { moduleOverrides: clean }, { new: true })
       .select("plan moduleOverrides")

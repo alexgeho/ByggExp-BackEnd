@@ -12,6 +12,7 @@ export const CORE_MODULES = [
   "my-tasks",
   "profile",
   "billing",
+  "modules", // the "customize menu" page itself
 ];
 
 // Everything a superadmin can switch on/off. Keys match the sidebar item keys.

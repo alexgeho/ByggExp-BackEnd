@@ -201,14 +201,20 @@ export class CompanyController {
     return this.companyService.getModules(id);
   }
 
-  // Superadmin: set the per-company override map.
+  // Set the per-company override map. Superadmin: any company, no limits.
+  // CompanyAdmin: own company only, and may only hide/show within the plan.
   @Patch(":id/modules")
-  @Roles(UserRole.SuperAdmin)
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   async setModules(
     @Param("id") id: string,
     @Body() body: { overrides?: Record<string, unknown> },
+    @Request() req,
   ) {
-    return this.companyService.setModuleOverrides(id, body?.overrides || {});
+    this.assertOwnCompany(id, req);
+    const restrictToPlan = req.user.role !== UserRole.SuperAdmin;
+    return this.companyService.setModuleOverrides(id, body?.overrides || {}, {
+      restrictToPlan,
+    });
   }
 
   @Delete(":id")
