@@ -1,6 +1,7 @@
 import {
   IsArray,
   IsDateString,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -90,4 +91,8 @@ export class CreateTaskDto {
   @IsDateString()
   @IsOptional()
   dueDate?: Date;
+
+  @IsIn(["low", "normal", "high"])
+  @IsOptional()
+  priority?: string;
 }

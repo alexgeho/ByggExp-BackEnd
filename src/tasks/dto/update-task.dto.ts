@@ -1,4 +1,10 @@
-import { IsArray, IsDateString, IsOptional, IsString } from "class-validator";
+import {
+  IsArray,
+  IsDateString,
+  IsIn,
+  IsOptional,
+  IsString,
+} from "class-validator";
 import { Transform } from "class-transformer";
 
 const parseArrayField = (value: unknown) => {
@@ -80,4 +86,8 @@ export class UpdateTaskDto {
   @IsDateString()
   @IsOptional()
   dueDate?: Date;
+
+  @IsIn(["low", "normal", "high"])
+  @IsOptional()
+  priority?: string;
 }

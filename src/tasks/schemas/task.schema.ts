@@ -8,6 +8,12 @@ export enum TaskStatus {
   Completed = "completed",
 }
 
+export enum TaskPriority {
+  Low = "low",
+  Normal = "normal",
+  High = "high",
+}
+
 export class TaskDocumentFile {
   name: string;
   url: string;
@@ -59,6 +65,14 @@ export class Task {
     index: true,
   })
   status: TaskStatus;
+
+  @Prop({
+    type: String,
+    enum: TaskPriority,
+    default: TaskPriority.Normal,
+    index: true,
+  })
+  priority: TaskPriority;
 
   @Prop({ type: Date, default: null })
   completedAt?: Date | null;
