@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Put,
+  Patch,
   Delete,
   UseGuards,
   Request,
@@ -184,6 +185,30 @@ export class CompanyController {
     return this.companyService.update(id, {
       logoUrl: `/uploads/company-logos/${file.filename}`,
     });
+  }
+
+  // Effective module set (plan preset + overrides). Company staff may read
+  // their own; superadmin may read any.
+  @Get(":id/modules")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  async getModules(@Param("id") id: string, @Request() req) {
+    this.assertOwnCompany(id, req);
+    return this.companyService.getModules(id);
+  }
+
+  // Superadmin: set the per-company override map.
+  @Patch(":id/modules")
+  @Roles(UserRole.SuperAdmin)
+  async setModules(
+    @Param("id") id: string,
+    @Body() body: { overrides?: Record<string, unknown> },
+  ) {
+    return this.companyService.setModuleOverrides(id, body?.overrides || {});
   }
 
   @Delete(":id")

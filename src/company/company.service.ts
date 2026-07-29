@@ -21,6 +21,11 @@ import { AcceptInviteDto } from "./dto/accept-invite.dto";
 import { UsersService } from "../users/users.service";
 import { MailService } from "../mail/mail.service";
 import { UserAccountStatus, UserRole } from "../users/schemas/user.schema";
+import {
+  ModuleResolution,
+  resolveModules,
+  sanitizeOverrides,
+} from "./modules";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -224,6 +229,34 @@ export class CompanyService {
 
   async findOneByEmail(email: string): Promise<Company | null> {
     return this.companyModel.findOne({ email }).exec();
+  }
+
+  // Resolve the effective module set (plan preset + overrides) for a company.
+  async getModules(id: string): Promise<ModuleResolution> {
+    const company = await this.companyModel
+      .findById(id)
+      .select("plan moduleOverrides")
+      .exec();
+    if (!company) {
+      throw new NotFoundException(`Company with ID "${id}" not found`);
+    }
+    return resolveModules(company);
+  }
+
+  // Superadmin: replace the per-company override map, then return the resolution.
+  async setModuleOverrides(
+    id: string,
+    overrides: Record<string, unknown>,
+  ): Promise<ModuleResolution> {
+    const clean = sanitizeOverrides(overrides);
+    const company = await this.companyModel
+      .findByIdAndUpdate(id, { moduleOverrides: clean }, { new: true })
+      .select("plan moduleOverrides")
+      .exec();
+    if (!company) {
+      throw new NotFoundException(`Company with ID "${id}" not found`);
+    }
+    return resolveModules(company);
   }
 
   async findByIds(ids: string[]): Promise<Company[]> {

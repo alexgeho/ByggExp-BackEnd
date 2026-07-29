@@ -67,6 +67,12 @@ export class Company {
 
   @Prop({ type: Boolean, default: false })
   cancelAtPeriodEnd: boolean;
+
+  // ---- Module visibility (feature flags) ----
+  // Superadmin overrides on top of the plan preset: { moduleKey: true|false }.
+  // Absent key → inherit the plan default. See company/modules.ts.
+  @Prop({ type: Object, default: {} })
+  moduleOverrides?: Record<string, boolean>;
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);
