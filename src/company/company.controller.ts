@@ -201,6 +201,16 @@ export class CompanyController {
     return this.companyService.getModules(id);
   }
 
+  // Superadmin: manually assign / clear a company's plan tier.
+  @Patch(":id/plan")
+  @Roles(UserRole.SuperAdmin)
+  async setPlan(
+    @Param("id") id: string,
+    @Body() body: { plan?: string | null },
+  ) {
+    return this.companyService.setPlan(id, body?.plan ?? null);
+  }
+
   // Set the per-company override map. Superadmin: any company, no limits.
   // CompanyAdmin: own company only, and may only hide/show within the plan.
   @Patch(":id/modules")

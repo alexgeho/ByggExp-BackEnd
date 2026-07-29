@@ -232,6 +232,24 @@ export class CompanyService {
     return this.companyModel.findOne({ email }).exec();
   }
 
+  // Superadmin: manually assign a plan tier (or clear it), returning the
+  // resolved modules so the caller can refresh in one round-trip.
+  async setPlan(
+    id: string,
+    plan: string | null,
+  ): Promise<ModuleResolution> {
+    const allowed = new Set(["start", "tillvaxt", "professionell"]);
+    const value = plan && allowed.has(plan) ? plan : null;
+    const company = await this.companyModel
+      .findByIdAndUpdate(id, { plan: value }, { new: true })
+      .select("plan moduleOverrides")
+      .exec();
+    if (!company) {
+      throw new NotFoundException(`Company with ID "${id}" not found`);
+    }
+    return resolveModules(company);
+  }
+
   // Resolve the effective module set (plan preset + overrides) for a company.
   async getModules(id: string): Promise<ModuleResolution> {
     const company = await this.companyModel
