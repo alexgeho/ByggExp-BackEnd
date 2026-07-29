@@ -33,6 +33,26 @@ export class MailService {
     }
   }
 
+  // Whether SMTP is wired up (used by the system-status panel).
+  isConfigured(): boolean {
+    return this.transporter !== null;
+  }
+
+  // Send a one-off diagnostic email so an admin can confirm SMTP works right
+  // after setting the secrets. Throws if not configured or the send fails.
+  async sendTestEmail(to: string): Promise<void> {
+    if (!this.transporter) {
+      throw new Error("SMTP is not configured");
+    }
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to,
+      subject: "ByggExp — test email",
+      text: "This is a test email from ByggExp. SMTP is working correctly.",
+      html: "<p>This is a test email from <strong>ByggExp</strong>. SMTP is working correctly.</p>",
+    });
+  }
+
   private getFromAddress(): string {
     return (
       this.configService.get<string>("SMTP_FROM") ||
