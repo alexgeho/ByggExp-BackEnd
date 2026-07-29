@@ -120,7 +120,7 @@ export class TasksController {
     @Body() updateTaskDto: UpdateTaskDto,
   ) {
     await this.tasksService.assertTaskAccessById(id, req.user);
-    return this.tasksService.update(id, updateTaskDto, req.user.userId);
+    return this.tasksService.update(id, updateTaskDto, req.user);
   }
 
   @Patch(":id/complete")

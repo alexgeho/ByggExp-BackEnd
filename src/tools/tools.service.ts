@@ -311,13 +311,17 @@ export class ToolsService {
     return tool;
   }
 
-  async attachToWorker(workerId: string, toolIds: string[]): Promise<void> {
+  async attachToWorker(
+    workerId: string,
+    toolIds: string[],
+    companyId: string,
+  ): Promise<void> {
     if (!toolIds.length) {
       return;
     }
 
     await this.toolModel.updateMany(
-      { _id: { $in: toolIds } },
+      { _id: { $in: toolIds }, companyId },
       { $addToSet: { workerIds: workerId } },
     );
   }
@@ -325,9 +329,12 @@ export class ToolsService {
   async replaceWorkerAssignments(
     workerId: string,
     toolIds: string[],
+    companyId: string,
   ): Promise<void> {
+    // Company-scope the clear so passing another company's workerId can never
+    // strip that worker off *their* tools.
     await this.toolModel.updateMany(
-      { workerIds: workerId },
+      { workerIds: workerId, companyId },
       { $pull: { workerIds: workerId } },
     );
 
@@ -336,18 +343,22 @@ export class ToolsService {
     }
 
     await this.toolModel.updateMany(
-      { _id: { $in: toolIds } },
+      { _id: { $in: toolIds }, companyId },
       { $addToSet: { workerIds: workerId } },
     );
   }
 
-  async attachToProject(projectId: string, toolIds: string[]): Promise<void> {
+  async attachToProject(
+    projectId: string,
+    toolIds: string[],
+    companyId: string,
+  ): Promise<void> {
     if (!toolIds.length) {
       return;
     }
 
     await this.toolModel.updateMany(
-      { _id: { $in: toolIds } },
+      { _id: { $in: toolIds }, companyId },
       { $addToSet: { projectIds: projectId } },
     );
   }

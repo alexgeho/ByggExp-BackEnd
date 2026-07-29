@@ -35,11 +35,6 @@ type TaskNotificationSource = {
   taskTitle: string;
 };
 
-type TaskActorContext = {
-  userId?: string;
-  role?: UserRole;
-};
-
 @Injectable()
 export class TasksService {
   private readonly logger = new Logger(TasksService.name);
@@ -54,10 +49,9 @@ export class TasksService {
 
   async create(
     createTaskDto: CreateTaskDto,
-    actor?: TaskActorContext,
+    actor?: TaskAuthUser,
   ): Promise<Task> {
     const actorUserId = actor?.userId;
-    const actorRole = actor?.role;
     const hasProject = Boolean(createTaskDto.projectId);
     const hasAssignee = Boolean(createTaskDto.assigneeUserId);
 
@@ -68,25 +62,21 @@ export class TasksService {
     }
 
     if (!hasProject && hasAssignee) {
-      return this.createPersonalTask(createTaskDto, actorUserId);
+      return this.createPersonalTask(createTaskDto, actor);
     }
 
     const projectId = createTaskDto.projectId as string;
+
+    // Tenant isolation: the target project must belong to the caller's company
+    // (and, for projectAdmin/worker, they must be a member of it).
+    if (actor) {
+      await this.assertProjectAccessForTasks(projectId, actor);
+    }
+
     const project = await this.projectModel.findById(projectId).exec();
 
     if (!project) {
       throw new NotFoundException(`Project with ID "${projectId}" not found`);
-    }
-
-    if (actorRole === UserRole.Worker && actorUserId) {
-      const workerIds = (project.workers || []).map((value) =>
-        value.toString(),
-      );
-      if (!workerIds.includes(String(actorUserId))) {
-        throw new BadRequestException(
-          "Workers can only create tasks in their own projects.",
-        );
-      }
     }
 
     let assigneeUserId: string | null = null;
@@ -103,6 +93,7 @@ export class TasksService {
         );
       }
 
+      this.assertSameCompany(assignee.companyId, actor);
       assigneeUserId = assignee._id.toString();
       assigneeUserName = assignee.name || assignee.email || "User";
     }
@@ -156,8 +147,9 @@ export class TasksService {
 
   private async createPersonalTask(
     createTaskDto: CreateTaskDto,
-    actorUserId?: string,
+    actor?: TaskAuthUser,
   ): Promise<Task> {
+    const actorUserId = actor?.userId;
     const assignee = await this.userModel
       .findById(createTaskDto.assigneeUserId)
       .exec();
@@ -167,6 +159,8 @@ export class TasksService {
         `User with ID "${createTaskDto.assigneeUserId}" not found`,
       );
     }
+
+    this.assertSameCompany(assignee.companyId, actor);
 
     const personalTaskPayload = {
       ...createTaskDto,
@@ -270,6 +264,18 @@ export class TasksService {
 
   // ---- Tenant / project-scope access control for single tasks ----
 
+  // Guards that a referenced user (e.g. a task assignee) is in the caller's
+  // company, so a task/notification can't be pushed to another tenant's user.
+  private assertSameCompany(
+    targetCompanyId: unknown,
+    user?: TaskAuthUser,
+  ): void {
+    if (!user?.companyId) return; // internal call without a tenant context
+    if (String(targetCompanyId ?? "") !== String(user.companyId)) {
+      throw new ForbiddenException("User belongs to another company");
+    }
+  }
+
   private async assertProjectAccessForTasks(
     projectId: string,
     user: TaskAuthUser,
@@ -346,8 +352,9 @@ export class TasksService {
   async update(
     id: string,
     updateTaskDto: UpdateTaskDto,
-    actorUserId?: string,
+    actor?: TaskAuthUser,
   ): Promise<Task> {
+    const actorUserId = actor?.userId;
     const existingTask = await this.taskModel.findById(id).exec();
 
     if (!existingTask) {
@@ -366,6 +373,13 @@ export class TasksService {
         : null;
 
     if (nextProjectId && nextProjectId !== currentProjectId) {
+      // Tenant isolation: don't let a task be moved into a project of another
+      // company (the caller's access to the *current* project is checked by the
+      // controller's assertTaskAccessById).
+      if (actor) {
+        await this.assertProjectAccessForTasks(String(nextProjectId), actor);
+      }
+
       targetProject = await this.projectModel.findById(nextProjectId).exec();
 
       if (!targetProject) {

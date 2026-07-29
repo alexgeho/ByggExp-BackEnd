@@ -101,7 +101,7 @@ export class ToolsController {
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async attachToWorker(@Body() dto: AttachToolsToWorkerDto, @Request() req) {
     await this.toolsService.assertToolsInCompany(dto.toolIds, req.user);
-    return this.toolsService.attachToWorker(dto.workerId, dto.toolIds);
+    return this.toolsService.attachToWorker(dto.workerId, dto.toolIds, req.user.companyId);
   }
 
   @Put("worker/:workerId/assignments")
@@ -112,14 +112,14 @@ export class ToolsController {
     @Request() req,
   ) {
     await this.toolsService.assertToolsInCompany(dto.toolIds, req.user);
-    return this.toolsService.replaceWorkerAssignments(workerId, dto.toolIds);
+    return this.toolsService.replaceWorkerAssignments(workerId, dto.toolIds, req.user.companyId);
   }
 
   @Post("attach-to-project")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async attachToProject(@Body() dto: AttachToolsToProjectDto, @Request() req) {
     await this.toolsService.assertToolsInCompany(dto.toolIds, req.user);
-    return this.toolsService.attachToProject(dto.projectId, dto.toolIds);
+    return this.toolsService.attachToProject(dto.projectId, dto.toolIds, req.user.companyId);
   }
 
   @Post()
