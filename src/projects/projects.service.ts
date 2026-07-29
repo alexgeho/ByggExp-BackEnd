@@ -552,6 +552,9 @@ export class ProjectsService {
 
     for (const workerId of workerIds) {
       const user = await this.usersService.findOne(workerId);
+      if (String(user.companyId) !== String(project.companyId)) {
+        throw new ForbiddenException(`User ${workerId} belongs to another company`);
+      }
       if (user.role !== UserRole.Worker) {
         throw new ForbiddenException(`User ${workerId} is not a Worker`);
       }
@@ -580,6 +583,11 @@ export class ProjectsService {
 
   async addProjectAdmin(projectId: string, userId: string): Promise<Project> {
     const project = await this.findOne(projectId);
+
+    const user = await this.usersService.findOne(userId);
+    if (String(user.companyId) !== String(project.companyId)) {
+      throw new ForbiddenException(`User ${userId} belongs to another company`);
+    }
 
     if (!project.projectAdmins.includes(userId)) {
       await this.projectModel.findByIdAndUpdate(projectId, {
