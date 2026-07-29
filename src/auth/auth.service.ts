@@ -1,4 +1,6 @@
 import {
+  HttpException,
+  HttpStatus,
   Injectable,
   UnauthorizedException,
   ConflictException,
@@ -25,6 +27,51 @@ export class AuthService {
     private companyService: CompanyService,
     private jwtService: JwtService,
   ) {}
+
+  // In-memory brute-force protection for password login, keyed by email so it
+  // works regardless of the reverse proxy's IP. Single-instance (PM2); move to
+  // Redis if the API is ever horizontally scaled.
+  private readonly loginAttempts = new Map<
+    string,
+    { count: number; firstAt: number; lockedUntil: number }
+  >();
+  private static readonly MAX_LOGIN_ATTEMPTS = 8;
+  private static readonly LOGIN_WINDOW_MS = 10 * 60 * 1000;
+  private static readonly LOGIN_LOCK_MS = 10 * 60 * 1000;
+
+  private assertLoginAllowed(email: string): void {
+    const record = this.loginAttempts.get(email);
+    if (!record) return;
+    const now = Date.now();
+    if (record.lockedUntil > now) {
+      const minutes = Math.ceil((record.lockedUntil - now) / 60000);
+      throw new HttpException(
+        `För många inloggningsförsök. Försök igen om ${minutes} minut(er).`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    // Window elapsed and not locked → forget the old failures.
+    if (now - record.firstAt > AuthService.LOGIN_WINDOW_MS) {
+      this.loginAttempts.delete(email);
+    }
+  }
+
+  private registerLoginFailure(email: string): void {
+    const now = Date.now();
+    const record = this.loginAttempts.get(email);
+    if (!record || now - record.firstAt > AuthService.LOGIN_WINDOW_MS) {
+      this.loginAttempts.set(email, { count: 1, firstAt: now, lockedUntil: 0 });
+      return;
+    }
+    record.count += 1;
+    if (record.count >= AuthService.MAX_LOGIN_ATTEMPTS) {
+      record.lockedUntil = now + AuthService.LOGIN_LOCK_MS;
+    }
+  }
+
+  private clearLoginFailures(email: string): void {
+    this.loginAttempts.delete(email);
+  }
 
   private async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, 10);
@@ -125,8 +172,12 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
-    const normalizedEmail = email?.trim().toLowerCase();
+    const normalizedEmail = email?.trim().toLowerCase() || "";
     const normalizedPassword = password?.trim();
+
+    // Reject early if this email is temporarily locked from too many failures.
+    this.assertLoginAllowed(normalizedEmail);
+
     const user = await this.usersService.findByEmail(normalizedEmail);
 
     const isMatch =
@@ -135,8 +186,11 @@ export class AuthService {
       (await this.comparePasswords(normalizedPassword, user.password));
 
     if (!user || !isMatch) {
+      this.registerLoginFailure(normalizedEmail);
       throw new UnauthorizedException("Invalid credentials");
     }
+
+    this.clearLoginFailures(normalizedEmail);
 
     // Invite users start as waiting_for_approval. Allow email+password login
     // (admin/app) and activate the account on first successful password sign-in.
