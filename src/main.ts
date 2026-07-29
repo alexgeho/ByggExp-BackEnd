@@ -46,6 +46,23 @@ async function bootstrap() {
 
   const logger = new Logger("Bootstrap");
   app.useLogger(logger);
+
+  // Make the active environment + database obvious, and loudly warn when a
+  // non-production process is pointed at the production database — so local
+  // development and tests never silently write to real customer data.
+  const dbName =
+    (process.env.MONGODB_URI || "").split("/").pop()?.split("?")[0] || "unknown";
+  const nodeEnv = process.env.NODE_ENV || "development";
+  logger.log(`Environment: ${nodeEnv} | Database: ${dbName}`);
+  const looksLikeProdDb =
+    /byggexp/i.test(dbName) && !/dev|stag|test|local/i.test(dbName);
+  if (nodeEnv !== "production" && looksLikeProdDb) {
+    logger.warn(
+      `⚠️  A non-production process is connected to what looks like the PRODUCTION database ("${dbName}"). ` +
+        `Point local development at a separate database (e.g. "${dbName}_dev") to avoid writing to real data.`,
+    );
+  }
+
   app.useGlobalFilters(new AllExceptionsFilter());
   app.use("/uploads", express.static(join(process.cwd(), "uploads")));
 
