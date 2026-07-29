@@ -113,6 +113,17 @@ export class BillingService {
     return { url: session.url };
   }
 
+  // Lightweight status lookup used by the paywall interceptor (mutations only).
+  async getSubscriptionStatus(companyId: string): Promise<string | null> {
+    if (!companyId) return null;
+    const company = await this.companyModel
+      .findById(companyId)
+      .select("subscriptionStatus")
+      .lean()
+      .exec();
+    return (company as { subscriptionStatus?: string } | null)?.subscriptionStatus ?? null;
+  }
+
   async getStatus(companyId: string) {
     const company = await this.getCompany(companyId);
     const status = company.subscriptionStatus ?? null;
