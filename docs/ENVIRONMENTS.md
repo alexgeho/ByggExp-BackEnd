@@ -40,18 +40,42 @@ mongodb+srv://USER:PASSWORD@cluster0.zgjfrlf.mongodb.net/ByggExp_dev?retryWrites
    If you ever see `Database: ByggExp` with `Environment: development`, stop —
    you are about to write to production.
 
+## Seeding demo data
+
+Once your local `.env` points at `ByggExp_dev`, fill it with a self-contained
+demo company (admin + workers + projects + tasks):
+
+```
+npm run seed:demo
+```
+
+- Re-runnable: it removes its own previously seeded records first.
+- **Safe:** refuses to run against a production-looking database (name contains
+  `byggexp` without a `dev`/`stg`/`test`/`local` marker) unless `SEED_FORCE=1`.
+- Login after seeding: `admin@byggexp.dev` / `demo1234` (companyAdmin).
+
 ## Guardrails already in place
 
 - **Startup log + warning** (`src/main.ts`): prints the environment + database
   on boot and warns when a non-production process targets the production DB.
+- **Seed guard** (`scripts/seed-demo.ts`): won't seed a prod-looking DB.
 - **CI gate** (`.github/workflows/ci.yml` + the deploy workflow): tests must
   pass before anything is built or deployed.
 
-## Still to do (needs your action / a follow-up)
+## Staging (your action to provision)
 
-- Provision a **staging** deploy target (host + `ByggExp_stg` DB) so changes can
-  be smoke-tested against production-like data before hitting real customers.
-- Add a **seed script** that fills a fresh `ByggExp_dev` with realistic demo
-  data (company, users, projects, shifts) — best written once a separate dev DB
-  exists, so it can be iterated safely without touching production.
-- Move existing **test/demo records** out of the production `ByggExp` database.
+Reuse the existing deploy pipeline against a separate host + database:
+
+1. Provision a staging app on the VPS (or a second VPS): a `byggexp-api-stg`
+   PM2 process on its own port, and a `shared/.env` with
+   `NODE_ENV=production`, `MONGODB_URI=…/ByggExp_stg`.
+2. In GitHub, add staging secrets (`SSH_HOST_STG`, `SSH_USER_STG`, …) and copy
+   `.github/workflows/deploy.yml` to `deploy-staging.yml`, pointing it at the
+   staging secrets/paths and triggering on the `staging` branch (or
+   `workflow_dispatch`).
+3. Promote `staging` → `main` once smoke-tested.
+
+## Still to do
+
+- Move existing **test/demo records** out of the production `ByggExp` database
+  (the ones created while dev shared the prod DB).

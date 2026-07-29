@@ -22,6 +22,7 @@
     "migration:up": "migrate-mongo up -f ./migrate-mongo-config.js",
     "migration:down": "migrate-mongo down -f ./migrate-mongo-config.js",
     "migration:status": "migrate-mongo status -f ./migrate-mongo-config.js",
+    "seed:demo": "ts-node scripts/seed-demo.ts",
     "seed:superadmin": "ts-node scripts/seed-superadmin.ts",
     "seed:invoicing-demo": "ts-node scripts/seed-invoicing-demo.ts",
     "check:superadmin": "ts-node scripts/check-superadmin.ts",
