@@ -12,6 +12,7 @@ import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import {
   ACTIVE_STATUSES,
   BillingInterval,
+  PLAN_TIERS,
   PlanTier,
   TRIAL_DAYS,
   priceIdFor,
@@ -81,13 +82,24 @@ export class BillingService {
     const company = await this.getCompany(companyId);
     const customer = await this.ensureCustomer(company);
 
+    const taxEnabled = process.env.STRIPE_TAX_ENABLED === "true";
     const session = await this.client().checkout.sessions.create({
       mode: "subscription",
       customer,
       line_items: [{ price, quantity: 1 }],
       subscription_data: { trial_period_days: TRIAL_DAYS },
       allow_promotion_codes: true,
-      billing_address_collection: "auto",
+      billing_address_collection: "required",
+      // Let Swedish/EU B2B customers enter their VAT number (reverse charge).
+      tax_id_collection: { enabled: true },
+      // Stripe Tax computes moms automatically — only when enabled in the
+      // dashboard, otherwise checkout would error, so it is behind a flag.
+      ...(taxEnabled
+        ? {
+            automatic_tax: { enabled: true },
+            customer_update: { address: "auto", name: "auto" },
+          }
+        : {}),
       success_url: `${appBaseUrl}/company/billing?checkout=success`,
       cancel_url: `${appBaseUrl}/company/billing?checkout=cancel`,
     });
@@ -111,6 +123,36 @@ export class BillingService {
       return_url: `${appBaseUrl}/company/billing`,
     });
     return { url: session.url };
+  }
+
+  // Plans with live prices pulled from Stripe, so the UI can show real amounts.
+  async getPlans() {
+    if (!this.stripe) return { enabled: false, plans: [] };
+    const intervals: BillingInterval[] = ["monthly", "yearly"];
+    const plans: Array<{ tier: PlanTier; prices: Record<string, unknown> }> = [];
+
+    for (const tier of PLAN_TIERS) {
+      const prices: Record<string, unknown> = {};
+      for (const interval of intervals) {
+        const id = priceIdFor(tier, interval);
+        if (!id) continue;
+        try {
+          const price = await this.stripe.prices.retrieve(id);
+          prices[interval] = {
+            priceId: price.id,
+            amount: price.unit_amount != null ? price.unit_amount / 100 : null,
+            currency: (price.currency || "sek").toUpperCase(),
+            interval: price.recurring?.interval ?? null,
+          };
+        } catch (error) {
+          this.logger.warn(
+            `Could not load Stripe price ${id}: ${(error as Error)?.message}`,
+          );
+        }
+      }
+      if (Object.keys(prices).length) plans.push({ tier, prices });
+    }
+    return { enabled: true, plans };
   }
 
   // Lightweight status lookup used by the paywall interceptor (mutations only).

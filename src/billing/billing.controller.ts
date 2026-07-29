@@ -32,6 +32,12 @@ export class BillingController {
     return this.billing.getStatus(req.user.companyId);
   }
 
+  @Get("plans")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  plans() {
+    return this.billing.getPlans();
+  }
+
   @Post("checkout")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   checkout(@Request() req, @Body() body: { plan?: string; interval?: string }) {
