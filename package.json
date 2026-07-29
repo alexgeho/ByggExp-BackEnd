@@ -59,7 +59,8 @@
     "puppeteer-core": "^25.2.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "sanitize-html": "^2.17.6"
+    "sanitize-html": "^2.17.6",
+    "stripe": "^22.3.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

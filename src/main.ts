@@ -7,7 +7,8 @@ import { join } from "path";
 import express from "express";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody is needed to verify Stripe webhook signatures.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const uploadsDir = join(process.cwd(), "uploads", "project-documents");
   const taskUploadsDir = join(process.cwd(), "uploads", "task-documents");
   const shiftUploadsDir = join(process.cwd(), "uploads", "shift-photos");

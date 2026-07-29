@@ -57,7 +57,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: DEEPL_API_KEY,ANTHROPIC_API_KEY,INBOUND_INVOICE_TOKEN,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASS,SMTP_FROM
+          envs: DEEPL_API_KEY,ANTHROPIC_API_KEY,INBOUND_INVOICE_TOKEN,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASS,SMTP_FROM,STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET,STRIPE_PRICE_BASIC_MONTHLY,STRIPE_PRICE_BASIC_YEARLY,STRIPE_PRICE_PRO_MONTHLY,STRIPE_PRICE_PRO_YEARLY,APP_PUBLIC_URL
           script: |
             set -euo pipefail
             RELEASE=$(date -u +%Y%m%d-%H%M%S)
@@ -95,6 +95,13 @@ jobs:
             upsert_env SMTP_USER "${SMTP_USER:-}"
             upsert_env SMTP_PASS "${SMTP_PASS:-}"
             upsert_env SMTP_FROM "${SMTP_FROM:-}"
+            upsert_env STRIPE_SECRET_KEY "${STRIPE_SECRET_KEY:-}"
+            upsert_env STRIPE_WEBHOOK_SECRET "${STRIPE_WEBHOOK_SECRET:-}"
+            upsert_env STRIPE_PRICE_BASIC_MONTHLY "${STRIPE_PRICE_BASIC_MONTHLY:-}"
+            upsert_env STRIPE_PRICE_BASIC_YEARLY "${STRIPE_PRICE_BASIC_YEARLY:-}"
+            upsert_env STRIPE_PRICE_PRO_MONTHLY "${STRIPE_PRICE_PRO_MONTHLY:-}"
+            upsert_env STRIPE_PRICE_PRO_YEARLY "${STRIPE_PRICE_PRO_YEARLY:-}"
+            upsert_env APP_PUBLIC_URL "${APP_PUBLIC_URL:-}"
 
             cd "$DIR"
             echo "==> Installing production deps"
@@ -139,3 +146,10 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_PRICE_BASIC_MONTHLY: ${{ secrets.STRIPE_PRICE_BASIC_MONTHLY }}
+          STRIPE_PRICE_BASIC_YEARLY: ${{ secrets.STRIPE_PRICE_BASIC_YEARLY }}
+          STRIPE_PRICE_PRO_MONTHLY: ${{ secrets.STRIPE_PRICE_PRO_MONTHLY }}
+          STRIPE_PRICE_PRO_YEARLY: ${{ secrets.STRIPE_PRICE_PRO_YEARLY }}
+          APP_PUBLIC_URL: ${{ secrets.APP_PUBLIC_URL }}

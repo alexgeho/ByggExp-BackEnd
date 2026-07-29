@@ -42,6 +42,31 @@ export class Company {
 
   @Prop({ type: [String], ref: "Project", default: [] })
   projects: string[];
+
+  // ---- Billing / subscription (Stripe) ----
+  @Prop({ type: String, default: null, index: true })
+  stripeCustomerId?: string | null;
+
+  @Prop({ type: String, default: null })
+  stripeSubscriptionId?: string | null;
+
+  // "basic" | "pro" | null — the tier the active subscription maps to.
+  @Prop({ type: String, default: null })
+  plan?: string | null;
+
+  // Stripe subscription status: trialing | active | past_due | canceled |
+  // incomplete | unpaid | null (never subscribed).
+  @Prop({ type: String, default: null, index: true })
+  subscriptionStatus?: string | null;
+
+  @Prop({ type: Date, default: null })
+  trialEndsAt?: Date | null;
+
+  @Prop({ type: Date, default: null })
+  currentPeriodEnd?: Date | null;
+
+  @Prop({ type: Boolean, default: false })
+  cancelAtPeriodEnd: boolean;
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);
