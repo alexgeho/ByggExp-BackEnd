@@ -57,7 +57,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: DEEPL_API_KEY,ANTHROPIC_API_KEY,INBOUND_INVOICE_TOKEN
+          envs: DEEPL_API_KEY,ANTHROPIC_API_KEY,INBOUND_INVOICE_TOKEN,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASS,SMTP_FROM
           script: |
             set -euo pipefail
             RELEASE=$(date -u +%Y%m%d-%H%M%S)
@@ -90,6 +90,11 @@ jobs:
             upsert_env DEEPL_API_KEY "${DEEPL_API_KEY:-}"
             upsert_env ANTHROPIC_API_KEY "${ANTHROPIC_API_KEY:-}"
             upsert_env INBOUND_INVOICE_TOKEN "${INBOUND_INVOICE_TOKEN:-}"
+            upsert_env SMTP_HOST "${SMTP_HOST:-}"
+            upsert_env SMTP_PORT "${SMTP_PORT:-}"
+            upsert_env SMTP_USER "${SMTP_USER:-}"
+            upsert_env SMTP_PASS "${SMTP_PASS:-}"
+            upsert_env SMTP_FROM "${SMTP_FROM:-}"
 
             cd "$DIR"
             echo "==> Installing production deps"
@@ -129,3 +134,8 @@ jobs:
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           INBOUND_INVOICE_TOKEN: ${{ secrets.INBOUND_INVOICE_TOKEN }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
