@@ -8,7 +8,6 @@ import {
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
-import { randomBytes } from "crypto";
 import { UsersService } from "../users/users.service";
 import { CompanyService } from "../company/company.service";
 import { RegisterCompanyWithAdminDto } from "../company/dto/register-company-with-admin.dto";
@@ -128,7 +127,7 @@ export class AuthService {
       email: dto.email.trim().toLowerCase(),
       adminName: dto.userName.trim(),
       adminEmail: dto.email.trim().toLowerCase(),
-      adminPassword: randomBytes(18).toString("base64url"),
+      adminPassword: dto.password,
     };
 
     const { admin } =
