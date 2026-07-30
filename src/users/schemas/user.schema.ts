@@ -82,6 +82,14 @@ export class User {
   @Prop({ type: Number, default: null })
   hourlyRate?: number | null;
 
+  // Skatteverket tax table (tabellnr, e.g. 31) and column (1–6) for preliminary
+  // tax in payroll. Null → payroll falls back to a flat percentage.
+  @Prop({ type: Number, default: null })
+  taxTable?: number | null;
+
+  @Prop({ type: Number, default: null })
+  taxColumn?: number | null;
+
   // Swedish personnummer / samordningsnummer. Sensitive PII, stored only to
   // build the legally required electronic personalliggare (attendance log).
   @Prop({ default: "" })

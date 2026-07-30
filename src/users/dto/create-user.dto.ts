@@ -50,6 +50,14 @@ export class CreateUserDto {
   @IsOptional()
   hourlyRate?: number;
 
+  @IsNumber()
+  @IsOptional()
+  taxTable?: number;
+
+  @IsNumber()
+  @IsOptional()
+  taxColumn?: number;
+
   @IsString()
   @IsOptional()
   personalNumber?: string;

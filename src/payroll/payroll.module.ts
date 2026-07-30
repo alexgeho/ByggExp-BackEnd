@@ -4,6 +4,7 @@ import { User, UserSchema } from '../users/schemas/user.schema';
 import { Company, CompanySchema } from '../company/schemas/company.schema';
 import { PayrollController } from './payroll.controller';
 import { PayrollService } from './payroll.service';
+import { TaxTableService } from './tax-table.service';
 import { PayrollRun, PayrollRunSchema } from './schemas/payroll-run.schema';
 
 @Module({
@@ -15,7 +16,7 @@ import { PayrollRun, PayrollRunSchema } from './schemas/payroll-run.schema';
     ]),
   ],
   controllers: [PayrollController],
-  providers: [PayrollService],
+  providers: [PayrollService, TaxTableService],
   exports: [PayrollService],
 })
 export class PayrollModule {}

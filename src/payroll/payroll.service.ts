@@ -11,6 +11,7 @@ import { Company, CompanyDocument } from '../company/schemas/company.schema';
 import { launchForInvoicePdf } from '../invoices/puppeteer-launch';
 import { buildPayslipHtml } from './templates/payslip-pdf.template';
 import { computeLineAmounts, computeRunTotals } from './payroll-math';
+import { TaxTableService } from './tax-table.service';
 import { CreatePayrollRunDto } from './dto/create-payroll-run.dto';
 import {
   PayrollRun,
@@ -33,6 +34,7 @@ export class PayrollService {
     private payrollModel: Model<PayrollRunDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
+    private readonly taxTableService: TaxTableService,
   ) {}
 
   // A per-worker lönespecifikation PDF for one line of a run.
@@ -84,33 +86,49 @@ export class PayrollService {
     const ids = [...new Set(dto.lines.map((l) => String(l.userId)))];
     const users = await this.userModel
       .find({ _id: { $in: ids }, companyId })
-      .select('name hourlyRate')
+      .select('name hourlyRate taxTable taxColumn')
       .exec();
     const byId = new Map(users.map((u) => [String(u._id), u]));
 
     const taxRate = dto.taxRate ?? 30;
     const employerRate = 31.42;
 
-    const lines = dto.lines
-      .filter((l) => byId.has(String(l.userId)))
-      .map((l) => {
-        const u = byId.get(String(l.userId));
-        const rate = round2(u?.hourlyRate ?? l.rate ?? 0);
-        const hours = round2(l.hours);
-        const multiplier = Number(l.multiplier) > 0 ? Number(l.multiplier) : 1;
-        const { gross, tax, net } = computeLineAmounts(hours, rate, multiplier, taxRate);
-        return {
-          userId: String(l.userId),
-          name: u?.name || l.name || '',
-          hours,
-          rate,
-          multiplier,
-          hourType: l.hourType || 'normal',
-          amount: gross,
-          tax,
-          net,
-        };
-      });
+    const lines = await Promise.all(
+      dto.lines
+        .filter((l) => byId.has(String(l.userId)))
+        .map(async (l) => {
+          const u = byId.get(String(l.userId));
+          const rate = round2(u?.hourlyRate ?? l.rate ?? 0);
+          const hours = round2(l.hours);
+          const multiplier = Number(l.multiplier) > 0 ? Number(l.multiplier) : 1;
+          const { gross, tax: pctTax } = computeLineAmounts(
+            hours,
+            rate,
+            multiplier,
+            taxRate,
+          );
+          // Prefer the worker's Skatteverket tax table when set (and available);
+          // otherwise fall back to the flat percentage.
+          const tableTax = await this.taxTableService.lookupMonthlyTax(
+            u?.taxTable,
+            u?.taxColumn,
+            gross,
+          );
+          const tax = tableTax == null ? pctTax : round2(tableTax);
+          const net = round2(gross - tax);
+          return {
+            userId: String(l.userId),
+            name: u?.name || l.name || '',
+            hours,
+            rate,
+            multiplier,
+            hourType: l.hourType || 'normal',
+            amount: gross,
+            tax,
+            net,
+          };
+        }),
+    );
 
     if (!lines.length) {
       throw new BadRequestException(
