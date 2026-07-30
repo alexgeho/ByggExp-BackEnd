@@ -39,6 +39,7 @@ import { ChecklistsModule } from "./checklists/checklists.module";
 import { PaymentPlansModule } from "./payment-plans/payment-plans.module";
 import { LeaveModule } from "./leave/leave.module";
 import { AssignmentsModule } from "./assignments/assignments.module";
+import { GdprModule } from "./gdpr/gdpr.module";
 import { ScanningModule } from "./scanning/scanning.module";
 import { SystemModule } from "./system/system.module";
 
@@ -75,6 +76,7 @@ import { SystemModule } from "./system/system.module";
     PaymentPlansModule,
     LeaveModule,
     AssignmentsModule,
+    GdprModule,
     ScanningModule,
     SystemModule,
     OffersModule,

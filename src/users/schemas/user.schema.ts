@@ -90,6 +90,11 @@ export class User {
   @Prop({ default: "" })
   avatarUrl: string;
 
+  // Set when the user's personal data has been erased on a GDPR request. The
+  // record is kept (de-identified) so references from retained data stay valid.
+  @Prop({ type: Date, default: null })
+  erasedAt?: Date | null;
+
   @Prop({ type: Object, default: { ru: "Русский" } })
   language: Record<string, any>;
 

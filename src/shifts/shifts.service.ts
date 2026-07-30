@@ -839,6 +839,31 @@ export class ShiftsService {
    * until they stop manually, leave the project area, or those finalizers close
    * the shift.
    */
+  // GDPR data minimisation: drop the stored location snapshot from shifts once
+  // they are older than the retention window (default 90 days). Tune with the
+  // GPS_RETENTION_DAYS env var.
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async purgeOldLocationSnapshots(): Promise<void> {
+    if (cronsDisabled()) {
+      return;
+    }
+    const days = Number(process.env.GPS_RETENTION_DAYS) || 90;
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    try {
+      const result = await this.shiftModel.updateMany(
+        { locationSnapshot: { $nin: ["", null] }, createdAt: { $lt: cutoff } },
+        { $set: { locationSnapshot: "" } },
+      );
+      if (result.modifiedCount) {
+        this.logger.log(
+          `Purged location snapshots from ${result.modifiedCount} shift(s) older than ${days} days`,
+        );
+      }
+    } catch (error) {
+      this.logger.error("Failed to purge old location snapshots", error);
+    }
+  }
+
   @Cron(CronExpression.EVERY_10_MINUTES)
   async reconcileOpenShifts(): Promise<void> {
     if (cronsDisabled() || this.isReconcilingOpenShifts) {
