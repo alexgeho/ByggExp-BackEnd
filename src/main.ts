@@ -9,6 +9,8 @@ import express from "express";
 async function bootstrap() {
   // rawBody is needed to verify Stripe webhook signatures.
   const app = await NestFactory.create(AppModule, { rawBody: true });
+  // Avoid 304 + empty body on repeat API requests (breaks fetch/axios clients).
+  app.getHttpAdapter().getInstance().set("etag", false);
   const uploadsDir = join(process.cwd(), "uploads", "project-documents");
   const taskUploadsDir = join(process.cwd(), "uploads", "task-documents");
   const shiftUploadsDir = join(process.cwd(), "uploads", "shift-photos");
