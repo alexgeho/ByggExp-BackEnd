@@ -116,6 +116,49 @@ jobs:
             ln -sfn "$DIR" "$BASE/current"
             echo "==> Linked $BASE/current -> $DIR"
 
+            # The variables exported by ssh-action have done their only job above:
+            # they were written into the shared .env file. Keeping them exported is
+            # what broke outgoing mail again and again.
+            #
+            # Why: pm2 start captures the current shell environment into the process,
+            # and pm2 save freezes it into dump.pm2, which systemd replays with
+            # pm2 resurrect after every reboot. A GitHub secret that is missing
+            # arrives here as an empty string, so an empty SMTP_PASS gets frozen.
+            # Node's --env-file does NOT override a variable that already exists,
+            # and an empty string is a value, so a perfectly correct .env is
+            # powerless against it. Proven on this host:
+            #     X_PROBE= node --env-file=probe.env -e 'print X_PROBE'  ->  ""
+            #
+            # From here on the file is the single source of truth.
+            unset DEEPL_API_KEY ANTHROPIC_API_KEY INBOUND_INVOICE_TOKEN
+            unset SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM
+            unset STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET
+            unset STRIPE_PRICE_START_MONTHLY STRIPE_PRICE_START_YEARLY
+            unset STRIPE_PRICE_TILLVAXT_MONTHLY STRIPE_PRICE_TILLVAXT_YEARLY
+            unset STRIPE_PRICE_PROFESSIONELL_MONTHLY STRIPE_PRICE_PROFESSIONELL_YEARLY
+            unset APP_PUBLIC_URL BILLING_ENFORCED STRIPE_TAX_ENABLED
+
+            # Guard the invariant that actually broke, rather than trusting the unset
+            # above to stay correct when someone adds a variable to the envs: list.
+            for v in SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
+              if [ -n "${!v+isset}" ]; then
+                echo "Refusing to start: $v is still exported and pm2 would freeze it into dump.pm2" >&2
+                exit 1
+              fi
+            done
+
+            # And check the file really carries the mail settings, so a deploy fails
+            # loudly here instead of silently sending nothing in production.
+            node --env-file="$ENV_FILE" -e '
+              const missing = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"]
+                .filter((k) => !process.env[k]);
+              if (missing.length) {
+                console.error("Empty after --env-file: " + missing.join(", "));
+                process.exit(1);
+              }
+              console.log("Mail settings present in shared/.env");
+            '
+
             cd "$BASE/current"
             echo "==> (Re)starting PM2"
             pm2 delete byggexp-api >/dev/null 2>&1 || true
