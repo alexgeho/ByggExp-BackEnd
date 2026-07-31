@@ -2,6 +2,7 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { ValidationPipe, Logger } from "@nestjs/common";
 import { AllExceptionsFilter } from "./filtres/exception.filter";
+import { NullJsonBodyInterceptor } from "./common/interceptors/null-json-body.interceptor";
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import express from "express";
@@ -67,6 +68,7 @@ async function bootstrap() {
   }
 
   app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalInterceptors(new NullJsonBodyInterceptor());
   app.use("/uploads", express.static(join(process.cwd(), "uploads")));
 
   app.use((req, res, next) => {

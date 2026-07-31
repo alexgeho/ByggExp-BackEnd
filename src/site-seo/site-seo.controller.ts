@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Put, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Put, Query, Res, UseGuards } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import { IsBoolean, IsOptional, IsString, MaxLength } from "class-validator";
+import type { Response } from "express";
 import { Public } from "../common/decorators/public.decorator";
 import { Roles } from "../common/decorators/roles.decorator";
 import { RolesGuard } from "../common/guards/roles.guard";
@@ -22,15 +23,24 @@ export class SiteSeoController {
 
   @Public()
   @Get("public")
-  getPublic(@Query("locale") locale: BlogPostLocale = BlogPostLocale.Sv) {
-    return this.service.get(locale);
+  async getPublic(
+    @Query("locale") locale: BlogPostLocale = BlogPostLocale.Sv,
+    @Res() res: Response,
+  ) {
+    const seo = await this.service.get(locale);
+    // NestJS serializes `null` as an empty body; clients fail on response.json().
+    return res.status(200).json(seo ?? null);
   }
 
   @Get()
   @UseGuards(AuthGuard("jwt"), RolesGuard)
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  get(@Query("locale") locale: BlogPostLocale = BlogPostLocale.Sv) {
-    return this.service.get(locale);
+  async get(
+    @Query("locale") locale: BlogPostLocale = BlogPostLocale.Sv,
+    @Res() res: Response,
+  ) {
+    const seo = await this.service.get(locale);
+    return res.status(200).json(seo ?? null);
   }
 
   @Put()
