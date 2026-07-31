@@ -20,6 +20,8 @@ import { UsersService } from "./users.service";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { BulkCreateUsersDto } from "./dto/bulk-create-users.dto";
 import { CreateWorkerNoteDto } from "./dto/create-worker-note.dto";
+import { CreateCertificateDto } from "./dto/create-certificate.dto";
+import { UpdateCertificateDto } from "./dto/update-certificate.dto";
 import { User, UserAccountStatus, UserRole } from "./schemas/user.schema";
 import { UserActivityLogLevel } from "./schemas/user-activity-log.schema";
 import { Roles } from "../common/decorators/roles.decorator";
@@ -54,6 +56,22 @@ const userDocumentsStorage = diskStorage({
         .replace(extname(file.originalname), "")
         .replace(/[^a-zA-Z0-9-_]/g, "_")
         .slice(0, 80) || "document";
+
+    callback(
+      null,
+      `${Date.now()}-${safeBaseName}${extname(file.originalname)}`,
+    );
+  },
+});
+
+const certificateFilesStorage = diskStorage({
+  destination: "./uploads/certificate-files",
+  filename: (_req, file, callback) => {
+    const safeBaseName =
+      file.originalname
+        .replace(extname(file.originalname), "")
+        .replace(/[^a-zA-Z0-9-_]/g, "_")
+        .slice(0, 80) || "certificate";
 
     callback(
       null,
@@ -492,6 +510,83 @@ export class UsersController {
         files.map((file) => `/uploads/user-documents/${file.filename}`),
       ),
     );
+  }
+
+  // ---- Certificates (certifikat / behörigheter) ----
+
+  @Post(":id/certificates")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  createCertificate(
+    @Param("id") id: string,
+    @Body() dto: CreateCertificateDto,
+    @Request() req,
+  ) {
+    return this.usersService
+      .assertCanEditUser(req.user, id)
+      .then(() => this.usersService.addCertificate(id, dto));
+  }
+
+  @Put(":id/certificates/:certId")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  updateCertificate(
+    @Param("id") id: string,
+    @Param("certId") certId: string,
+    @Body() dto: UpdateCertificateDto,
+    @Request() req,
+  ) {
+    return this.usersService
+      .assertCanEditUser(req.user, id)
+      .then(() => this.usersService.updateCertificate(id, certId, dto));
+  }
+
+  @Delete(":id/certificates/:certId")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  removeCertificate(
+    @Param("id") id: string,
+    @Param("certId") certId: string,
+    @Request() req,
+  ) {
+    return this.usersService
+      .assertCanEditUser(req.user, id)
+      .then(() => this.usersService.removeCertificate(id, certId));
+  }
+
+  @Post(":id/certificates/upload")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @UseInterceptors(
+    FileInterceptor("file", { storage: certificateFilesStorage }),
+  )
+  uploadCertificateFile(
+    @Param("id") id: string,
+    @UploadedFile() file: UploadedDocumentFile,
+    @Request() req,
+  ) {
+    if (!file) {
+      throw new BadRequestException("No file uploaded");
+    }
+    return this.usersService.assertCanEditUser(req.user, id).then(() => ({
+      fileUrl: `/uploads/certificate-files/${file.filename}`,
+    }));
+  }
+
+  // Stores the file and returns its URL. OCR extraction of the certificate
+  // fields is a follow-up; the frontend degrades to plain upload meanwhile.
+  @Post(":id/certificates/scan")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @UseInterceptors(
+    FileInterceptor("file", { storage: certificateFilesStorage }),
+  )
+  scanCertificateFile(
+    @Param("id") id: string,
+    @UploadedFile() file: UploadedDocumentFile,
+    @Request() req,
+  ) {
+    if (!file) {
+      throw new BadRequestException("No file uploaded");
+    }
+    return this.usersService.assertCanEditUser(req.user, id).then(() => ({
+      fileUrl: `/uploads/certificate-files/${file.filename}`,
+    }));
   }
 
   @Delete(":id")

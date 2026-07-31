@@ -20,6 +20,8 @@ import {
 } from "./schemas/user.schema";
 import { MailService } from "../mail/mail.service";
 import { CreateUserDto } from "./dto/create-user.dto";
+import { CreateCertificateDto } from "./dto/create-certificate.dto";
+import { UpdateCertificateDto } from "./dto/update-certificate.dto";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import { Project, ProjectDocument } from "../projects/schemas/project.schema";
 import {
@@ -80,6 +82,7 @@ type UserDetailResponse = {
   phoneNumber: number | null;
   language: Record<string, any>;
   additionalDocuments: string[];
+  certificates: unknown[];
   notificationPreferences: {
     flowMode: boolean;
     messages: boolean;
@@ -861,6 +864,7 @@ export class UsersService {
       additionalDocuments: Array.isArray(user.additionalDocuments)
         ? user.additionalDocuments
         : [],
+      certificates: Array.isArray(user.certificates) ? user.certificates : [],
       notificationPreferences: normalizeUserNotificationPreferences(
         user.notificationPreferences,
       ),
@@ -1374,5 +1378,74 @@ export class UsersService {
     await user.save();
 
     return user;
+  }
+
+  // ---- Certificates (certifikat / behörigheter) ----
+
+  private buildCertificatePayload(dto: Partial<CreateCertificateDto>) {
+    const out: Record<string, unknown> = {};
+    if (dto.name !== undefined) out.name = dto.name;
+    if (dto.number !== undefined) out.number = dto.number;
+    if (dto.issuer !== undefined) out.issuer = dto.issuer;
+    if (dto.issuedAt !== undefined) {
+      out.issuedAt = dto.issuedAt ? new Date(dto.issuedAt) : null;
+    }
+    if (dto.expiresAt !== undefined) {
+      out.expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
+    }
+    if (dto.fileUrl !== undefined) out.fileUrl = dto.fileUrl;
+    if (dto.notes !== undefined) out.notes = dto.notes;
+    return out;
+  }
+
+  async addCertificate(userId: string, dto: CreateCertificateDto) {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+    const certs = user.certificates as unknown as {
+      push: (value: unknown) => void;
+    };
+    certs.push(this.buildCertificatePayload(dto));
+    await user.save();
+    return user.certificates[user.certificates.length - 1];
+  }
+
+  async updateCertificate(
+    userId: string,
+    certId: string,
+    dto: UpdateCertificateDto,
+  ) {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+    const cert = (
+      user.certificates as unknown as { id: (id: string) => unknown }
+    ).id(certId);
+    if (!cert) {
+      throw new NotFoundException(`Certificate "${certId}" not found`);
+    }
+    Object.assign(cert, this.buildCertificatePayload(dto));
+    await user.save();
+    return cert;
+  }
+
+  async removeCertificate(userId: string, certId: string) {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+    const cert = (
+      user.certificates as unknown as {
+        id: (id: string) => { deleteOne: () => void } | null;
+      }
+    ).id(certId);
+    if (!cert) {
+      throw new NotFoundException(`Certificate "${certId}" not found`);
+    }
+    cert.deleteOne();
+    await user.save();
+    return { ok: true };
   }
 }

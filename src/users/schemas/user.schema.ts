@@ -3,6 +3,33 @@ import { Document } from "mongoose";
 
 export type UserDocument = User & Document;
 
+// Employee certificate / behörighet with an expiry the admin gets reminded about.
+@Schema({ timestamps: true })
+export class Certificate {
+  @Prop({ required: true })
+  name: string;
+
+  @Prop({ default: "" })
+  number?: string;
+
+  @Prop({ default: "" })
+  issuer?: string;
+
+  @Prop({ type: Date, default: null })
+  issuedAt?: Date | null;
+
+  @Prop({ type: Date, default: null })
+  expiresAt?: Date | null;
+
+  @Prop({ default: "" })
+  fileUrl?: string;
+
+  @Prop({ default: "" })
+  notes?: string;
+}
+
+export const CertificateSchema = SchemaFactory.createForClass(Certificate);
+
 export enum UserRole {
   SuperAdmin = "superadmin",
   CompanyAdmin = "companyAdmin",
@@ -97,6 +124,10 @@ export class User {
 
   @Prop({ default: "" })
   avatarUrl: string;
+
+  // Employee certificates / behörigheter (Heta arbeten, ID06, …) with expiry.
+  @Prop({ type: [CertificateSchema], default: [] })
+  certificates: Certificate[];
 
   // Set when the user's personal data has been erased on a GDPR request. The
   // record is kept (de-identified) so references from retained data stay valid.
