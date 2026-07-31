@@ -11,6 +11,7 @@ import { Project, ProjectDocument } from "../projects/schemas/project.schema";
 import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
 import { CreateDirectChatDto } from "./dto/create-direct-chat.dto";
 import { CreateProjectGroupChatDto } from "./dto/create-project-group-chat.dto";
+import { CreateGroupChatDto } from "./dto/create-group-chat.dto";
 import { Chat, ChatDocument, ChatType } from "./schemas/chat.schema";
 
 type AuthenticatedUser = {
@@ -186,6 +187,91 @@ export class ChatsService {
       readStates: this.buildReadStates(members),
       title,
       projectId: project._id.toString(),
+      groupKey,
+      lastMessageText: "",
+      lastMessageAt: null,
+    });
+
+    const [formattedChat] = await this.formatChats(
+      [createdChat.toObject()],
+      this.normalizeId(user.userId),
+    );
+    return formattedChat;
+  }
+
+  // Custom group chat with a hand-picked set of members. Tenant-isolated:
+  // only company members can be added (superadmin exempt). Deduped by member
+  // set so re-selecting the same people reuses the existing group.
+  async createGroupChat(
+    createGroupChatDto: CreateGroupChatDto,
+    user: AuthenticatedUser,
+  ) {
+    const requestedIds = [
+      ...new Set(
+        (createGroupChatDto.memberIds || [])
+          .map((id) => String(id || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+
+    if (requestedIds.length === 0) {
+      throw new BadRequestException("Select at least one member");
+    }
+
+    const candidates = await this.userModel
+      .find({ _id: { $in: requestedIds } })
+      .select("_id name companyId")
+      .lean()
+      .exec();
+
+    const allowed = candidates.filter(
+      (candidate) =>
+        user.role === UserRole.SuperAdmin ||
+        String((candidate as { companyId?: unknown }).companyId ?? "") ===
+          String(user.companyId ?? ""),
+    );
+
+    const members = [
+      ...new Set([
+        this.normalizeId(user.userId),
+        ...allowed.map((candidate) => this.normalizeId(candidate._id)),
+      ]),
+    ].sort();
+
+    if (members.length < 2) {
+      throw new BadRequestException("A group needs at least two members");
+    }
+
+    const groupKey = `group:${members.join(":")}`;
+    const title =
+      createGroupChatDto.title?.trim() ||
+      allowed
+        .map((candidate) => candidate.name)
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(", ") ||
+      "Group chat";
+
+    const existingChat = await this.chatModel.findOne({ groupKey }).exec();
+
+    if (existingChat) {
+      if (createGroupChatDto.title?.trim() && existingChat.title !== title) {
+        existingChat.title = title;
+        await existingChat.save();
+      }
+      const [formattedChat] = await this.formatChats(
+        [existingChat.toObject()],
+        this.normalizeId(user.userId),
+      );
+      return formattedChat;
+    }
+
+    const createdChat = await this.chatModel.create({
+      ownerId: user.userId,
+      type: ChatType.Group,
+      members,
+      readStates: this.buildReadStates(members),
+      title,
       groupKey,
       lastMessageText: "",
       lastMessageAt: null,

@@ -13,6 +13,7 @@ import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../users/schemas/user.schema";
 import { CreateDirectChatDto } from "./dto/create-direct-chat.dto";
 import { CreateProjectGroupChatDto } from "./dto/create-project-group-chat.dto";
+import { CreateGroupChatDto } from "./dto/create-group-chat.dto";
 import { ChatsService } from "./chats.service";
 
 @Controller("chats")
@@ -63,6 +64,17 @@ export class ChatsController {
       createProjectGroupChatDto,
       req.user,
     );
+  }
+
+  @Post("group")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  createGroup(@Request() req, @Body() createGroupChatDto: CreateGroupChatDto) {
+    return this.chatsService.createGroupChat(createGroupChatDto, req.user);
   }
 
   @Get(":id")
