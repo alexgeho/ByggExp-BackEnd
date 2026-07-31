@@ -585,6 +585,39 @@ export class UsersService {
     return savedUser;
   }
 
+  // Re-send the invitation email with a fresh temporary password and
+  // verification token (the previous ones may be used or expired).
+  async resendInvite(userId: string): Promise<{ ok: true }> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+    if (!this.mailService.isConfigured()) {
+      throw new BadRequestException(
+        "E-post är inte konfigurerad — inbjudan kunde inte skickas",
+      );
+    }
+
+    const plainPassword = this.generateInvitePassword();
+    user.password = await this.hashPassword(plainPassword);
+    const { plainToken, hashedToken } = this.buildVerificationToken();
+    user.emailVerificationToken = hashedToken;
+    user.emailVerificationExpiresAt = new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000,
+    );
+    await user.save();
+
+    await this.mailService.sendUserInviteEmail(
+      user.email,
+      user.name,
+      plainToken,
+      plainPassword,
+      this.getRoleLabel(user.role),
+    );
+
+    return { ok: true };
+  }
+
   async activateInvitedUser(userId: string): Promise<UserDocument> {
     const user = await this.userModel.findById(userId).exec();
 

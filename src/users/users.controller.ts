@@ -516,6 +516,14 @@ export class UsersController {
     );
   }
 
+  @Post(":id/resend-invite")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  resendInvite(@Param("id") id: string, @Request() req) {
+    return this.usersService
+      .assertCanEditUser(req.user, id)
+      .then(() => this.usersService.resendInvite(id));
+  }
+
   // ---- Certificates (certifikat / behörigheter) ----
 
   @Post(":id/certificates")
