@@ -250,6 +250,13 @@ export class UsersController {
     return this.usersService.findAllByCompany(req.user.companyId);
   }
 
+  // Colleagues the caller can chat with. Available to ALL roles (workers
+  // included): admins get the whole company, others get co-project members.
+  @Get("colleagues")
+  findColleagues(@Request() req): Promise<User[]> {
+    return this.usersService.findColleagues(req.user);
+  }
+
   @Get("project/:projectId")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   findAllByProject(

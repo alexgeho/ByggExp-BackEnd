@@ -727,6 +727,43 @@ export class UsersService {
     return this.userModel.find(query).exec();
   }
 
+  // Colleagues a user may chat with. Admins see the whole company; everyone
+  // else (workers, project admins) sees co-members of their own projects.
+  // Always tenant-isolated and excludes the requester.
+  async findColleagues(actor: AuthUser): Promise<User[]> {
+    const userId = actor?.userId;
+    const companyId = actor?.companyId ?? null;
+    const isAdmin =
+      actor?.role === UserRole.SuperAdmin ||
+      actor?.role === UserRole.CompanyAdmin;
+
+    if (isAdmin && companyId) {
+      return this.userModel
+        .find({ companyId, _id: { $ne: userId } })
+        .exec();
+    }
+
+    const me = await this.userModel
+      .findById(userId)
+      .select("projectIds companyId")
+      .exec();
+    if (!me) {
+      return [];
+    }
+
+    const projectIds = Array.isArray(me.projectIds) ? me.projectIds : [];
+    const query: Record<string, unknown> = {
+      _id: { $ne: userId },
+      projectIds: { $in: projectIds },
+    };
+    const scopeCompanyId = companyId ?? me.companyId;
+    if (scopeCompanyId) {
+      query.companyId = scopeCompanyId;
+    }
+
+    return this.userModel.find(query).exec();
+  }
+
   async findByIds(
     ids: string[],
     scopeCompanyId?: string | null,
