@@ -31,6 +31,10 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { FilesInterceptor } from "@nestjs/platform-express";
 import { diskStorage } from "multer";
 import { extname } from "path";
+import { mkdirSync } from "fs";
+
+// Ensure the upload directory exists (multer does not create it).
+mkdirSync("./uploads/certificate-files", { recursive: true });
 
 const userAvatarStorage = diskStorage({
   destination: "./uploads/user-avatars",
