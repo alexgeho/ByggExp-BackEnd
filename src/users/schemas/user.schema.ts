@@ -26,6 +26,11 @@ export class Certificate {
 
   @Prop({ default: "" })
   notes?: string;
+
+  // Last reminder milestone sent (30/14/7/1/0 days, or -1 = expired). Prevents
+  // sending the same reminder twice; reset to null when the cert is far out again.
+  @Prop({ type: Number, default: null })
+  lastReminderBucket?: number | null;
 }
 
 export const CertificateSchema = SchemaFactory.createForClass(Certificate);
