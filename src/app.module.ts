@@ -27,6 +27,7 @@ import { BillingModule } from "./billing/billing.module";
 import { ClientsModule } from "./clients/clients.module";
 import { ArticlesModule } from "./articles/articles.module";
 import { OffersModule } from "./offers/offers.module";
+import { OfferDraftModule } from "./offer-draft/offer-draft.module";
 import { BugReportsModule } from "./bug-reports/bug-reports.module";
 import { MailModule } from "./mail/mail.module";
 import { BlogPostsModule } from "./blog-posts/blog-posts.module";
@@ -82,6 +83,7 @@ import { SystemModule } from "./system/system.module";
     ScanningModule,
     SystemModule,
     OffersModule,
+    OfferDraftModule,
     ClientsModule,
     ArticlesModule,
     BlogPostsModule,
