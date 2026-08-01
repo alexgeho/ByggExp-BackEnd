@@ -1287,6 +1287,46 @@ export class UsersService {
       .exec();
   }
 
+  // Email is unique per company, so one email can map to several accounts (one
+  // per company). Login uses this to find every candidate and then picks the
+  // account whose password matches. Passwords are included.
+  async findAllByEmail(email: string): Promise<UserDocument[]> {
+    const normalizedEmail = email?.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      return [];
+    }
+
+    const escapedEmail = normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    return this.userModel
+      .find({ email: { $regex: `^${escapedEmail}$`, $options: "i" } })
+      .select("+password")
+      .exec();
+  }
+
+  // Company-scoped existence check used when creating/inviting a user: the same
+  // email is only a duplicate within the same company.
+  async findByEmailInCompany(
+    email: string,
+    companyId: string | null,
+  ): Promise<UserDocument | null> {
+    const normalizedEmail = email?.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      return null;
+    }
+
+    const escapedEmail = normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    return this.userModel
+      .findOne({
+        companyId: companyId ?? null,
+        email: { $regex: `^${escapedEmail}$`, $options: "i" },
+      })
+      .exec();
+  }
+
   async findOneIdByEmail(
     email: string,
     scopeCompanyId?: string | null,

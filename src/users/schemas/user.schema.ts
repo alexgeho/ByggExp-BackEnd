@@ -91,7 +91,9 @@ export const normalizeUserNotificationPreferences = (
 
 @Schema({ timestamps: true })
 export class User {
-  @Prop({ required: true, unique: true })
+  // Email is the login identifier, but it is unique PER COMPANY, not globally
+  // (see the compound index below). Do not add `unique: true` here.
+  @Prop({ required: true })
   email: string;
 
   @Prop({ required: true, select: false })
@@ -211,3 +213,17 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+
+// Email is unique PER COMPANY, not globally: the same person can hold separate
+// accounts at different companies (e.g. after changing employer, where the
+// companies don't know about each other). Login disambiguates by matching the
+// password across the accounts that share an email (see findAllByEmail).
+// The partial filter only enforces uniqueness for real companies (companyId is
+// a string); company-less accounts (superadmin, pending signups) are not
+// constrained here.
+// NOTE: the legacy global `email_1` unique index must be dropped in the
+// database for this to take effect — Mongoose does not drop it automatically.
+UserSchema.index(
+  { companyId: 1, email: 1 },
+  { unique: true, partialFilterExpression: { companyId: { $type: "string" } } },
+);

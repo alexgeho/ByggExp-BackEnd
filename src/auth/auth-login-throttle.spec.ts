@@ -5,7 +5,7 @@ import { AuthService } from "./auth.service";
 describe("AuthService login throttling", () => {
   const makeService = () =>
     new AuthService(
-      { findByEmail: async () => null } as any, // always "invalid credentials"
+      { findAllByEmail: async () => [] } as any, // always "invalid credentials"
       {} as any,
       {} as any,
     );

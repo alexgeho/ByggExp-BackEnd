@@ -177,14 +177,23 @@ export class AuthService {
     // Reject early if this email is temporarily locked from too many failures.
     this.assertLoginAllowed(normalizedEmail);
 
-    const user = await this.usersService.findByEmail(normalizedEmail);
+    // Email is unique per company, so one email may map to several accounts
+    // (one per company). Pick the account whose password matches. In practice a
+    // returning worker gets a fresh password at the new employer, so exactly one
+    // account matches.
+    const candidates = await this.usersService.findAllByEmail(normalizedEmail);
 
-    const isMatch =
-      user &&
-      normalizedPassword &&
-      (await this.comparePasswords(normalizedPassword, user.password));
+    let user: (typeof candidates)[number] | null = null;
+    if (normalizedPassword) {
+      for (const candidate of candidates) {
+        if (await this.comparePasswords(normalizedPassword, candidate.password)) {
+          user = candidate;
+          break;
+        }
+      }
+    }
 
-    if (!user || !isMatch) {
+    if (!user) {
       this.registerLoginFailure(normalizedEmail);
       throw new UnauthorizedException("Invalid credentials");
     }
@@ -293,12 +302,16 @@ export class AuthService {
   }
 
   async validateUserForLocal(email: string, password: string) {
-    const user = await this.usersService.findByEmail(email);
-    if (user && (await this.comparePasswords(password, user.password))) {
-      const { password: _, ...safeUser } = user.toObject
-        ? user.toObject()
-        : { ...user };
-      return safeUser;
+    // One email can map to several accounts (unique per company); return the
+    // one whose password matches.
+    const candidates = await this.usersService.findAllByEmail(email);
+    for (const user of candidates) {
+      if (await this.comparePasswords(password, user.password)) {
+        const { password: _, ...safeUser } = user.toObject
+          ? user.toObject()
+          : { ...user };
+        return safeUser;
+      }
     }
     return null;
   }
