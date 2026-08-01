@@ -331,15 +331,19 @@ export class UsersService {
       return true;
     }
 
-    if (targetUser.role !== UserRole.Worker) {
-      return false;
-    }
-
-    // Superadmin is scoped to its own company, exactly like a company admin.
+    // Company admin / superadmin (scoped to their own company) may manage both
+    // workers and project admins — e.g. edit them or remove them from a project
+    // — but not other company admins / superadmins.
     if (
       actor.role === UserRole.CompanyAdmin ||
       actor.role === UserRole.SuperAdmin
     ) {
+      if (
+        targetUser.role !== UserRole.Worker &&
+        targetUser.role !== UserRole.ProjectAdmin
+      ) {
+        return false;
+      }
       return Boolean(
         actor.companyId &&
         targetUser.companyId &&
@@ -347,7 +351,11 @@ export class UsersService {
       );
     }
 
+    // Project admin can only manage workers they manage.
     if (actor.role === UserRole.ProjectAdmin) {
+      if (targetUser.role !== UserRole.Worker) {
+        return false;
+      }
       return this.canProjectAdminManageWorker(actorUserId, targetUserId);
     }
 
