@@ -79,6 +79,11 @@ export class Client {
   @Prop({ default: "0" })
   discount: string;
 
+  // Default hourly rate charged to this client (debiteras/tim). Prefills a new
+  // project's bill rate and the labour line on invoices. 0 = not set.
+  @Prop({ type: Number, default: 0 })
+  hourlyRate: number;
+
   @Prop({ type: Boolean, default: false })
   reverseVAT: boolean;
 
