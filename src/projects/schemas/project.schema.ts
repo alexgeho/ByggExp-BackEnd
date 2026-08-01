@@ -102,6 +102,16 @@ export class Project {
   @Prop({ type: Number })
   spentMaterialsCost?: number;
 
+  // Two hourly rates for labour. costRatePerHour = självkostnad (what an hour
+  // costs the company: lön + sociala avgifter) → drives project cost & margin.
+  // billRatePerHour = debiteras (what the customer is charged per hour) →
+  // billable labour and offer pricing. 0 = not set (fall back to per-employee).
+  @Prop({ type: Number, default: 0 })
+  costRatePerHour?: number;
+
+  @Prop({ type: Number, default: 0 })
+  billRatePerHour?: number;
+
   @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
   documents: Array<string | ProjectDocumentFile>;
 

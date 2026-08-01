@@ -169,6 +169,16 @@ export class CreateProjectDto {
   @IsOptional()
   spentMaterialsCost?: number;
 
+  @Transform(({ value }) => parseOptionalNumberField(value))
+  @IsNumber()
+  @IsOptional()
+  costRatePerHour?: number;
+
+  @Transform(({ value }) => parseOptionalNumberField(value))
+  @IsNumber()
+  @IsOptional()
+  billRatePerHour?: number;
+
   @Transform(({ value }) => parseArrayField(value))
   @IsArray()
   @IsOptional()
