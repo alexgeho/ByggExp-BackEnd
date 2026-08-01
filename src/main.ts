@@ -1,3 +1,5 @@
+// Must be first: loads .env with override before any module reads the env.
+import "./load-env";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { ValidationPipe, Logger } from "@nestjs/common";
