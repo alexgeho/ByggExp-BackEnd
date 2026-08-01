@@ -1,5 +1,10 @@
 # Environment
+# Every .env flavour, not just the bare name: a file called .env.bak.local was
+# committed to this public repository with MONGODB_URI and JWT_SECRET inside,
+# because the old rule matched one exact filename and nothing else.
 .env
+.env.*
+!.env.example
 
 # Dependencies
 node_modules/

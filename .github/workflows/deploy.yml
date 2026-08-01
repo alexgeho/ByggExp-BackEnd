@@ -112,30 +112,116 @@ jobs:
             export PUPPETEER_SKIP_DOWNLOAD=true
             npm ci --omit=dev --no-audit --no-fund
 
+            # Remember what was running, so a failed release can be put back.
+            # Without this the deploy could only fail loudly and leave the site down.
+            PREV="$(readlink -f "$BASE/current" 2>/dev/null || true)"
+            echo "==> Previous release: ${PREV:-none}"
+
             # atomic switch
             ln -sfn "$DIR" "$BASE/current"
             echo "==> Linked $BASE/current -> $DIR"
 
+            # The variables exported by ssh-action have done their only job above:
+            # they were written into the shared .env file. Keeping them exported is
+            # what broke outgoing mail again and again.
+            #
+            # Why: pm2 start captures the current shell environment into the process,
+            # and pm2 save freezes it into dump.pm2, which systemd replays with
+            # pm2 resurrect after every reboot. A GitHub secret that is missing
+            # arrives here as an empty string, so an empty SMTP_PASS gets frozen.
+            # Node's --env-file does NOT override a variable that already exists,
+            # and an empty string is a value, so a perfectly correct .env is
+            # powerless against it. Proven on this host:
+            #     X_PROBE= node --env-file=probe.env -e 'print X_PROBE'  ->  ""
+            #
+            # From here on the file is the single source of truth.
+            unset DEEPL_API_KEY ANTHROPIC_API_KEY INBOUND_INVOICE_TOKEN
+            unset SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM
+            unset STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET
+            unset STRIPE_PRICE_START_MONTHLY STRIPE_PRICE_START_YEARLY
+            unset STRIPE_PRICE_TILLVAXT_MONTHLY STRIPE_PRICE_TILLVAXT_YEARLY
+            unset STRIPE_PRICE_PROFESSIONELL_MONTHLY STRIPE_PRICE_PROFESSIONELL_YEARLY
+            unset APP_PUBLIC_URL BILLING_ENFORCED STRIPE_TAX_ENABLED
+
+            # Guard the invariant that actually broke, rather than trusting the unset
+            # above to stay correct when someone adds a variable to the envs: list.
+            for v in SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
+              if [ -n "${!v+isset}" ]; then
+                echo "Refusing to start: $v is still exported and pm2 would freeze it into dump.pm2" >&2
+                exit 1
+              fi
+            done
+
+            # And check the file really carries the mail settings, so a deploy fails
+            # loudly here instead of silently sending nothing in production.
+            node --env-file="$ENV_FILE" -e '
+              const missing = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"]
+                .filter((k) => !process.env[k]);
+              if (missing.length) {
+                console.error("Empty after --env-file: " + missing.join(", "));
+                process.exit(1);
+              }
+              console.log("Mail settings present in shared/.env");
+            '
+
+            # pm2 lives in /usr/local/bin, and the deploy user does NOT have that
+            # directory on PATH in a non-interactive shell: there it is only
+            # /sbin:/bin:/usr/sbin:/usr/bin. That is why the daemon could be started
+            # from the systemd unit (which sets PATH explicitly) but not by hand.
+            # Resolving the binary here removes the dependency on PATH entirely,
+            # instead of patching PATH in one more dotfile that the next shell forgets.
+            PM2="$(command -v pm2 || true)"
+            [ -x "$PM2" ] || PM2=/usr/local/bin/pm2
+            [ -x "$PM2" ] || { echo "pm2 not found, looked at PATH and /usr/local/bin" >&2; exit 1; }
+            echo "==> Using pm2 at $PM2"
+
             cd "$BASE/current"
             echo "==> (Re)starting PM2"
-            pm2 delete byggexp-api >/dev/null 2>&1 || true
-            pm2 start ecosystem.config.js
-            pm2 save
+            # startOrReload instead of delete+start: delete tears the process down and
+            # leaves the port dead for the whole npm start-up, reload replaces it in
+            # place. In fork mode this is a SHORT gap, not zero: honest zero-downtime
+            # would need a second instance, and cluster mode is unsafe here because the
+            # API registers scheduled jobs (ScheduleModule in app.module) which would
+            # then fire twice. See RUNBOOK.md for what it would take to do properly.
+            "$PM2" startOrReload ecosystem.config.js --update-env
+            "$PM2" save
 
             echo "==> Health check"
             sleep 5
+            HEALTHY=0
             for i in 1 2 3 4 5 6; do
               if curl -fsS -m 5 http://127.0.0.1:3001/ > /dev/null 2>&1; then
                 echo "OK on attempt $i"
+                HEALTHY=1
                 break
-              fi
-              if [ $i -eq 6 ]; then
-                echo "Health check failed!" >&2
-                pm2 logs byggexp-api --lines 50 --nostream
-                exit 1
               fi
               sleep 5
             done
+
+            # Rollback. A deploy that fails its own health check must not be left
+            # standing: the previous release is known good, so we put it back and only
+            # then fail the job. Failing without rolling back would hand the client a
+            # dead site and a red checkmark, which is strictly worse than either.
+            if [ "$HEALTHY" != "1" ]; then
+              echo "Health check failed" >&2
+              "$PM2" logs byggexp-api --lines 50 --nostream || true
+              if [ -n "${PREV:-}" ] && [ -d "$PREV" ]; then
+                echo "==> Rolling back to $PREV" >&2
+                ln -sfn "$PREV" "$BASE/current"
+                cd "$BASE/current"
+                "$PM2" startOrReload ecosystem.config.js --update-env || true
+                "$PM2" save || true
+                sleep 5
+                if curl -fsS -m 5 http://127.0.0.1:3001/ > /dev/null 2>&1; then
+                  echo "==> Rollback succeeded, previous release is serving again" >&2
+                else
+                  echo "==> ROLLBACK ALSO UNHEALTHY, manual action needed, see RUNBOOK.md" >&2
+                fi
+              else
+                echo "==> No previous release to roll back to" >&2
+              fi
+              exit 1
+            fi
 
             echo "==> Cleaning old releases (keep 5)"
             ls -1dt $BASE/releases/*/ 2>/dev/null | tail -n +6 | xargs -r rm -rf
