@@ -102,6 +102,10 @@ export class CreateClientDto {
   hourlyRate?: number;
 
   @IsOptional()
+  @IsString()
+  labourArticleNumber?: string;
+
+  @IsOptional()
   @IsBoolean()
   reverseVAT?: boolean;
 

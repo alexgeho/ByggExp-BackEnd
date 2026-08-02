@@ -84,6 +84,11 @@ export class Client {
   @Prop({ type: Number, default: 0 })
   hourlyRate: number;
 
+  // Article number used for the labour/hours row on this client's invoices.
+  // Remembered from the last invoice so repeat invoices pre-fill it. "" = none.
+  @Prop({ default: "" })
+  labourArticleNumber: string;
+
   @Prop({ type: Boolean, default: false })
   reverseVAT: boolean;
 
