@@ -11,8 +11,28 @@ export class Message {
   @Prop({ required: true, ref: "User" }) // Автор сообщения
   userId: string;
 
-  @Prop({ required: true })
+  // Text is optional: a message may be attachments-only.
+  @Prop({ default: "" })
   text: string;
+
+  // Photos/files attached to the message. kind is "image" or "file".
+  @Prop({
+    type: [
+      {
+        url: String,
+        name: String,
+        mimeType: String,
+        kind: String,
+      },
+    ],
+    default: [],
+  })
+  attachments: {
+    url: string;
+    name: string;
+    mimeType: string;
+    kind: string;
+  }[];
 
   // Source language as detected on first translation (DeepL code, e.g. "PL").
   @Prop({ type: String, default: "" })

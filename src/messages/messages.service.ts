@@ -150,6 +150,80 @@ export class MessagesService {
     return formattedMessage;
   }
 
+  async sendWithAttachments(
+    chatId: string,
+    files: Array<{
+      originalname: string;
+      filename: string;
+      mimetype: string;
+    }>,
+    rawText: string,
+    user: AuthenticatedUser,
+  ) {
+    const chat = await this.findAccessibleChat(chatId, user);
+    const text = (rawText || "").trim();
+    const attachments = (files || []).map((file) => ({
+      url: `/uploads/chat-attachments/${file.filename}`,
+      name: file.originalname,
+      mimeType: file.mimetype,
+      kind: file.mimetype?.startsWith("image/") ? "image" : "file",
+    }));
+
+    if (!text && attachments.length === 0) {
+      throw new BadRequestException("Message text or attachment is required");
+    }
+
+    const createdMessage = await this.messageModel.create({
+      chatId,
+      userId: user.userId,
+      text,
+      attachments,
+      timestamp: new Date(),
+    });
+
+    const chatDocument = await this.chatModel.findById(chat._id).exec();
+    if (!chatDocument) {
+      throw new NotFoundException(`Chat with ID "${chatId}" not found`);
+    }
+
+    const nextReadStates = Array.isArray(chatDocument.readStates)
+      ? [...chatDocument.readStates]
+      : [];
+    const readStateIndex = nextReadStates.findIndex(
+      (entry) => entry.memberId === user.userId,
+    );
+    if (readStateIndex >= 0) {
+      nextReadStates[readStateIndex] = {
+        ...nextReadStates[readStateIndex],
+        memberId: user.userId,
+        lastReadAt: createdMessage.timestamp,
+      };
+    } else {
+      nextReadStates.push({
+        memberId: user.userId,
+        lastReadAt: createdMessage.timestamp,
+      });
+    }
+
+    const preview =
+      text ||
+      (attachments.some((a) => a.kind === "image") ? "📷 Photo" : "📎 File");
+    chatDocument.lastMessageText = preview;
+    chatDocument.lastMessageAt = createdMessage.timestamp;
+    chatDocument.readStates = nextReadStates;
+    await chatDocument.save();
+
+    const [formattedMessage] = await this.formatMessages([
+      createdMessage.toObject(),
+    ]);
+    await this.sendMessageNotification(
+      chatDocument,
+      formattedMessage,
+      user.userId,
+    );
+    return formattedMessage;
+  }
+
   private async findAccessibleChat(chatId: string, user: AuthenticatedUser) {
     const chat = await this.chatModel.findById(chatId).lean().exec();
 
@@ -199,6 +273,9 @@ export class MessagesService {
         text: message.text,
         translatedText,
         sourceLang,
+        attachments: Array.isArray(message.attachments)
+          ? message.attachments
+          : [],
         timestamp: message.timestamp,
         senderName: sender?.name || sender?.email || "Unknown user",
       };
