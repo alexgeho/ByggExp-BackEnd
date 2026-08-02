@@ -20,6 +20,14 @@ export type ScannedDocument = {
   raw?: string;
 };
 
+export type ScannedCertificate = {
+  name: string;
+  number: string;
+  issuer: string;
+  issuedAt: string; // YYYY-MM-DD
+  expiresAt: string; // YYYY-MM-DD
+};
+
 // Extracts structured fields from a photographed/scanned receipt or supplier
 // invoice using Claude vision. Gated on ANTHROPIC_API_KEY — when unset the
 // feature simply reports itself disabled and the UI hides the scan button.
@@ -210,6 +218,94 @@ Rules:
       currency: this.str(parsed.currency) || "SEK",
       category: this.str(parsed.category),
       suggestedKind: kind,
+    };
+  }
+
+  private readonly certificatePrompt = `You are an assistant for a Swedish construction company. The attached file is a photo or scan of an employee certificate / licence (certifikat / behörighet) — e.g. "Heta arbeten", "ID06", "Säkra lyft", "Ställningsbyggnad" — usually in Swedish.
+
+Extract the fields and return ONLY a JSON object (no prose, no code fences) with exactly these keys:
+{
+  "name": string,       // the certificate/licence name, e.g. "Heta arbeten"
+  "number": string,     // certificate/licence number if present, else ""
+  "issuer": string,     // issuing body/organisation if present, else ""
+  "issuedAt": string,   // issue date as YYYY-MM-DD, else ""
+  "expiresAt": string   // expiry / valid-until date (giltig t.o.m.) as YYYY-MM-DD, else ""
+}
+
+Rules:
+- Dates must be YYYY-MM-DD. If only a validity period is shown, use its end date for expiresAt.
+- If a value is missing or unreadable, use "".
+- Never invent a number or a date.`;
+
+  // Extracts certificate fields from a photographed certificate/licence, reusing
+  // the same Claude-vision pipeline as receipts. Gated on ANTHROPIC_API_KEY.
+  async extractCertificate(
+    buffer: Buffer,
+    mimetype: string,
+  ): Promise<ScannedCertificate> {
+    if (!this.enabled) {
+      throw new ServiceUnavailableException(
+        "Document scanning is not configured (missing ANTHROPIC_API_KEY)",
+      );
+    }
+
+    ({ buffer, mimetype } = await this.normalizeHeic(buffer, mimetype));
+
+    const res = await fetch(this.apiUrl, {
+      method: "POST",
+      headers: {
+        "x-api-key": this.apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: 512,
+        messages: [
+          {
+            role: "user",
+            content: [
+              this.buildSourceBlock(buffer, mimetype),
+              { type: "text", text: this.certificatePrompt },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      this.logger.error(`Anthropic responded ${res.status}: ${body}`);
+      throw new ServiceUnavailableException("Scanning service failed");
+    }
+
+    const data = (await res.json()) as {
+      content?: { type: string; text?: string }[];
+    };
+    const text = (data.content || [])
+      .filter((b) => b.type === "text")
+      .map((b) => b.text || "")
+      .join("");
+
+    let parsed: Partial<ScannedCertificate>;
+    try {
+      parsed = this.parseJson(text) as unknown as Partial<ScannedCertificate>;
+    } catch (error) {
+      this.logger.error(
+        "Failed to parse certificate model output",
+        error as Error,
+      );
+      throw new ServiceUnavailableException(
+        "Could not read the certificate — please enter the details manually",
+      );
+    }
+
+    return {
+      name: this.str(parsed.name),
+      number: this.str(parsed.number),
+      issuer: this.str(parsed.issuer),
+      issuedAt: this.str(parsed.issuedAt),
+      expiresAt: this.str(parsed.expiresAt),
     };
   }
 }

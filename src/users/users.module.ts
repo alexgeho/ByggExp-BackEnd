@@ -16,10 +16,12 @@ import {
 import { WorkerNote, WorkerNoteSchema } from "./schemas/worker-note.schema";
 import { MailModule } from "../mail/mail.module";
 import { Tool, ToolSchema } from "../tools/schemas/tool.schema";
+import { ScanningModule } from "../scanning/scanning.module";
 
 @Module({
   imports: [
     MailModule,
+    ScanningModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Company.name, schema: CompanySchema },

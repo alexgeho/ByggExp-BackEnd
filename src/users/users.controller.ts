@@ -15,6 +15,7 @@ import {
   UploadedFile,
   UploadedFiles,
   UseInterceptors,
+  Logger,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import { CreateUserDto } from "./dto/create-user.dto";
@@ -31,7 +32,8 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { FilesInterceptor } from "@nestjs/platform-express";
 import { diskStorage } from "multer";
 import { extname } from "path";
-import { mkdirSync } from "fs";
+import { mkdirSync, readFileSync } from "fs";
+import { ScanningService } from "../scanning/scanning.service";
 
 // Ensure the upload directory exists (multer does not create it).
 mkdirSync("./uploads/certificate-files", { recursive: true });
@@ -90,12 +92,19 @@ type UploadedAvatarFile = {
 
 type UploadedDocumentFile = {
   filename: string;
+  path?: string;
+  mimetype?: string;
 };
 
 @Controller("users")
 @UseGuards(AuthGuard("jwt"), RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  private readonly logger = new Logger(UsersController.name);
+
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly scanningService: ScanningService,
+  ) {}
 
   @Post()
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
@@ -593,14 +602,15 @@ export class UsersController {
     }));
   }
 
-  // Stores the file and returns its URL. OCR extraction of the certificate
-  // fields is a follow-up; the frontend degrades to plain upload meanwhile.
+  // Stores the file and, when OCR is configured (ANTHROPIC_API_KEY), reads the
+  // certificate fields off the image with Claude vision. If OCR is off or fails,
+  // it still returns the fileUrl and the frontend falls back to manual entry.
   @Post(":id/certificates/scan")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   @UseInterceptors(
     FileInterceptor("file", { storage: certificateFilesStorage }),
   )
-  scanCertificateFile(
+  async scanCertificateFile(
     @Param("id") id: string,
     @UploadedFile() file: UploadedDocumentFile,
     @Request() req,
@@ -608,9 +618,29 @@ export class UsersController {
     if (!file) {
       throw new BadRequestException("No file uploaded");
     }
-    return this.usersService.assertCanEditUser(req.user, id).then(() => ({
-      fileUrl: `/uploads/certificate-files/${file.filename}`,
-    }));
+    await this.usersService.assertCanEditUser(req.user, id);
+
+    const fileUrl = `/uploads/certificate-files/${file.filename}`;
+
+    if (!this.scanningService.enabled || !file.path) {
+      return { fileUrl };
+    }
+
+    try {
+      const buffer = readFileSync(file.path);
+      const fields = await this.scanningService.extractCertificate(
+        buffer,
+        file.mimetype || "image/jpeg",
+      );
+      return { fileUrl, ...fields };
+    } catch (error) {
+      this.logger.warn(
+        `Certificate OCR failed for ${file.filename}: ${
+          (error as Error)?.message
+        }`,
+      );
+      return { fileUrl };
+    }
   }
 
   @Delete(":id")
