@@ -18,6 +18,14 @@ import {
   DeviceToken,
   DeviceTokenSchema,
 } from "../notifications/schemas/device-token.schema";
+import {
+  WorkerNote,
+  WorkerNoteSchema,
+} from "../users/schemas/worker-note.schema";
+import {
+  UserActivityLog,
+  UserActivityLogSchema,
+} from "../users/schemas/user-activity-log.schema";
 
 @Module({
   imports: [
@@ -29,6 +37,8 @@ import {
       { name: Expense.name, schema: ExpenseSchema },
       { name: LeaveRequest.name, schema: LeaveRequestSchema },
       { name: DeviceToken.name, schema: DeviceTokenSchema },
+      { name: WorkerNote.name, schema: WorkerNoteSchema },
+      { name: UserActivityLog.name, schema: UserActivityLogSchema },
     ]),
   ],
   controllers: [GdprController],

@@ -21,6 +21,14 @@ import {
   DeviceToken,
   DeviceTokenDocument,
 } from "../notifications/schemas/device-token.schema";
+import {
+  WorkerNote,
+  WorkerNoteDocument,
+} from "../users/schemas/worker-note.schema";
+import {
+  UserActivityLog,
+  UserActivityLogDocument,
+} from "../users/schemas/user-activity-log.schema";
 
 type AuthUser = {
   role?: UserRole;
@@ -47,6 +55,10 @@ export class GdprService {
     private leaveModel: Model<LeaveRequestDocument>,
     @InjectModel(DeviceToken.name)
     private deviceTokenModel: Model<DeviceTokenDocument>,
+    @InjectModel(WorkerNote.name)
+    private workerNoteModel: Model<WorkerNoteDocument>,
+    @InjectModel(UserActivityLog.name)
+    private activityLogModel: Model<UserActivityLogDocument>,
   ) {}
 
   private async loadUserInCompany(
@@ -70,15 +82,25 @@ export class GdprService {
   // personal data across the platform (secrets stripped).
   async export(userId: string, actor?: AuthUser) {
     const user = await this.loadUserInCompany(userId, actor);
-    const [shifts, tasks, assignments, expenses, leave, deviceTokens] =
-      await Promise.all([
-        this.shiftModel.find({ workerId: userId }).lean().exec(),
-        this.taskModel.find({ assigneeUserId: userId }).lean().exec(),
-        this.assignmentModel.find({ userId }).lean().exec(),
-        this.expenseModel.find({ userId }).lean().exec(),
-        this.leaveModel.find({ userId }).lean().exec(),
-        this.deviceTokenModel.find({ userId }).lean().exec(),
-      ]);
+    const [
+      shifts,
+      tasks,
+      assignments,
+      expenses,
+      leave,
+      deviceTokens,
+      workerNotes,
+      activityLogs,
+    ] = await Promise.all([
+      this.shiftModel.find({ workerId: userId }).lean().exec(),
+      this.taskModel.find({ assigneeUserId: userId }).lean().exec(),
+      this.assignmentModel.find({ userId }).lean().exec(),
+      this.expenseModel.find({ userId }).lean().exec(),
+      this.leaveModel.find({ userId }).lean().exec(),
+      this.deviceTokenModel.find({ userId }).lean().exec(),
+      this.workerNoteModel.find({ workerId: userId }).lean().exec(),
+      this.activityLogModel.find({ userId }).lean().exec(),
+    ]);
 
     const profile = user.toObject() as Record<string, unknown>;
     SECRET_FIELDS.forEach((field) => delete profile[field]);
@@ -92,6 +114,8 @@ export class GdprService {
       assignments,
       expenses,
       leave,
+      workerNotes,
+      activityLogs,
       // Register presence of push devices without exposing the raw tokens.
       deviceTokens: deviceTokens.map((token) => ({
         platform: (token as Record<string, unknown>).platform,
@@ -123,6 +147,10 @@ export class GdprService {
 
     await Promise.all([
       this.deviceTokenModel.deleteMany({ userId }),
+      // Notes written ABOUT this worker and their activity trail are personal
+      // data with no bookkeeping value — remove them outright.
+      this.workerNoteModel.deleteMany({ workerId: userId }),
+      this.activityLogModel.deleteMany({ userId }),
       this.shiftModel.updateMany(
         { workerId: userId },
         { $set: { locationSnapshot: "" } },
@@ -130,6 +158,13 @@ export class GdprService {
       this.taskModel.updateMany(
         { assigneeUserId: userId },
         { $set: { assigneeUserName: "Raderad användare" } },
+      ),
+      // Scrub the worker's name where it was snapshotted into a task's
+      // notification assignees.
+      this.taskModel.updateMany(
+        { "notificationSettings.assignees.id": userId },
+        { $set: { "notificationSettings.assignees.$[a].name": "Raderad användare" } },
+        { arrayFilters: [{ "a.id": userId }] },
       ),
     ]);
 
