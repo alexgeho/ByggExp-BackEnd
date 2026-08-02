@@ -600,8 +600,9 @@ export class TasksService {
     );
 
     // Reminders fully off for this task: stamp so we stop re-checking it every
-    // minute, but never push.
-    if (!hasReminderEnabled(settings)) {
+    // minute, but never push. `remindUntilDone` counts as "on" on its own, so a
+    // task can nag after the deadline without a pre-deadline reminder.
+    if (!hasReminderEnabled(settings) && !settings.remindUntilDone) {
       task.lastOverdueReminderAt = now;
       await task.save();
       return;
