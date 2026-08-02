@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
+import { Cron, CronExpression } from "@nestjs/schedule";
 import { Model } from "mongoose";
 import { Task, TaskDocument, TaskStatus } from "./schemas/task.schema";
 import { CreateTaskDto } from "./dto/create-task.dto";
@@ -14,6 +15,13 @@ import { UpdateTaskDto } from "./dto/update-task.dto";
 import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
 import { NotificationsService } from "../notifications/notifications.service";
 import { TaskRemindersService } from "../task-reminders/task-reminders.service";
+import { cronsDisabled } from "../common/cron.util";
+import {
+  buildReminderMessage,
+  getOverdueReminderConfig,
+  getReminderRecipientIds,
+  normalizeTaskNotificationSettings,
+} from "../task-reminders/task-reminder-settings";
 
 type TaskAuthUser = {
   role?: UserRole;
@@ -38,6 +46,7 @@ type TaskNotificationSource = {
 @Injectable()
 export class TasksService {
   private readonly logger = new Logger(TasksService.name);
+  private isProcessingOverdueReminders = false;
 
   constructor(
     @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
@@ -482,12 +491,129 @@ export class TasksService {
     task.status = TaskStatus.Open;
     task.completedAt = null;
     task.completedByUserId = null;
+    task.lastOverdueReminderAt = null;
     await task.save();
 
     return task;
   }
 
-  private hasDueDateChanged(currentDueDate: Date, nextDueDate?: Date | string) {
+  // ---- Overdue "nag until done" reminders ----
+  // Every minute, find not-yet-done tasks whose due date has passed and whose
+  // notificationSettings enable `remindUntilDone`, then push a reminder every
+  // `repeatIntervalMinutes` (default 15) until the task is completed. Because
+  // the query re-checks `status` each cycle, completing (or deleting) the task
+  // stops the reminders automatically.
+  @Cron(CronExpression.EVERY_MINUTE)
+  async processOverdueReminders() {
+    if (cronsDisabled() || this.isProcessingOverdueReminders) {
+      return;
+    }
+    this.isProcessingOverdueReminders = true;
+
+    try {
+      const now = new Date();
+      const tasks = await this.taskModel
+        .find({
+          status: { $ne: TaskStatus.Completed },
+          dueDate: { $ne: null, $lte: now },
+          "notificationSettings.remindUntilDone": true,
+        })
+        .limit(200)
+        .exec();
+
+      if (!tasks.length) {
+        return;
+      }
+
+      // Resolve project members once per project for the project-scoped tasks.
+      const projectIds = [
+        ...new Set(
+          tasks
+            .map((task) => (task.projectId ? task.projectId.toString() : null))
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+      const projects = projectIds.length
+        ? await this.projectModel.find({ _id: { $in: projectIds } }).exec()
+        : [];
+      const membersByProject = new Map<string, string[]>(
+        projects.map((project) => [
+          project._id.toString(),
+          this.getProjectMemberIds(project),
+        ]),
+      );
+
+      for (const task of tasks) {
+        await this.sendOverdueReminder(task, membersByProject, now);
+      }
+    } catch (error) {
+      this.logger.error("Failed to process overdue task reminders", error);
+    } finally {
+      this.isProcessingOverdueReminders = false;
+    }
+  }
+
+  private async sendOverdueReminder(
+    task: TaskDocument,
+    membersByProject: Map<string, string[]>,
+    now: Date,
+  ) {
+    const settings = normalizeTaskNotificationSettings(
+      task.notificationSettings,
+    );
+    const { enabled, intervalMinutes } = getOverdueReminderConfig(settings);
+    if (!enabled) {
+      return;
+    }
+
+    // One push per interval per task.
+    const last = task.lastOverdueReminderAt
+      ? new Date(task.lastOverdueReminderAt).getTime()
+      : null;
+    if (last !== null && now.getTime() - last < intervalMinutes * 60 * 1000) {
+      return;
+    }
+
+    const projectMemberIds = task.projectId
+      ? membersByProject.get(task.projectId.toString()) || []
+      : task.assigneeUserId
+        ? [task.assigneeUserId.toString()]
+        : [];
+    const recipients = getReminderRecipientIds(settings, projectMemberIds);
+
+    if (recipients.length) {
+      try {
+        await this.notificationsService.sendToUsers(recipients, {
+          title: `Overdue: ${task.taskTitle}`,
+          body: buildReminderMessage(task.taskTitle, settings),
+          preferenceKey: "tasks",
+          data: {
+            type: "task_overdue",
+            screen: task.projectId ? "Project" : "Tasks",
+            ...(task.projectId
+              ? { projectId: task.projectId.toString() }
+              : {}),
+            entityId: task._id.toString(),
+          },
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to send overdue reminder for task ${task._id.toString()}`,
+          error,
+        );
+      }
+    }
+
+    // Stamp regardless so we respect the interval even when there are no
+    // recipients (avoids re-checking the same task every minute).
+    task.lastOverdueReminderAt = now;
+    await task.save();
+  }
+
+  private hasDueDateChanged(
+    currentDueDate: Date | null | undefined,
+    nextDueDate?: Date | string,
+  ) {
     if (nextDueDate === undefined || nextDueDate === null) {
       return false;
     }

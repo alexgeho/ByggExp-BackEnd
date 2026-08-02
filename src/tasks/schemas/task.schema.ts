@@ -52,11 +52,16 @@ export class Task {
   @Prop({ type: [MongooseSchema.Types.Mixed], default: [] }) // Документы задачи
   documents: Array<string | TaskDocumentFile>;
 
-  @Prop({ type: Date, required: true })
-  startDate: Date;
+  @Prop({ type: Date, default: null })
+  startDate?: Date | null;
 
-  @Prop({ type: Date, required: true })
-  dueDate: Date;
+  @Prop({ type: Date, default: null })
+  dueDate?: Date | null;
+
+  // Last time an "overdue nag" reminder was pushed for this task. Drives the
+  // repeat-after-deadline reminders (every N minutes until the task is done).
+  @Prop({ type: Date, default: null })
+  lastOverdueReminderAt?: Date | null;
 
   @Prop({
     required: true,

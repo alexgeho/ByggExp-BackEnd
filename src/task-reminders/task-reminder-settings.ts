@@ -26,6 +26,10 @@ export type TaskNotificationSettings = {
   customMessage: string;
   repeat: "none" | "minutes" | "hourly" | "daily" | "weekly";
   repeatIntervalMinutes: number;
+  // When true, keep pushing a reminder every `repeatIntervalMinutes` AFTER the
+  // due date passes, until the task is marked done. Independent of `repeat`
+  // (which only fires before the due date).
+  remindUntilDone: boolean;
 };
 
 export type TaskReminderPlan = {
@@ -89,8 +93,18 @@ export const normalizeTaskNotificationSettings = (
         : "",
     repeat,
     repeatIntervalMinutes,
+    remindUntilDone: Boolean(source.remindUntilDone),
   };
 };
+
+// Resolves whether the "nag after the deadline until done" behaviour is active
+// for a task and how often it should fire (reuses the repeat interval, min 1).
+export const getOverdueReminderConfig = (
+  settings: TaskNotificationSettings,
+): { enabled: boolean; intervalMinutes: number } => ({
+  enabled: settings.remindUntilDone,
+  intervalMinutes: Math.max(1, settings.repeatIntervalMinutes),
+});
 
 export const getReminderRecipientIds = (
   settings: TaskNotificationSettings,
