@@ -69,8 +69,16 @@ export class ClientsService {
   ): Promise<ClientDocument> {
     const client = await this.findOne(id, user);
 
+    // Only apply fields that were actually sent. A partial PUT (e.g. just
+    // { labourArticleNumber }) instantiates a DTO whose other properties are
+    // `undefined`; spreading them wholesale would overwrite existing values and
+    // wipe the client. Strip undefined so a sparse update is a real merge.
+    const patch = Object.fromEntries(
+      Object.entries(dto).filter(([, value]) => value !== undefined),
+    );
+
     Object.assign(client, {
-      ...dto,
+      ...patch,
       companyId: client.companyId,
       createdByUserId: client.createdByUserId,
     });
