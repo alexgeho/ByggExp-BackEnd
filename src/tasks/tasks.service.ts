@@ -20,6 +20,7 @@ import {
   buildReminderMessage,
   getOverdueReminderConfig,
   getReminderRecipientIds,
+  hasReminderEnabled,
   normalizeTaskNotificationSettings,
 } from "../task-reminders/task-reminder-settings";
 
@@ -507,12 +508,15 @@ export class TasksService {
     return task;
   }
 
-  // ---- Overdue "nag until done" reminders ----
-  // Every minute, find not-yet-done tasks whose due date has passed and whose
-  // notificationSettings enable `remindUntilDone`, then push a reminder every
-  // `repeatIntervalMinutes` (default 15) until the task is completed. Because
-  // the query re-checks `status` each cycle, completing (or deleting) the task
-  // stops the reminders automatically.
+  // ---- Deadline & overdue reminders ----
+  // Every minute, find not-yet-done tasks whose due date has passed. Each such
+  // task gets ONE push at the deadline (the first time the cron sees it past
+  // due). If `remindUntilDone` is enabled it keeps nagging every
+  // `repeatIntervalMinutes` (default 15) until completed; otherwise it fires
+  // just the single deadline push. Because the query re-checks `status` each
+  // cycle, completing (or deleting) the task stops the reminders automatically.
+  // The `$or` keeps the query cheap: repeating tasks are always matched, while
+  // one-shot tasks drop out once `lastOverdueReminderAt` is stamped.
   @Cron(CronExpression.EVERY_MINUTE)
   async processOverdueReminders() {
     if (cronsDisabled() || this.isProcessingOverdueReminders) {
@@ -526,7 +530,10 @@ export class TasksService {
         .find({
           status: { $ne: TaskStatus.Completed },
           dueDate: { $ne: null, $lte: now },
-          "notificationSettings.remindUntilDone": true,
+          $or: [
+            { "notificationSettings.remindUntilDone": true },
+            { lastOverdueReminderAt: null },
+          ],
         })
         .limit(200)
         .exec();
@@ -571,16 +578,28 @@ export class TasksService {
     const settings = normalizeTaskNotificationSettings(
       task.notificationSettings,
     );
-    const { enabled, intervalMinutes } = getOverdueReminderConfig(settings);
-    if (!enabled) {
+
+    // Reminders fully off for this task: stamp so we stop re-checking it every
+    // minute, but never push.
+    if (!hasReminderEnabled(settings)) {
+      task.lastOverdueReminderAt = now;
+      await task.save();
       return;
     }
 
-    // One push per interval per task.
+    const { enabled: nagUntilDone, intervalMinutes } =
+      getOverdueReminderConfig(settings);
     const last = task.lastOverdueReminderAt
       ? new Date(task.lastOverdueReminderAt).getTime()
       : null;
-    if (last !== null && now.getTime() - last < intervalMinutes * 60 * 1000) {
+
+    if (nagUntilDone) {
+      // Keep nagging: throttle to one push per interval.
+      if (last !== null && now.getTime() - last < intervalMinutes * 60 * 1000) {
+        return;
+      }
+    } else if (last !== null) {
+      // One-shot deadline push already sent.
       return;
     }
 
