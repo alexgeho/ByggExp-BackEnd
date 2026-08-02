@@ -537,16 +537,19 @@ export class ShiftsService {
     const fallbackMonth = availableMonths[0] || this.getMonthKey(new Date());
     const month = query.month || fallbackMonth;
 
+    // Admins/project admins see company/project/worker-scoped shifts (per the
+    // filter); workers still only see their own.
+    const baseFilter = await this.buildAccessibleShiftFilter(user, query);
+
     const monthShifts = await this.shiftModel
-      .find({
-        workerId: user.userId,
-        shiftDate: new RegExp(`^${month}`),
-        ...(query.projectId ? { projectId: query.projectId } : {}),
-      })
+      .find({ ...baseFilter, shiftDate: new RegExp(`^${month}`) })
       .sort({ shiftDate: 1, startedAt: 1 })
       .exec();
 
     const previousMonth = this.getPreviousMonthKey(month);
+    const previousMonthShifts = await this.shiftModel
+      .find({ ...baseFilter, shiftDate: new RegExp(`^${previousMonth}`) })
+      .exec();
 
     const serializedShifts = await this.serializeShifts(monthShifts);
 
@@ -554,10 +557,7 @@ export class ShiftsService {
       month,
       availableMonths,
       monthTotalDurationMs: this.sumShiftDurations(monthShifts),
-      previousMonthTotalDurationMs: await this.sumMonthDurations(
-        user.userId,
-        previousMonth,
-      ),
+      previousMonthTotalDurationMs: this.sumShiftDurations(previousMonthShifts),
       days: this.groupSerializedShiftsByDay(serializedShifts, "asc"),
     };
   }
@@ -776,7 +776,13 @@ export class ShiftsService {
 
       filter.projectId = { $in: projectIds };
 
-      if (query.workerId) {
+      const scopedWorkerIds = (query.workerIds || "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean);
+      if (scopedWorkerIds.length) {
+        filter.workerId = { $in: scopedWorkerIds };
+      } else if (query.workerId) {
         filter.workerId = query.workerId;
       }
 
@@ -809,7 +815,13 @@ export class ShiftsService {
 
       filter.projectId = { $in: projectIds };
 
-      if (query.workerId) {
+      const scopedWorkerIds = (query.workerIds || "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean);
+      if (scopedWorkerIds.length) {
+        filter.workerId = { $in: scopedWorkerIds };
+      } else if (query.workerId) {
         filter.workerId = query.workerId;
       }
 

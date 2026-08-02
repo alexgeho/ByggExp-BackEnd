@@ -30,4 +30,11 @@ export class ListShiftsDto {
   @IsOptional()
   @Matches(/^[a-f\d]{24}$/i, { message: "workerId must be a valid ObjectId" })
   workerId?: string;
+
+  // Comma-separated worker ids, for exporting several people at once.
+  @IsOptional()
+  @Matches(/^[a-f\d]{24}(,[a-f\d]{24})*$/i, {
+    message: "workerIds must be comma-separated ObjectIds",
+  })
+  workerIds?: string;
 }
