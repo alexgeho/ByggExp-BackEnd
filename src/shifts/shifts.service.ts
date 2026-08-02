@@ -47,6 +47,12 @@ type AuthenticatedUser = {
   companyId?: string | null;
 };
 
+// How long an active shift's device can go without checking in (polling
+// /shifts/current) before we treat the worker as gone and auto-pause the shift.
+// Override with SHIFT_HEARTBEAT_TIMEOUT_MIN.
+const HEARTBEAT_TIMEOUT_MS =
+  (Number(process.env.SHIFT_HEARTBEAT_TIMEOUT_MIN) || 15) * 60 * 1000;
+
 type SerializedShiftRecord = {
   id: string;
   workerId: string;
@@ -840,6 +846,70 @@ export class ShiftsService {
   private async finalizeStaleShifts(userId: string) {
     await this.finalizeExpiredOpenShifts(userId);
     await this.finalizeShiftsPastScheduleDeadline(userId);
+    await this.finalizeShiftsPastHeartbeat(userId);
+  }
+
+  /**
+   * Auto-pauses an active shift whose device stopped checking in for longer than
+   * the heartbeat timeout (default 15 min) — the worker left the site or closed
+   * the app, which iOS can't report in the background. Time is banked only up to
+   * the last heartbeat (the away time is never counted), and the worker is
+   * flagged as outside the project area so the foreman sees they went silent
+   * instead of showing "På jobbet". The pause uses reason "offline", so
+   * getCurrent() auto-resumes it (adding time again) the moment the phone starts
+   * polling again; the day-end / schedule finalizers close it for good.
+   */
+  private async finalizeShiftsPastHeartbeat(userId: string) {
+    const today = this.getDateKey(new Date());
+    const activeShifts = await this.shiftModel
+      .find({
+        workerId: userId,
+        shiftDate: today,
+        status: ShiftStatus.Active,
+      })
+      .exec();
+
+    if (!activeShifts.length) {
+      return;
+    }
+
+    const now = new Date();
+    const lastSeenAt = await this.usersService.getLastSeenAt(userId);
+
+    for (const shift of activeShifts) {
+      // Reference point = last heartbeat, falling back to the shift start if we
+      // have never seen the device.
+      const reference = lastSeenAt || shift.startedAt || now;
+      if (now.getTime() - new Date(reference).getTime() < HEARTBEAT_TIMEOUT_MS) {
+        continue;
+      }
+
+      // Bank time only up to the last heartbeat, clamped inside the open segment
+      // so we never produce a negative or future duration.
+      const openSegmentStart =
+        shift.segments[shift.segments.length - 1]?.startedAt ||
+        shift.lastResumedAt ||
+        shift.startedAt ||
+        now;
+      let pauseAt = new Date(reference);
+      if (pauseAt < openSegmentStart) {
+        pauseAt = new Date(openSegmentStart);
+      }
+      if (pauseAt > now) {
+        pauseAt = now;
+      }
+
+      this.pauseShiftDocument(shift, pauseAt, "offline");
+      await shift.save();
+
+      await this.usersService.setOutsideProjectAreaStatus(userId, {
+        projectId: shift.projectId,
+        projectName: shift.projectNameSnapshot,
+        shiftId: shift._id.toString(),
+        reason: "no_signal",
+        updatedAt: pauseAt,
+      });
+    }
   }
 
   /**

@@ -1470,6 +1470,19 @@ export class UsersService {
   }
 
   /**
+   * Last device heartbeat for a worker, or null if never recorded. Used to
+   * detect a shift whose phone went silent (worker left / app closed).
+   */
+  async getLastSeenAt(userId: string): Promise<Date | null> {
+    const user = await this.userModel
+      .findById(userId)
+      .select("lastSeenAt")
+      .lean()
+      .exec();
+    return user?.lastSeenAt ? new Date(user.lastSeenAt) : null;
+  }
+
+  /**
    * Records a device heartbeat (the mobile app polling while a shift is active),
    * without touching work status. Used to detect offline workers.
    */
