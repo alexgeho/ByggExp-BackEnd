@@ -63,6 +63,11 @@ export class Task {
   @Prop({ type: Date, default: null })
   lastOverdueReminderAt?: Date | null;
 
+  // How many overdue reminders have been sent to the assignee. Once it reaches
+  // notificationSettings.maxReminders, the nag escalates to the boss.
+  @Prop({ type: Number, default: 0 })
+  overdueReminderCount?: number;
+
   @Prop({
     required: true,
     enum: TaskStatus,

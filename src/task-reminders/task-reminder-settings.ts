@@ -30,6 +30,14 @@ export type TaskNotificationSettings = {
   // due date passes, until the task is marked done. Independent of `repeat`
   // (which only fires before the due date).
   remindUntilDone: boolean;
+  // How many overdue reminders go to the assignee before escalating. 0 = never
+  // stop nagging the assignee (no escalation cut-off).
+  maxReminders: number;
+  // After `maxReminders` reminders, also start reminding the boss.
+  escalateToBoss: boolean;
+  // Explicit escalation recipients; empty = resolve to the project manager /
+  // owner (or the task creator for a personal task).
+  escalateToUserIds: string[];
 };
 
 export type TaskReminderPlan = {
@@ -94,16 +102,42 @@ export const normalizeTaskNotificationSettings = (
     repeat,
     repeatIntervalMinutes,
     remindUntilDone: Boolean(source.remindUntilDone),
+    maxReminders: (() => {
+      const n = Number(source.maxReminders);
+      return Number.isFinite(n) && n > 0 ? Math.min(100, Math.floor(n)) : 0;
+    })(),
+    escalateToBoss: Boolean(source.escalateToBoss),
+    escalateToUserIds: Array.isArray(source.escalateToUserIds)
+      ? [
+          ...new Set(
+            source.escalateToUserIds
+              .filter(
+                (id): id is string => typeof id === "string" && !!id.trim(),
+              )
+              .map((id) => id.trim()),
+          ),
+        ]
+      : [],
   };
 };
 
 // Resolves whether the "nag after the deadline until done" behaviour is active
-// for a task and how often it should fire (reuses the repeat interval, min 1).
+// for a task, how often it fires, and the escalation policy (nag the assignee
+// `maxReminders` times, then optionally the boss). 0 maxReminders = no cut-off.
 export const getOverdueReminderConfig = (
   settings: TaskNotificationSettings,
-): { enabled: boolean; intervalMinutes: number } => ({
+): {
+  enabled: boolean;
+  intervalMinutes: number;
+  maxReminders: number;
+  escalateToBoss: boolean;
+  escalateToUserIds: string[];
+} => ({
   enabled: settings.remindUntilDone,
   intervalMinutes: Math.max(1, settings.repeatIntervalMinutes),
+  maxReminders: settings.maxReminders,
+  escalateToBoss: settings.escalateToBoss,
+  escalateToUserIds: settings.escalateToUserIds,
 });
 
 export const getReminderRecipientIds = (

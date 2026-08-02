@@ -503,6 +503,7 @@ export class TasksService {
     task.completedAt = null;
     task.completedByUserId = null;
     task.lastOverdueReminderAt = null;
+    task.overdueReminderCount = 0;
     await task.save();
 
     return task;
@@ -559,9 +560,27 @@ export class TasksService {
           this.getProjectMemberIds(project),
         ]),
       );
+      // Escalation targets per project: the boss = project manager + owner.
+      const bossByProject = new Map<string, string[]>(
+        projects.map((project) => [
+          project._id.toString(),
+          [
+            ...new Set(
+              [project.ownerId, project.projectManagerId]
+                .filter(Boolean)
+                .map((value) => String(value)),
+            ),
+          ],
+        ]),
+      );
 
       for (const task of tasks) {
-        await this.sendOverdueReminder(task, membersByProject, now);
+        await this.sendOverdueReminder(
+          task,
+          membersByProject,
+          bossByProject,
+          now,
+        );
       }
     } catch (error) {
       this.logger.error("Failed to process overdue task reminders", error);
@@ -573,6 +592,7 @@ export class TasksService {
   private async sendOverdueReminder(
     task: TaskDocument,
     membersByProject: Map<string, string[]>,
+    bossByProject: Map<string, string[]>,
     now: Date,
   ) {
     const settings = normalizeTaskNotificationSettings(
@@ -587,15 +607,18 @@ export class TasksService {
       return;
     }
 
-    const { enabled: nagUntilDone, intervalMinutes } =
-      getOverdueReminderConfig(settings);
+    const cfg = getOverdueReminderConfig(settings);
+    const nagUntilDone = cfg.enabled;
     const last = task.lastOverdueReminderAt
       ? new Date(task.lastOverdueReminderAt).getTime()
       : null;
 
     if (nagUntilDone) {
       // Keep nagging: throttle to one push per interval.
-      if (last !== null && now.getTime() - last < intervalMinutes * 60 * 1000) {
+      if (
+        last !== null &&
+        now.getTime() - last < cfg.intervalMinutes * 60 * 1000
+      ) {
         return;
       }
     } else if (last !== null) {
@@ -608,16 +631,39 @@ export class TasksService {
       : task.assigneeUserId
         ? [task.assigneeUserId.toString()]
         : [];
-    const recipients = getReminderRecipientIds(settings, projectMemberIds);
+    const workerRecipients = getReminderRecipientIds(settings, projectMemberIds);
+
+    // Escalation: after `maxReminders` pushes to the assignee, switch to the
+    // boss (project manager / owner, or an explicit list). maxReminders 0 or no
+    // escalation configured keeps nagging the assignee forever.
+    const count = task.overdueReminderCount || 0;
+    const workerExhausted =
+      nagUntilDone && cfg.maxReminders > 0 && count >= cfg.maxReminders;
+
+    let recipients: string[];
+    let escalated = false;
+    if (workerExhausted && cfg.escalateToBoss) {
+      recipients = this.resolveBossRecipients(task, cfg, bossByProject);
+      escalated = true;
+    } else if (workerExhausted) {
+      // Assignee reminder cap reached and no escalation → stop nagging.
+      recipients = [];
+    } else {
+      recipients = workerRecipients;
+    }
 
     if (recipients.length) {
       try {
         await this.notificationsService.sendToUsers(recipients, {
-          title: `Overdue: ${task.taskTitle}`,
-          body: buildReminderMessage(task.taskTitle, settings),
+          title: escalated
+            ? `Escalated (overdue): ${task.taskTitle}`
+            : `Overdue: ${task.taskTitle}`,
+          body: escalated
+            ? `${task.assigneeUserName || "A worker"} still hasn't completed "${task.taskTitle}".`
+            : buildReminderMessage(task.taskTitle, settings),
           preferenceKey: "tasks",
           data: {
-            type: "task_overdue",
+            type: escalated ? "task_escalated" : "task_overdue",
             screen: task.projectId ? "Project" : "Tasks",
             ...(task.projectId
               ? { projectId: task.projectId.toString() }
@@ -625,6 +671,10 @@ export class TasksService {
             entityId: task._id.toString(),
           },
         });
+        // Only assignee reminders count toward the escalation threshold.
+        if (!escalated) {
+          task.overdueReminderCount = count + 1;
+        }
       } catch (error) {
         this.logger.error(
           `Failed to send overdue reminder for task ${task._id.toString()}`,
@@ -637,6 +687,21 @@ export class TasksService {
     // recipients (avoids re-checking the same task every minute).
     task.lastOverdueReminderAt = now;
     await task.save();
+  }
+
+  private resolveBossRecipients(
+    task: TaskDocument,
+    cfg: { escalateToUserIds: string[] },
+    bossByProject: Map<string, string[]>,
+  ): string[] {
+    if (cfg.escalateToUserIds.length) {
+      return cfg.escalateToUserIds;
+    }
+    if (task.projectId) {
+      return bossByProject.get(task.projectId.toString()) || [];
+    }
+    // Personal task → escalate to whoever created it.
+    return task.createdByUserId ? [task.createdByUserId.toString()] : [];
   }
 
   private hasDueDateChanged(
