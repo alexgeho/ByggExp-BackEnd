@@ -127,10 +127,20 @@ export class TasksService {
     const projectMemberIds = this.getProjectMemberIds(
       project as unknown as ProjectDocument,
     );
+    // If the task targets a chosen subset of the team, scope the "new task"
+    // ping to those assignees instead of the whole project.
+    const createdSettings = normalizeTaskNotificationSettings(
+      createTaskDto.notificationSettings,
+    );
+    const createdRecipients =
+      !createdSettings.allMembersNotification && createdSettings.assignees.length
+        ? getReminderRecipientIds(createdSettings, projectMemberIds)
+        : undefined;
     await this.sendTaskCreatedNotification(
       notificationTask,
       notificationProject,
       actorUserId,
+      createdRecipients,
     );
     await this.taskRemindersService.sendAssignmentNotification({
       actorUserId,
@@ -681,11 +691,14 @@ export class TasksService {
     task: TaskNotificationSource,
     project: ProjectNotificationSource,
     actorUserId?: string,
+    explicitRecipients?: string[],
   ) {
-    const recipients = this.getProjectNotificationRecipients(
-      project,
-      actorUserId,
-    );
+    // When the task is assigned to a chosen subset, only ping those users;
+    // otherwise notify the whole project team.
+    const recipients = (
+      explicitRecipients ??
+      this.getProjectNotificationRecipients(project, actorUserId)
+    ).filter((userId) => userId && userId !== actorUserId);
     if (!recipients.length) {
       return;
     }
