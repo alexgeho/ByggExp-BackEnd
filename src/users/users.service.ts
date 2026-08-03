@@ -11,6 +11,7 @@ import { Model } from "mongoose";
 import * as bcrypt from "bcrypt";
 import { createHash, randomBytes } from "crypto";
 import {
+  normalizeManagerReminderSettings,
   normalizeUserNotificationPreferences,
   User,
   UserAccountStatus,
@@ -1213,7 +1214,7 @@ export class UsersService {
       ? this.sanitizePrivilegedUserFields(updateUserDto, actor, id)
       : updateUserDto;
 
-    const normalizedUpdate = {
+    const normalizedUpdate: Record<string, unknown> = {
       ...safeDto,
       ...(safeDto.email != null
         ? { email: safeDto.email.trim().toLowerCase() }
@@ -1226,6 +1227,20 @@ export class UsersService {
         ? { projectIds: this.normalizeProjectIds(safeDto.projectIds) }
         : {}),
     };
+
+    // Reminder settings: normalize and preserve the server-managed lastSentAt so
+    // saving preferences never resets the send cadence.
+    if (safeDto.reminderSummary) {
+      const existing = await this.userModel
+        .findById(id)
+        .select("reminderSummary")
+        .lean()
+        .exec();
+      normalizedUpdate.reminderSummary = normalizeManagerReminderSettings({
+        ...(safeDto.reminderSummary as Record<string, unknown>),
+        lastSentAt: existing?.reminderSummary?.lastSentAt ?? null,
+      });
+    }
 
     const updatedUser = await this.userModel
       .findByIdAndUpdate(id, normalizedUpdate, { new: true })

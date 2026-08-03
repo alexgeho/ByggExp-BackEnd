@@ -89,6 +89,65 @@ export const normalizeUserNotificationPreferences = (
       : DEFAULT_USER_NOTIFICATION_PREFERENCES.productAndMarketingAlerts,
 });
 
+// Manager "what needs attention" summary reminder: a periodic digest of overdue
+// tasks, unpaid/overdue invoices, purchase invoices due and expenses to approve,
+// on a cadence the manager chooses. Sent as a push + in-app notification.
+export type ManagerReminderSettings = {
+  mode: "off" | "hours" | "daily" | "weekly";
+  intervalHours: number; // for mode 'hours' (every N hours)
+  timeOfDay: string; // 'HH:MM' for daily / weekly
+  weekday: number; // 1 = Mon … 7 = Sun, for weekly
+  overdueTasks: boolean;
+  unpaidInvoices: boolean;
+  purchaseInvoicesDue: boolean;
+  expensesToApprove: boolean;
+  lastSentAt: Date | null;
+};
+
+export const DEFAULT_MANAGER_REMINDER_SETTINGS: ManagerReminderSettings = {
+  mode: "off",
+  intervalHours: 5,
+  timeOfDay: "08:00",
+  weekday: 1,
+  overdueTasks: true,
+  unpaidInvoices: true,
+  purchaseInvoicesDue: true,
+  expensesToApprove: true,
+  lastSentAt: null,
+};
+
+export const normalizeManagerReminderSettings = (
+  value?: Partial<ManagerReminderSettings> | null,
+): ManagerReminderSettings => {
+  const d = DEFAULT_MANAGER_REMINDER_SETTINGS;
+  const bool = (v: unknown, fb: boolean) => (typeof v === "boolean" ? v : fb);
+  const mode = ["off", "hours", "daily", "weekly"].includes(String(value?.mode))
+    ? (value!.mode as ManagerReminderSettings["mode"])
+    : d.mode;
+  const intervalHours = Number.isFinite(Number(value?.intervalHours))
+    ? Math.min(24, Math.max(1, Math.round(Number(value!.intervalHours))))
+    : d.intervalHours;
+  const timeOfDay = /^\d{2}:\d{2}$/.test(String(value?.timeOfDay))
+    ? String(value!.timeOfDay)
+    : d.timeOfDay;
+  const weekday = Number.isFinite(Number(value?.weekday))
+    ? Math.min(7, Math.max(1, Math.round(Number(value!.weekday))))
+    : d.weekday;
+  const lastSentAt = value?.lastSentAt ? new Date(value.lastSentAt) : null;
+  return {
+    mode,
+    intervalHours,
+    timeOfDay,
+    weekday,
+    overdueTasks: bool(value?.overdueTasks, d.overdueTasks),
+    unpaidInvoices: bool(value?.unpaidInvoices, d.unpaidInvoices),
+    purchaseInvoicesDue: bool(value?.purchaseInvoicesDue, d.purchaseInvoicesDue),
+    expensesToApprove: bool(value?.expensesToApprove, d.expensesToApprove),
+    lastSentAt:
+      lastSentAt && !Number.isNaN(lastSentAt.getTime()) ? lastSentAt : null,
+  };
+};
+
 @Schema({ timestamps: true })
 export class User {
   // Email is the login identifier, but it is unique PER COMPANY, not globally
@@ -210,6 +269,12 @@ export class User {
     default: () => ({ ...DEFAULT_USER_NOTIFICATION_PREFERENCES }),
   })
   notificationPreferences: UserNotificationPreferences;
+
+  @Prop({
+    type: Object,
+    default: () => ({ ...DEFAULT_MANAGER_REMINDER_SETTINGS }),
+  })
+  reminderSummary: ManagerReminderSettings;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

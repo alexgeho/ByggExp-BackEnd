@@ -109,6 +109,12 @@ export class CreateUserDto {
   @IsOptional()
   language?: Record<string, any>;
 
+  // Manager "needs attention" reminder settings (validated/normalized in the
+  // service). lastSentAt is server-managed and preserved on update.
+  @IsObject()
+  @IsOptional()
+  reminderSummary?: Record<string, unknown>;
+
   @IsArray()
   @IsString({ each: true })
   @IsOptional()

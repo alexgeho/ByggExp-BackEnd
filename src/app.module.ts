@@ -17,6 +17,7 @@ import { ShiftsModule } from "./shifts/shifts.module";
 import { HoursModule } from "./hours/hours.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { TaskRemindersModule } from "./task-reminders/task-reminders.module";
+import { ManagerRemindersModule } from "./manager-reminders/manager-reminders.module";
 import { ToolsModule } from "./tools/tools.module";
 import { InvoicesModule } from "./invoices/invoices.module";
 import { PayrollModule } from "./payroll/payroll.module";
@@ -63,6 +64,7 @@ import { SystemModule } from "./system/system.module";
     HoursModule,
     NotificationsModule,
     TaskRemindersModule,
+    ManagerRemindersModule,
     ToolsModule,
     InvoicesModule,
     PayrollModule,
