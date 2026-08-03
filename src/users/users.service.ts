@@ -1175,15 +1175,17 @@ export class UsersService {
       delete cleaned.companyId;
     }
 
-    // Role: superadmin → any; companyAdmin → may set worker/projectAdmin for
-    // OTHER users only (never self, never companyAdmin/superadmin); anyone else
-    // (incl. a user editing self) cannot change role at all.
+    // Role: superadmin → any; companyAdmin → may set worker/projectAdmin/
+    // companyAdmin for OTHER users in its company (never self, never superadmin);
+    // anyone else (incl. a user editing self) cannot change role at all.
     if ("role" in cleaned) {
       const requested = cleaned.role;
       const companyAdminMayAssign =
         isCompanyAdmin &&
         !editingSelf &&
-        (requested === UserRole.Worker || requested === UserRole.ProjectAdmin);
+        (requested === UserRole.Worker ||
+          requested === UserRole.ProjectAdmin ||
+          requested === UserRole.CompanyAdmin);
       if (!isSuper && !companyAdminMayAssign) {
         delete cleaned.role;
       }

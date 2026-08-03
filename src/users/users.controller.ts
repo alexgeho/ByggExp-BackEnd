@@ -120,15 +120,13 @@ export class UsersController {
       createUserDto.role = UserRole.Worker;
     }
 
-    // CompanyAdmin может создавать Worker и ProjectAdmin
-    if (req.user.role === UserRole.CompanyAdmin) {
-      // CompanyAdmin не может создавать SuperAdmin или другого CompanyAdmin
-      if (
-        createUserDto.role === UserRole.SuperAdmin ||
-        createUserDto.role === UserRole.CompanyAdmin
-      ) {
-        createUserDto.role = UserRole.Worker;
-      }
+    // CompanyAdmin может назначать любую роль внутри своей компании, кроме
+    // SuperAdmin (кросс-тенантная платформенная роль).
+    if (
+      req.user.role === UserRole.CompanyAdmin &&
+      createUserDto.role === UserRole.SuperAdmin
+    ) {
+      createUserDto.role = UserRole.Worker;
     }
 
     // Tenant isolation: any non-superadmin ALWAYS creates users inside their own
@@ -195,7 +193,7 @@ export class UsersController {
           role = UserRole.Worker;
         } else if (
           req.user.role === UserRole.CompanyAdmin &&
-          (role === UserRole.SuperAdmin || role === UserRole.CompanyAdmin)
+          role === UserRole.SuperAdmin
         ) {
           role = UserRole.Worker;
         }
