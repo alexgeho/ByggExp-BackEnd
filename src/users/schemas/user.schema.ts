@@ -141,7 +141,7 @@ export class User {
   @Prop({ type: Date, default: null })
   erasedAt?: Date | null;
 
-  @Prop({ type: Object, default: { ru: "Русский" } })
+  @Prop({ type: Object, default: { en: "English" } })
   language: Record<string, any>;
 
   @Prop({ type: [String], default: [] })
