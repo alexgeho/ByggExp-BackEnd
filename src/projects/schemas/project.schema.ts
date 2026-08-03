@@ -27,7 +27,7 @@ export class Project {
   @Prop({ required: true, ref: "Company" })
   companyId: string;
 
-  // Optional customer ("заказчик") the project is carried out for. Belongs to
+  // Optional customer the project is carried out for. Belongs to
   // the same company (tenant) as the project. Not required to create a project.
   @Prop({ type: String, ref: "Client", default: null })
   clientId?: string | null;

@@ -168,7 +168,7 @@ export class CompanyService {
   async registerCompanyWithAdmin(
     dto: RegisterCompanyWithAdminDto,
   ): Promise<{ company: Company; admin: any }> {
-    // Проверяем существование компании
+    // Check the company exists
     const existingCompany = await this.companyModel
       .findOne({ email: dto.email })
       .exec();
@@ -176,13 +176,13 @@ export class CompanyService {
       throw new ConflictException("Company with this email already exists");
     }
 
-    // Проверяем существование админа
+    // Check the admin exists
     const existingAdmin = await this.usersService.findByEmail(dto.adminEmail);
     if (existingAdmin) {
       throw new ConflictException("User with this email already exists");
     }
 
-    // Создаём компанию
+    // Create the company
     const company = await this.create({
       name: dto.name,
       address: dto.address,
@@ -191,7 +191,7 @@ export class CompanyService {
       projects: [],
     });
 
-    // Создаём CompanyAdmin
+    // Create the CompanyAdmin
     const hashedPassword = await bcrypt.hash(dto.adminPassword, 10);
     const admin = await this.usersService.create({
       email: dto.adminEmail,
@@ -208,7 +208,7 @@ export class CompanyService {
       projectIds: [],
     });
 
-    // Добавляем админа в список companyAdmins компании
+    // Add the admin to the company companyAdmins list
     await this.companyModel.findByIdAndUpdate(company._id, {
       $push: { companyAdmins: admin._id.toString() },
     });

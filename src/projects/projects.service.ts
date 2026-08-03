@@ -42,7 +42,7 @@ export class ProjectsService {
     private companyService: CompanyService,
   ) {}
 
-  // Resolves an optional clientId ("заказчик") against the project's own
+  // Resolves an optional clientId against the project's own
   // company. Returns null when unset, or throws if the client is missing or
   // belongs to a different company (prevents cross-tenant references).
   private async resolveClientId(
@@ -669,7 +669,7 @@ export class ProjectsService {
         ? [...(existingProject.documents || []), ...updateProjectDto.documents]
         : existingProject.documents;
 
-    // Validate the customer ("заказчик") belongs to the project's company only
+    // Validate the customer belongs to the project's company only
     // when the caller actually sends the field, so unrelated updates are left
     // untouched. An explicit null clears the reference.
     const clientPatch =

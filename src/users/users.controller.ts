@@ -112,7 +112,7 @@ export class UsersController {
     @Body() createUserDto: CreateUserDto,
     @Request() req,
   ): Promise<User> {
-    // ProjectAdmin может создавать только Worker
+    // ProjectAdmin can only create Workers
     if (
       req.user.role === UserRole.ProjectAdmin &&
       createUserDto.role !== UserRole.Worker
@@ -120,8 +120,8 @@ export class UsersController {
       createUserDto.role = UserRole.Worker;
     }
 
-    // CompanyAdmin может назначать любую роль внутри своей компании, кроме
-    // SuperAdmin (кросс-тенантная платформенная роль).
+    // CompanyAdmin may assign any role within its own company except
+    // SuperAdmin (the cross-tenant platform role).
     if (
       req.user.role === UserRole.CompanyAdmin &&
       createUserDto.role === UserRole.SuperAdmin

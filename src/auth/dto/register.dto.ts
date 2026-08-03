@@ -15,5 +15,5 @@ export class RegisterDto {
   phoneNumber: number;
 
   @IsEnum(["admin", "manager", "client", "worker"], { message: "Invalid role" })
-  role: string = "client"; // по умолчанию — client
+  role: string = "client"; // default: client
 }

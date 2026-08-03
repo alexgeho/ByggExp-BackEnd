@@ -5,10 +5,10 @@ export type MessageDocument = Message & Document;
 
 @Schema({ timestamps: true })
 export class Message {
-  @Prop({ required: true, ref: "Chat" }) // Ссылка на чат
+  @Prop({ required: true, ref: "Chat" }) // Reference to the chat
   chatId: string;
 
-  @Prop({ required: true, ref: "User" }) // Автор сообщения
+  @Prop({ required: true, ref: "User" }) // Message author
   userId: string;
 
   // Text is optional: a message may be attachments-only.

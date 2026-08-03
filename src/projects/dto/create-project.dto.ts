@@ -76,7 +76,7 @@ export class CreateProjectDto {
   @IsString()
   clientCompanyId?: string;
 
-  // Optional customer ("заказчик") the project is for. Must belong to the
+  // Optional customer the project is for. Must belong to the
   // project's own company; validated server-side. Empty string clears it.
   @Expose()
   @Transform(({ value }) => (value === "" ? null : value))

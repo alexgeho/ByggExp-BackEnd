@@ -83,7 +83,7 @@ export class AuthService {
     return bcrypt.compare(plain, hashed);
   }
 
-  // Регистрация нового пользователя
+  // Register a new user
   async register(createUserDto: CreateUserDto) {
     // Public self-registration: NEVER trust caller-supplied privileged fields.
     // A self-registered account is always a company-less Worker; role, company
@@ -135,7 +135,7 @@ export class AuthService {
     return this.generateTokens(admin);
   }
 
-  // Регистрация SuperAdmin (только первый раз)
+  // Register the SuperAdmin (first-time only)
   async registerSuperAdmin(createUserDto: CreateUserDto) {
     const { email, password, ...userData } = createUserDto;
 
@@ -146,7 +146,7 @@ export class AuthService {
     const existing = await this.usersService.findByEmail(email);
     if (existing) throw new ConflictException("Email already exists");
 
-    // Проверяем, есть ли уже супер-admin
+    // Check whether a superadmin already exists
     const superAdmins = await this.usersService.findAllByRole(
       UserRole.SuperAdmin,
     );

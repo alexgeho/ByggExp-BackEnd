@@ -25,7 +25,7 @@ export class ProjectAccessGuard implements CanActivate {
       throw new ForbiddenException("User not authenticated");
     }
 
-    // SuperAdmin имеет доступ ко всем проектам
+    // SuperAdmin has access to all projects
     if (user.role === UserRole.SuperAdmin) {
       return true;
     }
@@ -39,12 +39,12 @@ export class ProjectAccessGuard implements CanActivate {
     try {
       const project = await this.projectsService.findOne(projectId);
 
-      // CompanyAdmin имеет доступ ко всем проектам своей компании
+      // CompanyAdmin has access to all projects in its company
       if (user.role === UserRole.CompanyAdmin) {
         return project.companyId === user.companyId;
       }
 
-      // ProjectAdmin имеет доступ только к своим проектам
+      // ProjectAdmin has access only to its own projects
       if (user.role === UserRole.ProjectAdmin) {
         return (
           project.projectAdmins.includes(user.sub) ||
@@ -52,7 +52,7 @@ export class ProjectAccessGuard implements CanActivate {
         );
       }
 
-      // Worker имеет доступ только к проектам, где он является работником
+      // Worker has access only to projects where they are a member
       if (user.role === UserRole.Worker) {
         return project.workers.includes(user.sub);
       }

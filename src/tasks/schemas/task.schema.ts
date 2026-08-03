@@ -22,10 +22,10 @@ export class TaskDocumentFile {
 
 @Schema({ timestamps: true })
 export class Task {
-  @Prop({ type: String, ref: "Project", default: null, index: true }) // Ссылка на проект
+  @Prop({ type: String, ref: "Project", default: null, index: true }) // Reference to the project
   projectId?: string | null;
 
-  @Prop({ type: String, ref: "User", default: null, index: true }) // Персональная задача
+  @Prop({ type: String, ref: "User", default: null, index: true }) // Personal task
   assigneeUserId?: string | null;
 
   @Prop({ default: "" })
@@ -43,13 +43,13 @@ export class Task {
   @Prop()
   notes: string;
 
-  @Prop({ type: [String] }) // Уведомления
+  @Prop({ type: [String] }) // Notifications
   notifications: string[];
 
   @Prop({ type: MongooseSchema.Types.Mixed })
   notificationSettings: Record<string, unknown>;
 
-  @Prop({ type: [MongooseSchema.Types.Mixed], default: [] }) // Документы задачи
+  @Prop({ type: [MongooseSchema.Types.Mixed], default: [] }) // Task documents
   documents: Array<string | TaskDocumentFile>;
 
   @Prop({ type: Date, default: null })

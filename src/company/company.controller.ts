@@ -152,7 +152,7 @@ export class CompanyController {
     @Body() updateCompanyDto: Partial<CreateCompanyDto>,
     @Request() req,
   ): Promise<Company> {
-    // CompanyAdmin может редактировать только свою компанию
+    // CompanyAdmin can only edit its own company
     if (req.user.role === UserRole.CompanyAdmin && req.user.companyId !== id) {
       throw new Error("Access denied");
     }

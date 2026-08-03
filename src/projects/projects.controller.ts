@@ -149,10 +149,10 @@ export class ProjectsController {
   @Roles(UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
   async findAllByUser(@Request() req): Promise<Project[]> {
     if (req.user.role === UserRole.CompanyAdmin) {
-      // CompanyAdmin видит все проекты своей компании
+      // CompanyAdmin sees all projects in its company
       return this.projectsService.findAllByCompany(req.user.companyId);
     }
-    // ProjectAdmin и Worker видят только свои проекты
+    // ProjectAdmin and Worker see only their own projects
     return this.projectsService.findAllByUser(req.user.userId);
   }
 
