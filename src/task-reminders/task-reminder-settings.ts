@@ -314,3 +314,76 @@ export const buildReminderMessage = (
 
   return `Reminder: "${taskTitle}" is still waiting for attention.`;
 };
+
+// Push notifications go out in the recipient's chosen app language (Swedish or
+// English). The user's `language` field is a { code: label } object (e.g.
+// { sv: "Svenska" }); we read the code and fall back to English otherwise.
+export type NotificationLang = "en" | "sv";
+
+export const resolveNotificationLang = (language: unknown): NotificationLang => {
+  if (language && typeof language === "object") {
+    const code = Object.keys(language as Record<string, unknown>)[0]
+      ?.slice(0, 2)
+      .toLowerCase();
+    if (code === "sv") {
+      return "sv";
+    }
+  }
+  return "en";
+};
+
+// Localized title/body for the overdue "confirm completion" reminders. The first
+// push (at the deadline) asks the assignee to confirm the task is done; every
+// repeat nags until it is marked complete. Escalation notifies the boss.
+export const buildOverdueReminderContent = ({
+  taskTitle,
+  isFirst,
+  lang,
+  escalated,
+  workerName,
+  settings,
+}: {
+  taskTitle: string;
+  isFirst: boolean;
+  lang: NotificationLang;
+  escalated: boolean;
+  workerName?: string;
+  settings: TaskNotificationSettings;
+}): { title: string; body: string } => {
+  const t = taskTitle;
+
+  if (escalated) {
+    const worker =
+      workerName || { en: "A worker", sv: "En medarbetare" }[lang];
+    return {
+      title: {
+        en: `Escalated (overdue): ${t}`,
+        sv: `Eskalerad (försenad): ${t}`,
+      }[lang],
+      body: {
+        en: `${worker} still hasn't completed "${t}".`,
+        sv: `${worker} har fortfarande inte slutfört "${t}".`,
+      }[lang],
+    };
+  }
+
+  const title = isFirst
+    ? { en: `Task due: ${t}`, sv: `Dags för uppgift: ${t}` }[lang]
+    : { en: `Reminder: ${t}`, sv: `Påminnelse: ${t}` }[lang];
+
+  if (settings.customReminder && settings.customMessage) {
+    return { title, body: settings.customMessage };
+  }
+
+  const body = isFirst
+    ? {
+        en: `It's time for "${t}". If you've finished, confirm it as done — otherwise please complete it now.`,
+        sv: `Det är dags för "${t}". Om du är klar, bekräfta att den är slutförd — annars slutför den nu.`,
+      }[lang]
+    : {
+        en: `"${t}" still needs to be completed. Mark it done to confirm and stop the reminders.`,
+        sv: `"${t}" måste fortfarande slutföras. Markera den som klar för att bekräfta och stoppa påminnelserna.`,
+      }[lang];
+
+  return { title, body };
+};

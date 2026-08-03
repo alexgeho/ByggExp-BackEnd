@@ -17,11 +17,13 @@ import { NotificationsService } from "../notifications/notifications.service";
 import { TaskRemindersService } from "../task-reminders/task-reminders.service";
 import { cronsDisabled } from "../common/cron.util";
 import {
-  buildReminderMessage,
+  buildOverdueReminderContent,
   getOverdueReminderConfig,
   getReminderRecipientIds,
   hasReminderEnabled,
+  NotificationLang,
   normalizeTaskNotificationSettings,
+  resolveNotificationLang,
 } from "../task-reminders/task-reminder-settings";
 
 type TaskAuthUser = {
@@ -653,25 +655,57 @@ export class TasksService {
       recipients = workerRecipients;
     }
 
+    // The first push (at the deadline) asks the assignee to confirm completion;
+    // every following push repeats until the task is marked done.
+    const isFirstNag = count === 0;
+
     if (recipients.length) {
+      const data = {
+        type: escalated ? "task_escalated" : "task_overdue",
+        screen: task.projectId ? "Project" : "Tasks",
+        ...(task.projectId ? { projectId: task.projectId.toString() } : {}),
+        entityId: task._id.toString(),
+      };
+
+      // Localize per recipient (Swedish / English) — send one push per language
+      // group so each worker gets the reminder in their chosen app language.
+      const recipientUsers = await this.userModel
+        .find({ _id: { $in: recipients } })
+        .select("language")
+        .lean()
+        .exec();
+      const langById = new Map(
+        recipientUsers.map((u) => [
+          String(u._id),
+          resolveNotificationLang(u.language),
+        ]),
+      );
+      const byLang = new Map<NotificationLang, string[]>();
+      for (const id of recipients) {
+        const lang = langById.get(id) ?? "en";
+        if (!byLang.has(lang)) {
+          byLang.set(lang, []);
+        }
+        byLang.get(lang)!.push(id);
+      }
+
       try {
-        await this.notificationsService.sendToUsers(recipients, {
-          title: escalated
-            ? `Escalated (overdue): ${task.taskTitle}`
-            : `Overdue: ${task.taskTitle}`,
-          body: escalated
-            ? `${task.assigneeUserName || "A worker"} still hasn't completed "${task.taskTitle}".`
-            : buildReminderMessage(task.taskTitle, settings),
-          preferenceKey: "tasks",
-          data: {
-            type: escalated ? "task_escalated" : "task_overdue",
-            screen: task.projectId ? "Project" : "Tasks",
-            ...(task.projectId
-              ? { projectId: task.projectId.toString() }
-              : {}),
-            entityId: task._id.toString(),
-          },
-        });
+        for (const [lang, ids] of byLang) {
+          const content = buildOverdueReminderContent({
+            taskTitle: task.taskTitle,
+            isFirst: isFirstNag,
+            lang,
+            escalated,
+            workerName: task.assigneeUserName,
+            settings,
+          });
+          await this.notificationsService.sendToUsers(ids, {
+            title: content.title,
+            body: content.body,
+            preferenceKey: "tasks",
+            data,
+          });
+        }
         // Only assignee reminders count toward the escalation threshold.
         if (!escalated) {
           task.overdueReminderCount = count + 1;
