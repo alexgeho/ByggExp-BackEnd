@@ -22,9 +22,14 @@ import {
 import { UsersService } from "../users/users.service";
 import { UserActivityLogLevel } from "../users/schemas/user-activity-log.schema";
 import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
+import {
+  HourAdjustment,
+  HourAdjustmentDocument,
+} from "../hours/schemas/hour-adjustment.schema";
 import { CompleteShiftDto } from "./dto/complete-shift.dto";
-import { ExportShiftsDto } from "./dto/export-shifts.dto";
+import { ExportShiftsDto, HoursSource } from "./dto/export-shifts.dto";
 import { ListShiftsDto } from "./dto/list-shifts.dto";
+import { SetManualHoursDto } from "./dto/set-manual-hours.dto";
 import { StartShiftDto } from "./dto/start-shift.dto";
 import {
   Shift,
@@ -39,7 +44,10 @@ import {
   getShiftScheduleWindow,
   getStartWindowErrorMessage,
   isPastShiftScheduleDeadline,
+  parseTimeToMinutes,
 } from "./shift-schedule.util";
+
+const MS_PER_HOUR = 1000 * 60 * 60;
 
 type AuthenticatedUser = {
   userId: string;
@@ -63,6 +71,7 @@ type SerializedShiftRecord = {
   status: ShiftStatus;
   durationMs: number;
   storedDurationMs: number;
+  manualDurationMs: number | null;
   completionReason?: string | null;
   completionSource?: string | null;
   completionNotifiedAt?: Date | null;
@@ -84,6 +93,10 @@ type SerializedShiftRecord = {
 type ShiftDayRecord = {
   date: string;
   totalDurationMs: number;
+  // Per-day totals for the other two hours sources, so the calendar can colour
+  // and value days by "Planned" or "Manual" as well as GPS (totalDurationMs).
+  plannedDurationMs: number;
+  manualDurationMs: number;
   shifts: SerializedShiftRecord[];
 };
 
@@ -105,6 +118,8 @@ export class ShiftsService {
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(Company.name)
     private readonly companyModel: Model<CompanyDocument>,
+    @InjectModel(HourAdjustment.name)
+    private readonly adjustmentModel: Model<HourAdjustmentDocument>,
     private readonly notificationsService: NotificationsService,
     private readonly usersService: UsersService,
   ) {}
@@ -454,6 +469,28 @@ export class ShiftsService {
     return this.serializeShift(shift);
   }
 
+  // The worker records the hours they actually worked on their own completed
+  // shift (the "Manual" hours source). Passing null clears the entry.
+  async setManualHours(
+    user: AuthenticatedUser,
+    shiftId: string,
+    dto: SetManualHoursDto,
+  ) {
+    const shift = await this.findOwnedShift(user.userId, shiftId);
+
+    if (shift.status !== ShiftStatus.Completed) {
+      throw new BadRequestException(
+        "Manual hours can only be set on a completed shift.",
+      );
+    }
+
+    shift.manualDurationMs =
+      dto.durationMs == null ? null : Math.max(0, Math.round(dto.durationMs));
+    await shift.save();
+
+    return this.serializeShift(shift);
+  }
+
   async uploadPhotos(
     user: AuthenticatedUser,
     shiftId: string,
@@ -555,13 +592,42 @@ export class ShiftsService {
       .exec();
 
     const serializedShifts = await this.serializeShifts(monthShifts);
+    const days = this.groupSerializedShiftsByDay(serializedShifts, "asc");
+
+    // Fold planned hours (schedule + admin corrections) into each day so the
+    // calendar can colour/value days by the "Planned" source too.
+    const plannedByKey = await this.computePlannedMsByKey(monthShifts);
+    const plannedMsByDate = new Map<string, number>();
+    const seenPlannedKeys = new Set<string>();
+    for (const shift of monthShifts) {
+      const date = String(shift.shiftDate);
+      const key = `${String(shift.projectId)}|${String(shift.workerId)}|${date}`;
+      if (seenPlannedKeys.has(key)) {
+        continue;
+      }
+      seenPlannedKeys.add(key);
+      const ms = plannedByKey.get(key) || 0;
+      if (ms) {
+        plannedMsByDate.set(date, (plannedMsByDate.get(date) || 0) + ms);
+      }
+    }
+
+    let monthPlannedDurationMs = 0;
+    let monthManualDurationMs = 0;
+    for (const day of days) {
+      day.plannedDurationMs = plannedMsByDate.get(day.date) || 0;
+      monthPlannedDurationMs += day.plannedDurationMs;
+      monthManualDurationMs += day.manualDurationMs;
+    }
 
     return {
       month,
       availableMonths,
       monthTotalDurationMs: this.sumShiftDurations(monthShifts),
+      monthPlannedDurationMs,
+      monthManualDurationMs,
       previousMonthTotalDurationMs: this.sumShiftDurations(previousMonthShifts),
-      days: this.groupSerializedShiftsByDay(serializedShifts, "asc"),
+      days,
     };
   }
 
@@ -584,8 +650,19 @@ export class ShiftsService {
     await this.finalizeStaleShifts(user.userId);
 
     const format = query.format || "pdf";
+    const hoursSource: HoursSource = query.hoursSource || "gps";
     const shifts = await this.findAccessibleShifts(user, query, "asc");
-    const serializedShifts = await this.serializeShifts(shifts);
+
+    const plannedByKey =
+      hoursSource === "planned"
+        ? await this.computePlannedMsByKey(shifts)
+        : new Map<string, number>();
+    const serializedShifts = this.applySourceDuration(
+      await this.serializeShifts(shifts),
+      hoursSource,
+      plannedByKey,
+    );
+
     const days = this.groupSerializedShiftsByDay(serializedShifts, "asc");
     const totalDurationMs = serializedShifts.reduce(
       (total, shift) => total + shift.durationMs,
@@ -600,6 +677,7 @@ export class ShiftsService {
           days,
           query,
           totalDurationMs,
+          hoursSource,
         ),
         fileName: `${fileBaseName}.xlsx`,
         mimeType:
@@ -613,10 +691,21 @@ export class ShiftsService {
         days,
         query,
         totalDurationMs,
+        hoursSource,
       ),
       fileName: `${fileBaseName}.pdf`,
       mimeType: "application/pdf",
     };
+  }
+
+  private hoursSourceLabel(hoursSource: HoursSource) {
+    if (hoursSource === "planned") {
+      return "Planned (contract)";
+    }
+    if (hoursSource === "manual") {
+      return "Manual (worker)";
+    }
+    return "GPS (measured)";
   }
 
   async findOneAccessible(user: AuthenticatedUser, shiftId: string) {
@@ -1100,10 +1189,13 @@ export class ShiftsService {
       const current = grouped.get(key) || {
         date: key,
         totalDurationMs: 0,
+        plannedDurationMs: 0,
+        manualDurationMs: 0,
         shifts: [],
       };
 
       current.totalDurationMs += shift.durationMs;
+      current.manualDurationMs += shift.manualDurationMs || 0;
       current.shifts.push(shift);
       grouped.set(key, current);
     }
@@ -1145,6 +1237,7 @@ export class ShiftsService {
     days: ShiftDayRecord[],
     query: ExportShiftsDto,
     totalDurationMs: number,
+    hoursSource: HoursSource,
   ) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Shift report");
@@ -1167,6 +1260,7 @@ export class ShiftsService {
 
     worksheet.addRow(["Generated at", this.formatDateTimeValue(new Date())]);
     worksheet.addRow(["Period", this.getReportPeriodLabel(query, days)]);
+    worksheet.addRow(["Hours source", this.hoursSourceLabel(hoursSource)]);
     worksheet.addRow(["Total shifts", shifts.length]);
     worksheet.addRow([
       "Total duration",
@@ -1231,6 +1325,7 @@ export class ShiftsService {
     days: ShiftDayRecord[],
     query: ExportShiftsDto,
     totalDurationMs: number,
+    hoursSource: HoursSource,
   ) {
     return new Promise<Buffer>((resolve, reject) => {
       const doc = new PDFDocument({ size: "A4", margin: 40 });
@@ -1254,6 +1349,7 @@ export class ShiftsService {
         .fontSize(11)
         .text(`Generated at: ${this.formatDateTimeValue(new Date())}`);
       doc.text(`Period: ${this.getReportPeriodLabel(query, days)}`);
+      doc.text(`Hours source: ${this.hoursSourceLabel(hoursSource)}`);
       doc.text(`Total shifts: ${shifts.length}`);
       doc.text(`Total duration: ${this.formatDurationLabel(totalDurationMs)}`);
 
@@ -1313,6 +1409,8 @@ export class ShiftsService {
       status: shift.status,
       durationMs: effectiveDurationMs,
       storedDurationMs: shift.durationMs,
+      manualDurationMs:
+        shift.manualDurationMs == null ? null : shift.manualDurationMs,
       completionReason: shift.completionReason || null,
       completionSource: shift.completionSource || null,
       completionNotifiedAt: shift.completionNotifiedAt || null,
@@ -1348,6 +1446,110 @@ export class ShiftsService {
       shift.durationMs +
       Math.max(0, Date.now() - new Date(shift.lastResumedAt).getTime())
     );
+  }
+
+  // Planned hours for a day from the project's workday window (same rule the
+  // Hours grid uses). null when the project has no enforced schedule, so there
+  // is no planned baseline.
+  private schedulePlannedHours(
+    project?: { shiftSchedule?: Project["shiftSchedule"] } | null,
+  ): number | null {
+    const schedule = project?.shiftSchedule;
+    if (!schedule?.enabled) {
+      return null;
+    }
+    const minutes =
+      parseTimeToMinutes(schedule.workDayEndTime || "16:00") -
+      parseTimeToMinutes(schedule.workDayStartTime || "07:00");
+    return minutes > 0 ? minutes / 60 : null;
+  }
+
+  /**
+   * Planned duration (ms) per `projectId|workerId|date` for the given shifts.
+   * Planned = the admin's corrected hours (HourAdjustment) when present, else
+   * the project's schedule window. Deduped by key so two shifts on the same
+   * day/project don't double-count the planned baseline.
+   */
+  private async computePlannedMsByKey(
+    shifts: Array<Pick<Shift, "projectId" | "workerId" | "shiftDate">>,
+  ): Promise<Map<string, number>> {
+    const plannedByKey = new Map<string, number>();
+    if (!shifts.length) {
+      return plannedByKey;
+    }
+
+    const projectIds = [...new Set(shifts.map((s) => String(s.projectId)))];
+    const dates = shifts.map((s) => String(s.shiftDate));
+    const minDate = dates.reduce((a, b) => (a < b ? a : b));
+    const maxDate = dates.reduce((a, b) => (a > b ? a : b));
+
+    const [projects, adjustments] = await Promise.all([
+      this.projectModel
+        .find({ _id: { $in: projectIds } })
+        .select("_id shiftSchedule")
+        .lean()
+        .exec(),
+      this.adjustmentModel
+        .find({
+          projectId: { $in: projectIds },
+          date: { $gte: minDate, $lte: maxDate },
+        })
+        .lean()
+        .exec(),
+    ]);
+
+    const projectById = new Map(projects.map((p) => [String(p._id), p]));
+    const adjByKey = new Map(
+      adjustments.map((a) => [`${a.projectId}|${a.workerId}|${a.date}`, a]),
+    );
+
+    for (const shift of shifts) {
+      const key = `${String(shift.projectId)}|${String(shift.workerId)}|${String(shift.shiftDate)}`;
+      if (plannedByKey.has(key)) {
+        continue;
+      }
+      const adj = adjByKey.get(key);
+      const hours = adj
+        ? adj.plannedHours
+        : this.schedulePlannedHours(projectById.get(String(shift.projectId)));
+      plannedByKey.set(key, hours == null ? 0 : hours * MS_PER_HOUR);
+    }
+
+    return plannedByKey;
+  }
+
+  // Re-value each shift's durationMs to the chosen hours source so downstream
+  // day/total sums and report rows reflect that source. GPS is the stored
+  // measured value (unchanged). Planned is a per-day-per-project quantity, so
+  // it is assigned to the first shift of each key and 0 to the rest.
+  private applySourceDuration(
+    shifts: SerializedShiftRecord[],
+    hoursSource: HoursSource,
+    plannedByKey: Map<string, number>,
+  ): SerializedShiftRecord[] {
+    if (hoursSource === "gps") {
+      return shifts;
+    }
+
+    const usedPlannedKeys = new Set<string>();
+
+    return shifts.map((shift) => {
+      let durationMs: number;
+
+      if (hoursSource === "manual") {
+        durationMs = shift.manualDurationMs || 0;
+      } else {
+        const key = `${shift.projectId}|${shift.workerId}|${shift.shiftDate}`;
+        if (usedPlannedKeys.has(key)) {
+          durationMs = 0;
+        } else {
+          usedPlannedKeys.add(key);
+          durationMs = plannedByKey.get(key) || 0;
+        }
+      }
+
+      return { ...shift, durationMs };
+    });
   }
 
   private getDateKey(date: Date) {

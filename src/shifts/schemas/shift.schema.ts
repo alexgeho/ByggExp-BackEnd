@@ -77,8 +77,15 @@ export class Shift {
   })
   segments: ShiftSegment[];
 
+  // GPS/measured duration — banked from the tracked segments.
   @Prop({ type: Number, default: 0 })
   durationMs: number;
+
+  // Worker-entered hours on a completed shift (the "Manual" hours source),
+  // in milliseconds. null = the worker has not entered anything, so Manual
+  // stays unlit for this shift; 0 is a deliberate "no hours" entry.
+  @Prop({ type: Number, default: null })
+  manualDurationMs?: number | null;
 
   @Prop({ default: "" })
   completionReason?: string;

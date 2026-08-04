@@ -23,6 +23,7 @@ import { UserRole } from "../users/schemas/user.schema";
 import { CompleteShiftDto } from "./dto/complete-shift.dto";
 import { ExportShiftsDto } from "./dto/export-shifts.dto";
 import { ListShiftsDto } from "./dto/list-shifts.dto";
+import { SetManualHoursDto } from "./dto/set-manual-hours.dto";
 import { StartShiftDto } from "./dto/start-shift.dto";
 import { ShiftsService } from "./shifts.service";
 
@@ -134,6 +135,21 @@ export class ShiftsController {
     @Body() dto: CompleteShiftDto,
   ) {
     return this.shiftsService.complete(req.user, id, dto);
+  }
+
+  @Post(":id/manual-hours")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  setManualHours(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() dto: SetManualHoursDto,
+  ) {
+    return this.shiftsService.setManualHours(req.user, id, dto);
   }
 
   @Post(":id/photos")
