@@ -357,8 +357,8 @@ export const buildOverdueReminderContent = ({
       workerName || { en: "A worker", sv: "En medarbetare" }[lang];
     return {
       title: {
-        en: `Escalated (overdue): ${t}`,
-        sv: `Eskalerad (försenad): ${t}`,
+        en: `Reminder: ${t}`,
+        sv: `Påminnelse: ${t}`,
       }[lang],
       body: {
         en: `${worker} still hasn't completed "${t}".`,
