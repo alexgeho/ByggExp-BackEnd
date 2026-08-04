@@ -18,7 +18,13 @@ import {
   Logger,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
+import {
+  ALL_PERMISSIONS,
+  PERMISSION_LABELS,
+  PERMISSION_DEFAULTS_BY_ROLE,
+} from "../common/permissions/permissions.constants";
 import { CreateUserDto } from "./dto/create-user.dto";
+import { SetUserPermissionsDto } from "./dto/set-user-permissions.dto";
 import { BulkCreateUsersDto } from "./dto/bulk-create-users.dto";
 import { CreateWorkerNoteDto } from "./dto/create-worker-note.dto";
 import { CreateCertificateDto } from "./dto/create-certificate.dto";
@@ -308,6 +314,28 @@ export class UsersController {
       return Promise.resolve(null);
     }
     return this.usersService.findOneIdByEmail(email, req.user.companyId);
+  }
+
+  @Get("permissions/catalog")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  getPermissionCatalog() {
+    return {
+      permissions: ALL_PERMISSIONS.map((key) => ({
+        key,
+        label: PERMISSION_LABELS[key],
+      })),
+      defaultsByRole: PERMISSION_DEFAULTS_BY_ROLE,
+    };
+  }
+
+  @Put("permissions/:id")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  setUserPermissions(
+    @Param("id") id: string,
+    @Body() dto: SetUserPermissionsDto,
+    @Request() req,
+  ) {
+    return this.usersService.setUserPermissions(req.user, id, dto);
   }
 
   @Get("info/:id")

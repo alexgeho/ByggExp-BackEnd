@@ -15,6 +15,7 @@ import { RegisterCompanyPublicDto } from "./dto/register-company-public.dto";
 import { CreateUserDto } from "../users/dto/create-user.dto";
 import { JwtPayload } from "./interfaces/jwt-payload.interface";
 import { UserAccountStatus, UserRole } from "../users/schemas/user.schema";
+import { getEffectivePermissions } from "../common/permissions/permissions.constants";
 import { UserActivityLogLevel } from "../users/schemas/user-activity-log.schema";
 
 @Injectable()
@@ -255,6 +256,11 @@ export class AuthService {
         name: user.name,
         role,
         companyId,
+        // Effective capabilities (role defaults ∪ granted − revoked) so the
+        // client can gate features like invoicing without re-deriving the map.
+        effectivePermissions: Array.from(
+          getEffectivePermissions(role, user.permissions),
+        ),
       },
       access_token,
       refresh_token,

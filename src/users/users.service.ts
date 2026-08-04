@@ -20,6 +20,10 @@ import {
   UserWorkStatus,
 } from "./schemas/user.schema";
 import { MailService } from "../mail/mail.service";
+import {
+  ALL_PERMISSIONS,
+  getEffectivePermissions,
+} from "../common/permissions/permissions.constants";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { CreateCertificateDto } from "./dto/create-certificate.dto";
 import { UpdateCertificateDto } from "./dto/update-certificate.dto";
@@ -794,6 +798,7 @@ export class UsersService {
     profession: string;
     role: string;
     avatarUrl: string;
+    effectivePermissions: string[];
     notificationPreferences: {
       flowMode: boolean;
       messages: boolean;
@@ -803,7 +808,9 @@ export class UsersService {
   } | null> {
     const user = await this.userModel
       .findById(id)
-      .select("email name profession role avatarUrl notificationPreferences")
+      .select(
+        "email name profession role avatarUrl permissions notificationPreferences",
+      )
       .exec();
     if (!user) return null;
     return {
@@ -813,8 +820,58 @@ export class UsersService {
       profession: user.profession || "",
       role: user.role,
       avatarUrl: user.avatarUrl || "",
+      // Effective capabilities so the client can gate features (e.g. invoicing)
+      // without re-deriving the role→permission map.
+      effectivePermissions: Array.from(
+        getEffectivePermissions(user.role, user.permissions),
+      ),
       notificationPreferences: normalizeUserNotificationPreferences(
         user.notificationPreferences,
+      ),
+    };
+  }
+
+  // Owner/company-admin delegates capabilities to a user (e.g. lets an office
+  // secretary do invoicing) by setting per-user granted/revoked overrides.
+  // Tenant-isolated: an admin can only edit users in their own company.
+  async setUserPermissions(
+    actor: AuthUser,
+    targetId: string,
+    dto: { granted?: string[]; revoked?: string[] },
+  ) {
+    if (
+      actor.role !== UserRole.CompanyAdmin &&
+      actor.role !== UserRole.SuperAdmin
+    ) {
+      throw new ForbiddenException("Not allowed to manage permissions.");
+    }
+
+    const target = await this.userModel.findById(targetId).exec();
+    if (!target) {
+      throw new NotFoundException(`User with ID "${targetId}" not found`);
+    }
+
+    if (String(target.companyId || "") !== String(actor.companyId || "")) {
+      throw new ForbiddenException("User belongs to another company.");
+    }
+
+    const valid = new Set<string>(ALL_PERMISSIONS);
+    const clean = (list?: string[]) => [
+      ...new Set((list || []).filter((p) => valid.has(p))),
+    ];
+
+    target.permissions = {
+      granted: clean(dto.granted),
+      revoked: clean(dto.revoked),
+    };
+    await target.save();
+
+    return {
+      id: target._id.toString(),
+      role: target.role,
+      permissions: target.permissions,
+      effectivePermissions: Array.from(
+        getEffectivePermissions(target.role, target.permissions),
       ),
     };
   }

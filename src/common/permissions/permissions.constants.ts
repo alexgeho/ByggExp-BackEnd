@@ -21,6 +21,19 @@ export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 export const ALL_PERMISSIONS: PermissionKey[] = Object.values(PERMISSIONS);
 
+/** Human-readable labels for the permissions editor in the admin panel. */
+export const PERMISSION_LABELS: Record<PermissionKey, string> = {
+  [PERMISSIONS.FINANCE_MANAGE]: "Finance — offers, invoices, clients",
+  [PERMISSIONS.SHIFTS_VIEW_ALL]: "View all shifts & hours",
+  [PERMISSIONS.SHIFTS_EXPORT]: "Export hours (Excel / PDF)",
+  [PERMISSIONS.SHIFTS_BILLING_SOURCE]: "Choose billing hours source",
+  [PERMISSIONS.PROJECTS_MANAGE]: "Manage projects",
+  [PERMISSIONS.TASKS_MANAGE]: "Manage tasks",
+  [PERMISSIONS.EMPLOYEES_MANAGE]: "Manage employees",
+  [PERMISSIONS.TOOLS_MANAGE]: "Manage tools",
+  [PERMISSIONS.COMPANY_MANAGE]: "Company settings & admins",
+};
+
 /**
  * Default permission set per role. companyAdmin/superadmin get everything;
  * projectAdmin gets project-scoped management + shift viewing/export (scope is
