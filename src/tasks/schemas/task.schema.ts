@@ -14,6 +14,17 @@ export enum TaskPriority {
   High = "high",
 }
 
+// How a task repeats. On completion, a task with a recurrence spawns its next
+// occurrence with the due/start dates advanced by the cadence.
+export enum TaskRecurrence {
+  None = "none",
+  Daily = "daily",
+  Weekdays = "weekdays", // Mon–Fri
+  Weekly = "weekly",
+  Biweekly = "biweekly",
+  Monthly = "monthly",
+}
+
 export class TaskDocumentFile {
   name: string;
   url: string;
@@ -57,6 +68,9 @@ export class Task {
 
   @Prop({ type: Date, default: null })
   dueDate?: Date | null;
+
+  @Prop({ type: String, enum: TaskRecurrence, default: TaskRecurrence.None })
+  recurrence?: TaskRecurrence;
 
   // Last time an "overdue nag" reminder was pushed for this task. Drives the
   // repeat-after-deadline reminders (every N minutes until the task is done).

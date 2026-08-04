@@ -8,7 +8,12 @@ import {
 import { InjectModel } from "@nestjs/mongoose";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { Model } from "mongoose";
-import { Task, TaskDocument, TaskStatus } from "./schemas/task.schema";
+import {
+  Task,
+  TaskDocument,
+  TaskStatus,
+  TaskRecurrence,
+} from "./schemas/task.schema";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { Project, ProjectDocument } from "../projects/schemas/project.schema";
 import { UpdateTaskDto } from "./dto/update-task.dto";
@@ -491,7 +496,90 @@ export class TasksService {
     await task.save();
     await this.taskRemindersService.cancelTaskReminders(task._id.toString());
 
+    // Recurring task: leave this occurrence as history and spawn the next one
+    // with its dates rolled forward. Never let a spawn failure fail the
+    // completion — the task the user just ticked is already done.
+    if (task.recurrence && task.recurrence !== TaskRecurrence.None) {
+      try {
+        await this.spawnNextOccurrence(task);
+      } catch (error) {
+        this.logger.error("Failed to spawn next recurring task", error);
+      }
+    }
+
     return task;
+  }
+
+  // Roll a date forward by one cadence step. `weekdays` skips the weekend so the
+  // next occurrence always lands Mon–Fri.
+  private advanceByRecurrence(from: Date, recurrence: TaskRecurrence): Date {
+    const next = new Date(from);
+    switch (recurrence) {
+      case TaskRecurrence.Daily:
+        next.setDate(next.getDate() + 1);
+        break;
+      case TaskRecurrence.Weekdays: {
+        do {
+          next.setDate(next.getDate() + 1);
+        } while (next.getDay() === 0 || next.getDay() === 6);
+        break;
+      }
+      case TaskRecurrence.Weekly:
+        next.setDate(next.getDate() + 7);
+        break;
+      case TaskRecurrence.Biweekly:
+        next.setDate(next.getDate() + 14);
+        break;
+      case TaskRecurrence.Monthly:
+        next.setMonth(next.getMonth() + 1);
+        break;
+      default:
+        break;
+    }
+    return next;
+  }
+
+  // Create the follow-up occurrence of a just-completed recurring task. Dates
+  // advance from the task's own due date (falling back to now) so a weekly task
+  // stays on its weekday even if it was ticked off a day late; the start date
+  // shifts by the same delta to preserve any lead time.
+  private async spawnNextOccurrence(task: TaskDocument): Promise<void> {
+    const recurrence = task.recurrence as TaskRecurrence;
+    const base = task.dueDate ? new Date(task.dueDate) : new Date();
+    const nextDue = this.advanceByRecurrence(base, recurrence);
+
+    let nextStart: Date | null = null;
+    if (task.startDate && task.dueDate) {
+      const lead = new Date(task.dueDate).getTime() - new Date(task.startDate).getTime();
+      nextStart = new Date(nextDue.getTime() - Math.max(0, lead));
+    }
+
+    const next = new this.taskModel({
+      projectId: task.projectId || null,
+      assigneeUserId: task.assigneeUserId || null,
+      assigneeUserName: task.assigneeUserName || "",
+      createdByUserId: task.createdByUserId || null,
+      taskTitle: task.taskTitle,
+      taskDescription: task.taskDescription || "",
+      notes: task.notes || "",
+      notifications: task.notifications || [],
+      notificationSettings: task.notificationSettings || {},
+      documents: [], // start each occurrence with a clean slate of attachments
+      startDate: nextStart,
+      dueDate: nextDue,
+      priority: task.priority,
+      recurrence,
+      status: TaskStatus.Open,
+      lastOverdueReminderAt: null,
+      overdueReminderCount: 0,
+    });
+    await next.save();
+
+    if (task.projectId) {
+      await this.projectModel.findByIdAndUpdate(task.projectId.toString(), {
+        $push: { tasks: next._id.toString() },
+      });
+    }
   }
 
   async reopen(id: string, _actorUserId?: string): Promise<Task> {

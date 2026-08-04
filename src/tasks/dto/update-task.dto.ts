@@ -90,4 +90,8 @@ export class UpdateTaskDto {
   @IsIn(["low", "normal", "high"])
   @IsOptional()
   priority?: string;
+
+  @IsIn(["none", "daily", "weekdays", "weekly", "biweekly", "monthly"])
+  @IsOptional()
+  recurrence?: string;
 }
