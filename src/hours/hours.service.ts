@@ -188,11 +188,11 @@ export class HoursService {
       .exec();
     const userById = new Map(users.map((u) => [this.getEntityId(u), u]));
 
-    // The Hours grid is about billable workers — never surface a company admin
-    // or a superadmin here, even if a stray shift is attributed to them.
+    // Company admins work and log hours too, so their shifts count on the Hours
+    // grid. Only the platform superadmin is excluded.
     const isStaffRole = (id: string) => {
       const role = userById.get(id)?.role;
-      return role !== UserRole.SuperAdmin && role !== UserRole.CompanyAdmin;
+      return role !== UserRole.SuperAdmin;
     };
 
     const workers = workerIds.filter(isStaffRole).map((workerId) => {
