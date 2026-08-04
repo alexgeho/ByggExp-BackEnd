@@ -129,8 +129,15 @@ export class HoursService {
       adjMap.set(`${adj.projectId}|${adj.workerId}|${adj.date}`, adj);
     }
 
-    // group shifts by worker → date → { actualMs, projectIds }
-    type DayAgg = { actualMs: number; projects: Set<string> };
+    // group shifts by worker → date → { actualMs, manualMs, projectIds }
+    // actualMs = GPS/measured; manualMs = worker-entered hours (null until any
+    // shift on the day has one), so the grid can bill on the "Manual" source.
+    type DayAgg = {
+      actualMs: number;
+      manualMs: number;
+      hasManual: boolean;
+      projects: Set<string>;
+    };
     const now = Date.now();
     // Live worked time: an active shift's currently-running segment is not yet
     // banked into durationMs, so add the elapsed time since it last resumed —
@@ -153,9 +160,19 @@ export class HoursService {
       const date = String(shift.shiftDate);
       if (!byWorker.has(workerId)) byWorker.set(workerId, new Map());
       const days = byWorker.get(workerId)!;
-      if (!days.has(date)) days.set(date, { actualMs: 0, projects: new Set() });
+      if (!days.has(date))
+        days.set(date, {
+          actualMs: 0,
+          manualMs: 0,
+          hasManual: false,
+          projects: new Set(),
+        });
       const day = days.get(date)!;
       day.actualMs += workedMs(shift);
+      if (shift.manualDurationMs != null) {
+        day.manualMs += Number(shift.manualDurationMs) || 0;
+        day.hasManual = true;
+      }
       day.projects.add(String(shift.projectId));
     }
 
@@ -170,7 +187,13 @@ export class HoursService {
       const workerId = String(adj.workerId);
       if (!byWorker.has(workerId)) byWorker.set(workerId, new Map());
       const days = byWorker.get(workerId)!;
-      if (!days.has(date)) days.set(date, { actualMs: 0, projects: new Set() });
+      if (!days.has(date))
+        days.set(date, {
+          actualMs: 0,
+          manualMs: 0,
+          hasManual: false,
+          projects: new Set(),
+        });
       days.get(date)!.projects.add(String(adj.projectId));
     }
     for (const project of projects) {
@@ -225,6 +248,7 @@ export class HoursService {
 
         cells[date] = {
           actual: round(day.actualMs / MS_PER_HOUR),
+          manual: day.hasManual ? round(day.manualMs / MS_PER_HOUR) : null,
           planned: hasPlan ? round(plannedSum) : null,
           orig: hasPlan ? round(origSum) : null,
           edited,
