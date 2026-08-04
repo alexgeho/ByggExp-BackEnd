@@ -1,0 +1,40 @@
+[
+  {
+    "_id": "6a353065bc11f7d2b875f4a6",
+    "name": "Toooooo",
+    "photoUrl": "",
+    "notes": "",
+    "workerIds": [],
+    "projectIds": [],
+    "createdAt": "2026-06-19T12:04:53.629Z",
+    "updatedAt": "2026-08-03T08:27:11.498Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a52882ce578899e2780b68e",
+    "name": "ддд",
+    "photoUrl": "/uploads/tool-photos/1783793708030-photo_2025-02-23_18-44-45.jpg",
+    "photoUrls": [
+      "/uploads/tool-photos/1783793708030-photo_2025-02-23_18-44-45.jpg"
+    ],
+    "notes": "",
+    "workerIds": [],
+    "projectIds": [],
+    "createdAt": "2026-07-11T18:15:08.087Z",
+    "updatedAt": "2026-08-03T08:27:11.498Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a61e0267f3eca9c95634871",
+    "name": "Test tool",
+    "photoUrl": "",
+    "photoUrls": [],
+    "notes": "Test",
+    "status": "broken",
+    "workerIds": [],
+    "projectIds": [],
+    "createdAt": "2026-07-23T09:34:30.721Z",
+    "updatedAt": "2026-08-03T08:27:11.498Z",
+    "__v": 0
+  }
+]

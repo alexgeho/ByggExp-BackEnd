@@ -209,6 +209,18 @@ export class User {
   @Prop({ required: true, enum: UserRole, default: UserRole.Worker })
   role: UserRole;
 
+  // Capability overrides on top of the role's default permission set.
+  // Effective = defaults(role) ∪ granted − revoked. Lets the owner delegate
+  // e.g. `finance.manage` to an office user without making them companyAdmin.
+  @Prop({
+    type: {
+      granted: { type: [String], default: [] },
+      revoked: { type: [String], default: [] },
+    },
+    default: () => ({ granted: [], revoked: [] }),
+  })
+  permissions: { granted: string[]; revoked: string[] };
+
   @Prop({
     required: true,
     enum: UserAccountStatus,

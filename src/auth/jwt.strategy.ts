@@ -29,6 +29,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: payload.email,
       role: payload.role,
       companyId: user.companyId,
+      // Per-user capability overrides; effective perms computed in the guard.
+      permissions: user.permissions || { granted: [], revoked: [] },
     };
   }
 }

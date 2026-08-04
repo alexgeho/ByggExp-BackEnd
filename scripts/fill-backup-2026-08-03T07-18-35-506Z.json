@@ -1,0 +1,1353 @@
+[
+  {
+    "_id": "6a0b34e6e5475cad2baff553",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a0b34dae5475cad2baff53f",
+    "projectNameSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "locationSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "shiftDate": "2026-05-18",
+    "startedAt": "2026-05-18T15:48:54.533Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-05-18T15:48:54.533Z",
+        "durationMs": 10715516,
+        "endedAt": "2026-05-18T18:47:30.049Z"
+      },
+      {
+        "startedAt": "2026-05-18T18:47:35.086Z",
+        "durationMs": 7089600,
+        "endedAt": "2026-05-18T20:45:44.686Z"
+      }
+    ],
+    "durationMs": 17805116,
+    "photos": [],
+    "createdAt": "2026-05-18T15:48:54.547Z",
+    "updatedAt": "2026-05-19T05:48:58.457Z",
+    "__v": 1,
+    "endedAt": "2026-05-18T20:45:44.686Z"
+  },
+  {
+    "_id": "6a0b8850e5475cad2baff833",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a07328472abc72cefc09e75",
+    "projectNameSnapshot": "Drottninggatan 61, Drottninggatan 61, Stockholm, 111 21, Sweden",
+    "locationSnapshot": "Drottninggatan 61, Drottninggatan 61, Stockholm, 111 21, Sweden",
+    "shiftDate": "2026-05-18",
+    "startedAt": "2026-05-18T21:44:48.308Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-05-18T21:44:48.308Z",
+        "durationMs": 185017,
+        "endedAt": "2026-05-18T21:47:53.325Z"
+      }
+    ],
+    "durationMs": 185017,
+    "photos": [],
+    "createdAt": "2026-05-18T21:44:48.315Z",
+    "updatedAt": "2026-05-19T05:48:58.496Z",
+    "__v": 0,
+    "endedAt": "2026-05-18T21:47:53.325Z"
+  },
+  {
+    "_id": "6a0bfa08e5475cad2baffad6",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a07328472abc72cefc09e75",
+    "projectNameSnapshot": "Drottninggatan 61, Drottninggatan 61, Stockholm, 111 21, Sweden",
+    "locationSnapshot": "Drottninggatan 61, Drottninggatan 61, Stockholm, 111 21, Sweden",
+    "shiftDate": "2026-05-19",
+    "startedAt": "2026-05-19T05:50:00.293Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-05-19T05:50:00.293Z",
+        "endedAt": "2026-05-19T14:02:00.293Z",
+        "durationMs": 29520000
+      }
+    ],
+    "durationMs": 29520000,
+    "photos": [],
+    "createdAt": "2026-05-19T05:50:00.311Z",
+    "updatedAt": "2026-05-20T12:46:22.603Z",
+    "__v": 1,
+    "endedAt": "2026-05-19T14:02:00.293Z",
+    "autoPausedReason": "",
+    "completionReason": "admin_normalized",
+    "completionSource": "admin"
+  },
+  {
+    "_id": "6a0f58439d507526237ea5df",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a0b34dae5475cad2baff53f",
+    "projectNameSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "locationSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "shiftDate": "2026-05-21",
+    "startedAt": "2026-05-21T19:08:51.624Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-05-21T19:08:51.624Z",
+        "durationMs": 604610,
+        "endedAt": "2026-05-21T19:18:56.234Z"
+      },
+      {
+        "startedAt": "2026-05-21T19:44:24.593Z",
+        "durationMs": 29735406,
+        "endedAt": "2026-05-22T03:59:59.999Z"
+      }
+    ],
+    "durationMs": 30340016,
+    "completionReason": "expired_day_end",
+    "completionSource": "system",
+    "completionNotifiedAt": null,
+    "photos": [
+      {
+        "name": "shift-photo-1779390762540-1.jpg",
+        "url": "/uploads/shift-photos/1779390763140-shift-photo-1779390762540-1.jpg",
+        "mimeType": "image/jpeg",
+        "size": 1702453,
+        "uploadedAt": "2026-05-21T19:12:43.180Z"
+      }
+    ],
+    "createdAt": "2026-05-21T19:08:51.630Z",
+    "updatedAt": "2026-05-22T07:04:18.156Z",
+    "__v": 2,
+    "endedAt": "2026-05-22T03:59:59.999Z"
+  },
+  {
+    "_id": "6a100ca3b4505566c34827c0",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a0b34dae5475cad2baff53f",
+    "projectNameSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "locationSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "shiftDate": "2026-05-22",
+    "startedAt": "2026-05-22T07:58:27.714Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-05-22T07:58:27.714Z",
+        "durationMs": 2023045,
+        "endedAt": "2026-05-22T08:32:10.759Z"
+      }
+    ],
+    "durationMs": 2023045,
+    "completionReason": "outside_project_area",
+    "completionSource": "mobile_location_guard",
+    "completionNotifiedAt": "2026-05-22T08:32:11.479Z",
+    "photos": [],
+    "createdAt": "2026-05-22T07:58:27.726Z",
+    "updatedAt": "2026-05-22T08:32:11.488Z",
+    "__v": 0,
+    "endedAt": "2026-05-22T08:32:10.759Z"
+  },
+  {
+    "_id": "6a1023d5b4505566c348288d",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a1023c8b4505566c3482872",
+    "projectNameSnapshot": "Ålstensgatan 24, Ålstensgatan 24, Bromma, 167 65, Sweden",
+    "locationSnapshot": "Ålstensgatan 24, Ålstensgatan 24, Bromma, 167 65, Sweden",
+    "shiftDate": "2026-05-22",
+    "startedAt": "2026-05-22T09:37:25.131Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-05-22T09:37:25.131Z",
+        "durationMs": 7236804,
+        "endedAt": "2026-05-22T11:38:01.935Z"
+      }
+    ],
+    "durationMs": 7236804,
+    "completionReason": "outside_project_area",
+    "completionSource": "mobile_location_guard",
+    "completionNotifiedAt": "2026-05-22T11:38:02.494Z",
+    "photos": [],
+    "createdAt": "2026-05-22T09:37:25.137Z",
+    "updatedAt": "2026-05-22T11:38:02.496Z",
+    "__v": 0,
+    "endedAt": "2026-05-22T11:38:01.935Z"
+  },
+  {
+    "_id": "6a10819fb4505566c3482c26",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a0b34dae5475cad2baff53f",
+    "projectNameSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "locationSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "shiftDate": "2026-05-22",
+    "startedAt": "2026-05-22T16:17:35.184Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-05-22T16:17:35.184Z",
+        "durationMs": 195067,
+        "endedAt": "2026-05-22T16:20:50.251Z"
+      }
+    ],
+    "durationMs": 195067,
+    "completionReason": "outside_project_area",
+    "completionSource": "mobile_location_guard",
+    "completionNotifiedAt": "2026-05-22T16:20:50.824Z",
+    "photos": [],
+    "createdAt": "2026-05-22T16:17:35.202Z",
+    "updatedAt": "2026-05-22T16:20:50.837Z",
+    "__v": 0,
+    "endedAt": "2026-05-22T16:20:50.251Z"
+  },
+  {
+    "_id": "6a1082e8b4505566c3482d06",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a0b34dae5475cad2baff53f",
+    "projectNameSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "locationSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "shiftDate": "2026-05-22",
+    "startedAt": "2026-05-22T16:23:04.775Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-05-22T16:23:04.775Z",
+        "endedAt": "2026-05-23T00:51:04.775Z",
+        "durationMs": 30480000
+      }
+    ],
+    "durationMs": 30480000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-05-22T16:23:04.779Z",
+    "updatedAt": "2026-05-23T09:13:30.224Z",
+    "__v": 0,
+    "endedAt": "2026-05-23T00:51:04.775Z",
+    "autoPausedReason": ""
+  },
+  {
+    "_id": "6a15fb11dbb898d2b5e0d25e",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a0b34dae5475cad2baff53f",
+    "projectNameSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "locationSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "shiftDate": "2026-05-26",
+    "startedAt": "2026-05-26T19:57:05.114Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-05-26T19:57:05.114Z",
+        "durationMs": 2500875,
+        "endedAt": "2026-05-26T20:38:45.989Z"
+      }
+    ],
+    "durationMs": 2500875,
+    "completionReason": "outside_project_area",
+    "completionSource": "mobile_location_guard",
+    "completionNotifiedAt": "2026-05-26T20:38:46.672Z",
+    "photos": [
+      {
+        "name": "shift-photo-1779825456135-1.jpg",
+        "url": "/uploads/shift-photos/1779825459856-shift-photo-1779825456135-1.jpg",
+        "mimeType": "image/jpeg",
+        "size": 2296036,
+        "uploadedAt": "2026-05-26T19:57:39.910Z"
+      }
+    ],
+    "createdAt": "2026-05-26T19:57:05.121Z",
+    "updatedAt": "2026-05-26T20:38:46.675Z",
+    "__v": 1,
+    "endedAt": "2026-05-26T20:38:45.989Z"
+  },
+  {
+    "_id": "6a16a566dbb898d2b5e0db9b",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a0b34dae5475cad2baff53f",
+    "projectNameSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "locationSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "shiftDate": "2026-05-27",
+    "startedAt": "2026-05-27T08:03:50.681Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-05-27T08:03:50.681Z",
+        "endedAt": "2026-05-27T16:11:50.681Z",
+        "durationMs": 29280000
+      }
+    ],
+    "durationMs": 29280000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [
+      {
+        "name": "shift-photo-1779869039228-1.jpg",
+        "url": "/uploads/shift-photos/1779869041302-shift-photo-1779869039228-1.jpg",
+        "mimeType": "image/jpeg",
+        "size": 3395079,
+        "uploadedAt": "2026-05-27T08:04:01.348Z"
+      },
+      {
+        "name": "shift-photo-1779869047202-1.jpg",
+        "url": "/uploads/shift-photos/1779869048715-shift-photo-1779869047202-1.jpg",
+        "mimeType": "image/jpeg",
+        "size": 2130815,
+        "uploadedAt": "2026-05-27T08:04:08.759Z"
+      },
+      {
+        "name": "shift-photo-1779869134284-1.jpg",
+        "url": "/uploads/shift-photos/1779869138807-shift-photo-1779869134284-1.jpg",
+        "mimeType": "image/jpeg",
+        "size": 2198579,
+        "uploadedAt": "2026-05-27T08:05:38.831Z"
+      }
+    ],
+    "createdAt": "2026-05-27T08:03:50.698Z",
+    "updatedAt": "2026-05-28T07:44:20.011Z",
+    "__v": 3,
+    "endedAt": "2026-05-27T16:11:50.681Z",
+    "autoPausedReason": ""
+  },
+  {
+    "_id": "6a193c4f18a59884883547c9",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a0b34dae5475cad2baff53f",
+    "projectNameSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "locationSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "shiftDate": "2026-05-29",
+    "startedAt": "2026-05-29T07:12:15.225Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-05-29T07:12:15.225Z",
+        "durationMs": 1668,
+        "endedAt": "2026-05-29T07:12:16.893Z"
+      }
+    ],
+    "durationMs": 1668,
+    "completionReason": "outside_project_area",
+    "completionSource": "mobile_location_guard",
+    "completionNotifiedAt": "2026-05-29T07:12:17.626Z",
+    "photos": [],
+    "createdAt": "2026-05-29T07:12:15.237Z",
+    "updatedAt": "2026-05-29T07:12:17.634Z",
+    "__v": 0,
+    "endedAt": "2026-05-29T07:12:16.893Z"
+  },
+  {
+    "_id": "6a1f0d31b9dbc13b875a8256",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a0b34dae5475cad2baff53f",
+    "projectNameSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "locationSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "shiftDate": "2026-06-02",
+    "startedAt": "2026-06-02T17:04:49.625Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-06-02T17:04:49.625Z",
+        "endedAt": "2026-06-03T01:34:49.625Z",
+        "durationMs": 30600000
+      }
+    ],
+    "durationMs": 30600000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [
+      {
+        "name": "shift-photo-1780419948316-1.jpg",
+        "url": "/uploads/shift-photos/1780419949668-shift-photo-1780419948316-1.jpg",
+        "mimeType": "image/jpeg",
+        "size": 2171875,
+        "uploadedAt": "2026-06-02T17:05:49.935Z"
+      }
+    ],
+    "createdAt": "2026-06-02T17:04:49.634Z",
+    "updatedAt": "2026-06-03T05:49:29.501Z",
+    "__v": 2,
+    "endedAt": "2026-06-03T01:34:49.625Z",
+    "autoPausedReason": ""
+  },
+  {
+    "_id": "6a21c3f6ebcd94a1d94a3c1f",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a0b34dae5475cad2baff53f",
+    "projectNameSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "locationSnapshot": "Byggmästarvägen 18, Byggmästarvägen 18, Bromma, 168 32, Sweden",
+    "shiftDate": "2026-06-04",
+    "startedAt": "2026-06-04T18:29:10.212Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-06-04T18:29:10.212Z",
+        "durationMs": 104500,
+        "endedAt": "2026-06-04T18:30:54.712Z"
+      }
+    ],
+    "durationMs": 104500,
+    "completionReason": "outside_project_area",
+    "completionSource": "mobile_location_guard",
+    "completionNotifiedAt": "2026-06-04T18:51:25.219Z",
+    "photos": [
+      {
+        "name": "shift-photo-1780597759192-1.jpg",
+        "url": "/uploads/shift-photos/1780597760429-shift-photo-1780597759192-1.jpg",
+        "mimeType": "image/jpeg",
+        "size": 6403191,
+        "uploadedAt": "2026-06-04T18:29:20.527Z"
+      }
+    ],
+    "createdAt": "2026-06-04T18:29:10.224Z",
+    "updatedAt": "2026-06-04T18:51:25.222Z",
+    "__v": 1,
+    "endedAt": "2026-06-04T18:51:24.661Z"
+  },
+  {
+    "_id": "6a21e01febcd94a1d94a4594",
+    "workerId": "69d74e583b1e56d25a94350d",
+    "projectId": "6a21c4c6ebcd94a1d94a3e44",
+    "projectNameSnapshot": "Byggmästarvägen 16,  Stockholm,  168 30,  Sweden",
+    "locationSnapshot": "Byggmästarvägen 16,  Stockholm,  168 30,  Sweden",
+    "shiftDate": "2026-06-04",
+    "startedAt": "2026-06-04T20:29:19.780Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "segments": [
+      {
+        "startedAt": "2026-06-04T20:29:19.780Z",
+        "durationMs": 5857164,
+        "endedAt": "2026-06-04T22:06:56.944Z"
+      }
+    ],
+    "durationMs": 5857164,
+    "completionReason": "outside_project_area",
+    "completionSource": "mobile_location_guard",
+    "completionNotifiedAt": "2026-06-04T22:06:57.413Z",
+    "photos": [],
+    "createdAt": "2026-06-04T20:29:19.786Z",
+    "updatedAt": "2026-06-04T22:06:57.415Z",
+    "__v": 0,
+    "endedAt": "2026-06-04T22:06:56.944Z"
+  },
+  {
+    "_id": "6a66d963648910faf965ae6b",
+    "workerId": "6a66249211e14c117d0f9469",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-27",
+    "startedAt": "2026-07-27T04:06:59.285Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-27T04:06:59.285Z",
+        "endedAt": "2026-07-27T12:36:59.285Z",
+        "durationMs": 30600000
+      }
+    ],
+    "durationMs": 30600000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-27T04:06:59.289Z",
+    "updatedAt": "2026-07-28T04:00:00.350Z",
+    "__v": 0,
+    "endedAt": "2026-07-27T12:36:59.285Z"
+  },
+  {
+    "_id": "6a66d9aa648910faf965ae7e",
+    "workerId": "6a66252811e14c117d0f9502",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-27",
+    "startedAt": "2026-07-27T04:08:10.910Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-27T04:08:10.910Z",
+        "endedAt": "2026-07-27T11:56:10.910Z",
+        "durationMs": 28080000
+      }
+    ],
+    "durationMs": 28080000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-27T04:08:10.915Z",
+    "updatedAt": "2026-07-28T04:00:00.418Z",
+    "__v": 0,
+    "endedAt": "2026-07-27T11:56:10.910Z"
+  },
+  {
+    "_id": "6a66d9c5648910faf965aea7",
+    "workerId": "6a66258f11e14c117d0f95fc",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-27",
+    "startedAt": "2026-07-27T04:08:37.362Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-27T04:08:37.362Z",
+        "endedAt": "2026-07-27T12:37:37.362Z",
+        "durationMs": 30540000
+      }
+    ],
+    "durationMs": 30540000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-27T04:08:37.375Z",
+    "updatedAt": "2026-07-28T04:00:00.467Z",
+    "__v": 0,
+    "endedAt": "2026-07-27T12:37:37.362Z"
+  },
+  {
+    "_id": "6a66f76fe51f177ed051d957",
+    "workerId": "6a664602bb4ddecd2376f17e",
+    "projectId": "6a66463cbb4ddecd2376f1a0",
+    "projectNameSnapshot": "Byggnation villa 23",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-27",
+    "startedAt": "2026-07-27T06:15:11.468Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-27T06:15:11.468Z",
+        "endedAt": "2026-07-27T13:52:11.468Z",
+        "durationMs": 27420000
+      }
+    ],
+    "durationMs": 27420000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-27T06:15:11.476Z",
+    "updatedAt": "2026-07-28T04:00:00.521Z",
+    "__v": 0,
+    "endedAt": "2026-07-27T13:52:11.468Z"
+  },
+  {
+    "_id": "6a6726d2d81ae31d7c23d1b5",
+    "workerId": "6a66220211e14c117d0f92cd",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-27",
+    "startedAt": "2026-07-27T09:37:22.403Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-27T09:37:22.403Z",
+        "durationMs": 13020,
+        "endedAt": "2026-07-27T09:37:35.423Z"
+      }
+    ],
+    "durationMs": 13020,
+    "completionReason": "expired_day_end",
+    "completionSource": "system",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-27T09:37:22.412Z",
+    "updatedAt": "2026-07-28T04:00:00.221Z",
+    "__v": 0,
+    "endedAt": "2026-07-27T09:37:35.423Z"
+  },
+  {
+    "_id": "6a6840b1c9fc827cbf66cd45",
+    "workerId": "6a66249211e14c117d0f9469",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-28",
+    "startedAt": "2026-07-28T05:40:01.570Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-28T05:40:01.570Z",
+        "durationMs": 15222032,
+        "endedAt": "2026-07-28T09:53:43.602Z"
+      }
+    ],
+    "durationMs": 15222032,
+    "completionReason": "expired_day_end",
+    "completionSource": "system",
+    "completionNotifiedAt": null,
+    "photos": [
+      {
+        "name": "shift-photo-1785246111207-1.jpg",
+        "url": "/uploads/shift-photos/1785246115255-shift-photo-1785246111207-1.jpg",
+        "mimeType": "image/jpeg",
+        "size": 2395198,
+        "uploadedAt": "2026-07-28T13:41:55.305Z"
+      }
+    ],
+    "createdAt": "2026-07-28T05:40:01.579Z",
+    "updatedAt": "2026-07-29T04:00:00.184Z",
+    "__v": 1,
+    "endedAt": "2026-07-28T09:53:43.602Z"
+  },
+  {
+    "_id": "6a6840edc9fc827cbf66cdb5",
+    "workerId": "6a66258f11e14c117d0f95fc",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-28",
+    "startedAt": "2026-07-28T05:41:01.712Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-28T05:41:01.712Z",
+        "endedAt": "2026-07-28T13:29:01.712Z",
+        "durationMs": 28080000
+      }
+    ],
+    "durationMs": 28080000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-28T05:41:01.716Z",
+    "updatedAt": "2026-07-29T04:00:00.336Z",
+    "__v": 1,
+    "endedAt": "2026-07-28T13:29:01.712Z"
+  },
+  {
+    "_id": "6a68412cc9fc827cbf66ce45",
+    "workerId": "6a66252811e14c117d0f9502",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-28",
+    "startedAt": "2026-07-28T05:42:04.399Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-28T05:42:04.399Z",
+        "endedAt": "2026-07-28T13:52:04.399Z",
+        "durationMs": 29400000
+      }
+    ],
+    "durationMs": 29400000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-28T05:42:04.426Z",
+    "updatedAt": "2026-07-29T04:00:00.258Z",
+    "__v": 1,
+    "endedAt": "2026-07-28T13:52:04.399Z"
+  },
+  {
+    "_id": "6a68bebd310f63191c1f6cad",
+    "workerId": "6a664602bb4ddecd2376f17e",
+    "projectId": "6a66463cbb4ddecd2376f1a0",
+    "projectNameSnapshot": "Byggnation villa 23",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-28",
+    "startedAt": "2026-07-28T14:37:49.324Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-28T14:37:49.324Z",
+        "durationMs": 17244109,
+        "endedAt": "2026-07-28T19:25:13.433Z"
+      }
+    ],
+    "durationMs": 17244109,
+    "completionReason": "expired_day_end",
+    "completionSource": "system",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-28T14:37:49.332Z",
+    "updatedAt": "2026-07-29T04:00:00.489Z",
+    "__v": 0,
+    "endedAt": "2026-07-28T19:25:13.433Z"
+  },
+  {
+    "_id": "6a692b0166ac9bd93c43c7f4",
+    "workerId": "6a692904c80ff333e39d4d4f",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-28",
+    "startedAt": "2026-07-28T22:19:45.422Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-28T22:19:45.422Z",
+        "durationMs": 20414577,
+        "endedAt": "2026-07-29T03:59:59.999Z"
+      }
+    ],
+    "durationMs": 20414577,
+    "completionReason": "expired_day_end",
+    "completionSource": "system",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-28T22:19:45.432Z",
+    "updatedAt": "2026-07-29T04:00:00.589Z",
+    "__v": 0,
+    "endedAt": "2026-07-29T03:59:59.999Z"
+  },
+  {
+    "_id": "6a6984418a12d54067a8cd34",
+    "workerId": "6a66249211e14c117d0f9469",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-29",
+    "startedAt": "2026-07-29T04:40:33.062Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-29T04:40:33.062Z",
+        "endedAt": "2026-07-29T12:21:33.062Z",
+        "durationMs": 27660000
+      }
+    ],
+    "durationMs": 27660000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-29T04:40:33.076Z",
+    "updatedAt": "2026-07-30T04:00:00.363Z",
+    "__v": 1,
+    "endedAt": "2026-07-29T12:21:33.062Z"
+  },
+  {
+    "_id": "6a6984538a12d54067a8cdaa",
+    "workerId": "6a66252811e14c117d0f9502",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-29",
+    "startedAt": "2026-07-29T04:40:51.771Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-29T04:40:51.771Z",
+        "endedAt": "2026-07-29T12:17:51.771Z",
+        "durationMs": 27420000
+      }
+    ],
+    "durationMs": 27420000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-29T04:40:51.779Z",
+    "updatedAt": "2026-07-30T04:00:00.412Z",
+    "__v": 0,
+    "endedAt": "2026-07-29T12:17:51.771Z"
+  },
+  {
+    "_id": "6a6984678a12d54067a8ce4d",
+    "workerId": "6a692904c80ff333e39d4d4f",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-29",
+    "startedAt": "2026-07-29T04:41:11.115Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-29T04:41:11.115Z",
+        "endedAt": "2026-07-29T12:59:11.115Z",
+        "durationMs": 29880000
+      }
+    ],
+    "durationMs": 29880000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-29T04:41:11.120Z",
+    "updatedAt": "2026-07-30T04:00:00.502Z",
+    "__v": 0,
+    "endedAt": "2026-07-29T12:59:11.115Z"
+  },
+  {
+    "_id": "6a6984ab8a12d54067a8ce5a",
+    "workerId": "6a66258f11e14c117d0f95fc",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-29",
+    "startedAt": "2026-07-29T04:42:19.843Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-29T04:42:19.843Z",
+        "endedAt": "2026-07-29T12:12:19.843Z",
+        "durationMs": 27000000
+      }
+    ],
+    "durationMs": 27000000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-29T04:42:19.850Z",
+    "updatedAt": "2026-07-30T04:00:00.458Z",
+    "__v": 2,
+    "endedAt": "2026-07-29T12:12:19.843Z"
+  },
+  {
+    "_id": "6a699fb58a12d54067a8d02d",
+    "workerId": "6a66220211e14c117d0f92cd",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-29",
+    "startedAt": "2026-07-29T06:37:41.715Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-29T06:37:41.715Z",
+        "durationMs": 34932851,
+        "endedAt": "2026-07-29T16:19:54.566Z"
+      }
+    ],
+    "durationMs": 34932851,
+    "completionReason": "expired_day_end",
+    "completionSource": "system",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-29T06:37:41.722Z",
+    "updatedAt": "2026-07-30T04:00:00.201Z",
+    "__v": 0,
+    "endedAt": "2026-07-29T16:19:54.566Z"
+  },
+  {
+    "_id": "6a6ae6ff82d25b6338133181",
+    "workerId": "6a66249211e14c117d0f9469",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-30",
+    "startedAt": "2026-07-30T05:54:07.031Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-30T05:54:07.031Z",
+        "endedAt": "2026-07-30T14:10:07.031Z",
+        "durationMs": 29760000
+      }
+    ],
+    "durationMs": 29760000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [
+      {
+        "name": "shift-photo-1785449215658-1.jpg",
+        "url": "/uploads/shift-photos/1785449216480-shift-photo-1785449215658-1.jpg",
+        "mimeType": "image/jpeg",
+        "size": 1380578,
+        "uploadedAt": "2026-07-30T22:06:56.613Z"
+      }
+    ],
+    "createdAt": "2026-07-30T05:54:07.037Z",
+    "updatedAt": "2026-07-31T04:00:00.356Z",
+    "__v": 1,
+    "endedAt": "2026-07-30T14:10:07.031Z"
+  },
+  {
+    "_id": "6a6ae71982d25b6338133227",
+    "workerId": "6a66252811e14c117d0f9502",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-30",
+    "startedAt": "2026-07-30T05:54:33.238Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-30T05:54:33.238Z",
+        "endedAt": "2026-07-30T13:53:33.238Z",
+        "durationMs": 28740000
+      }
+    ],
+    "durationMs": 28740000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-30T05:54:33.240Z",
+    "updatedAt": "2026-07-31T04:00:00.408Z",
+    "__v": 0,
+    "endedAt": "2026-07-30T13:53:33.238Z"
+  },
+  {
+    "_id": "6a6ae74f82d25b63381332c5",
+    "workerId": "6a692904c80ff333e39d4d4f",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-30",
+    "startedAt": "2026-07-30T05:55:27.863Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-30T05:55:27.863Z",
+        "endedAt": "2026-07-30T13:29:27.863Z",
+        "durationMs": 27240000
+      }
+    ],
+    "durationMs": 27240000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-30T05:55:27.867Z",
+    "updatedAt": "2026-07-31T04:00:00.484Z",
+    "__v": 0,
+    "endedAt": "2026-07-30T13:29:27.863Z"
+  },
+  {
+    "_id": "6a6ae75e82d25b63381332e5",
+    "workerId": "6a66258f11e14c117d0f95fc",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-30",
+    "startedAt": "2026-07-30T05:55:42.364Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-30T05:55:42.364Z",
+        "endedAt": "2026-07-30T14:01:42.364Z",
+        "durationMs": 29160000
+      }
+    ],
+    "durationMs": 29160000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-30T05:55:42.373Z",
+    "updatedAt": "2026-07-31T04:00:00.446Z",
+    "__v": 0,
+    "endedAt": "2026-07-30T14:01:42.364Z"
+  },
+  {
+    "_id": "6a6baeabe79158c9ab10db47",
+    "workerId": "6a66220211e14c117d0f92cd",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-30",
+    "startedAt": "2026-07-30T20:06:03.160Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-30T20:06:03.160Z",
+        "durationMs": 28436839,
+        "endedAt": "2026-07-31T03:59:59.999Z"
+      }
+    ],
+    "durationMs": 28436839,
+    "completionReason": "expired_day_end",
+    "completionSource": "system",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-30T20:06:03.167Z",
+    "updatedAt": "2026-07-31T04:00:00.215Z",
+    "__v": 0,
+    "endedAt": "2026-07-31T03:59:59.999Z"
+  },
+  {
+    "_id": "6a6c4856e79158c9ab10ede6",
+    "workerId": "6a66220211e14c117d0f92cd",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-31",
+    "startedAt": "2026-07-31T07:01:42.919Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-31T07:01:42.919Z",
+        "durationMs": 30276837,
+        "endedAt": "2026-07-31T15:26:19.756Z"
+      }
+    ],
+    "durationMs": 30276837,
+    "completionReason": "expired_day_end",
+    "completionSource": "system",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-31T07:01:42.924Z",
+    "updatedAt": "2026-08-01T04:00:00.146Z",
+    "__v": 0,
+    "endedAt": "2026-07-31T15:26:19.756Z"
+  },
+  {
+    "_id": "6a6c4868e79158c9ab10ef45",
+    "workerId": "6a66249211e14c117d0f9469",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-31",
+    "startedAt": "2026-07-31T07:02:00.138Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-31T07:02:00.138Z",
+        "endedAt": "2026-07-31T14:41:00.138Z",
+        "durationMs": 27540000
+      }
+    ],
+    "durationMs": 27540000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-31T07:02:00.141Z",
+    "updatedAt": "2026-08-01T04:00:00.241Z",
+    "__v": 0,
+    "endedAt": "2026-07-31T14:41:00.138Z"
+  },
+  {
+    "_id": "6a6c4a4be79158c9ab10efd1",
+    "workerId": "6a66252811e14c117d0f9502",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-31",
+    "startedAt": "2026-07-31T07:10:03.059Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-31T07:10:03.059Z",
+        "endedAt": "2026-07-31T15:07:03.059Z",
+        "durationMs": 28620000
+      }
+    ],
+    "durationMs": 28620000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-31T07:10:03.062Z",
+    "updatedAt": "2026-08-01T04:00:00.285Z",
+    "__v": 0,
+    "endedAt": "2026-07-31T15:07:03.059Z"
+  },
+  {
+    "_id": "6a6c4a73e79158c9ab10efea",
+    "workerId": "6a66258f11e14c117d0f95fc",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-31",
+    "startedAt": "2026-07-31T07:10:43.932Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-31T07:10:43.932Z",
+        "endedAt": "2026-07-31T15:32:43.932Z",
+        "durationMs": 30120000
+      }
+    ],
+    "durationMs": 30120000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-31T07:10:43.937Z",
+    "updatedAt": "2026-08-01T04:00:00.328Z",
+    "__v": 0,
+    "endedAt": "2026-07-31T15:32:43.932Z"
+  },
+  {
+    "_id": "6a6cafc3c60e7c66dac4e22e",
+    "workerId": "6a6caebfc60e7c66dac4df66",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-31",
+    "startedAt": "2026-07-31T14:22:59.195Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-31T14:22:59.195Z",
+        "endedAt": "2026-07-31T22:05:59.195Z",
+        "durationMs": 27780000
+      }
+    ],
+    "durationMs": 27780000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-31T14:22:59.209Z",
+    "updatedAt": "2026-08-01T04:00:00.381Z",
+    "__v": 0,
+    "endedAt": "2026-07-31T22:05:59.195Z"
+  },
+  {
+    "_id": "6a6cbd9d8b4f9bbd379176c4",
+    "workerId": "6a6cbd308b4f9bbd37917542",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Lgh renovering hos Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-07-31",
+    "startedAt": "2026-07-31T15:22:05.155Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-07-31T15:22:05.155Z",
+        "endedAt": "2026-07-31T23:18:05.155Z",
+        "durationMs": 28560000
+      }
+    ],
+    "durationMs": 28560000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-07-31T15:22:05.161Z",
+    "updatedAt": "2026-08-01T04:00:00.430Z",
+    "__v": 0,
+    "endedAt": "2026-07-31T23:18:05.155Z"
+  },
+  {
+    "_id": "6a703865c9da94c1f9bb818b",
+    "workerId": "6a66249211e14c117d0f9469",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Byggnation av BRF Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-08-03",
+    "startedAt": "2026-08-03T06:42:45.989Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-08-03T06:42:45.989Z",
+        "endedAt": "2026-08-03T14:52:45.989Z",
+        "durationMs": 29400000
+      }
+    ],
+    "durationMs": 29400000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-08-03T06:42:45.995Z",
+    "updatedAt": "2026-08-03T06:42:45.995Z",
+    "__v": 0,
+    "endedAt": "2026-08-03T14:52:45.989Z"
+  },
+  {
+    "_id": "6a703894c9da94c1f9bb834b",
+    "workerId": "6a66258f11e14c117d0f95fc",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Byggnation av BRF Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-08-03",
+    "startedAt": "2026-08-03T06:43:32.447Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-08-03T06:43:32.447Z",
+        "endedAt": "2026-08-03T14:13:32.447Z",
+        "durationMs": 27000000
+      }
+    ],
+    "durationMs": 27000000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-08-03T06:43:32.452Z",
+    "updatedAt": "2026-08-03T06:43:32.452Z",
+    "__v": 0,
+    "endedAt": "2026-08-03T14:13:32.447Z"
+  },
+  {
+    "_id": "6a7038c8c9da94c1f9bb8422",
+    "workerId": "6a66252811e14c117d0f9502",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Byggnation av BRF Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-08-03",
+    "startedAt": "2026-08-03T06:44:24.092Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-08-03T06:44:24.092Z",
+        "endedAt": "2026-08-03T14:46:24.092Z",
+        "durationMs": 28920000
+      }
+    ],
+    "durationMs": 28920000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-08-03T06:44:24.095Z",
+    "updatedAt": "2026-08-03T06:44:24.095Z",
+    "__v": 0,
+    "endedAt": "2026-08-03T14:46:24.092Z"
+  },
+  {
+    "_id": "6a703accc9da94c1f9bb88ef",
+    "workerId": "6a6caebfc60e7c66dac4df66",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Byggnation av BRF Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-08-03",
+    "startedAt": "2026-08-03T06:53:00.334Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-08-03T06:53:00.334Z",
+        "endedAt": "2026-08-03T15:04:00.334Z",
+        "durationMs": 29460000
+      }
+    ],
+    "durationMs": 29460000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-08-03T06:53:00.339Z",
+    "updatedAt": "2026-08-03T06:53:00.339Z",
+    "__v": 0,
+    "endedAt": "2026-08-03T15:04:00.334Z"
+  },
+  {
+    "_id": "6a703b02c9da94c1f9bb8a55",
+    "workerId": "6a664602bb4ddecd2376f17e",
+    "projectId": "6a66463cbb4ddecd2376f1a0",
+    "projectNameSnapshot": "Byggnation villa 23",
+    "locationSnapshot": "",
+    "shiftDate": "2026-08-03",
+    "startedAt": "2026-08-03T06:53:54.481Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-08-03T06:53:54.481Z",
+        "endedAt": "2026-08-03T14:56:54.481Z",
+        "durationMs": 28980000
+      }
+    ],
+    "durationMs": 28980000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-08-03T06:53:54.486Z",
+    "updatedAt": "2026-08-03T06:53:54.486Z",
+    "__v": 0,
+    "endedAt": "2026-08-03T14:56:54.481Z"
+  },
+  {
+    "_id": "6a703c26c9da94c1f9bb9086",
+    "workerId": "6a6d9418b9aa64015f143a92",
+    "projectId": "6a6624b511e14c117d0f9491",
+    "projectNameSnapshot": "Byggnation av BRF Peter",
+    "locationSnapshot": "",
+    "shiftDate": "2026-08-03",
+    "startedAt": "2026-08-03T06:58:46.427Z",
+    "lastResumedAt": null,
+    "status": "completed",
+    "autoPausedReason": "",
+    "segments": [
+      {
+        "startedAt": "2026-08-03T06:58:46.427Z",
+        "endedAt": "2026-08-03T15:00:46.427Z",
+        "durationMs": 28920000
+      }
+    ],
+    "durationMs": 28920000,
+    "completionReason": "admin_normalized",
+    "completionSource": "admin",
+    "completionNotifiedAt": null,
+    "photos": [],
+    "createdAt": "2026-08-03T06:58:46.432Z",
+    "updatedAt": "2026-08-03T06:58:46.432Z",
+    "__v": 0,
+    "endedAt": "2026-08-03T15:00:46.427Z"
+  }
+]

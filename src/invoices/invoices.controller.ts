@@ -16,27 +16,27 @@ import {
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import type { Response } from "express";
-import { Roles } from "../common/decorators/roles.decorator";
-import { RolesGuard } from "../common/guards/roles.guard";
-import { UserRole } from "../users/schemas/user.schema";
+import { Permissions } from "../common/decorators/permissions.decorator";
+import { PermissionsGuard } from "../common/guards/permissions.guard";
+import { PERMISSIONS } from "../common/permissions/permissions.constants";
 import { CreateInvoiceDto } from "./dto/create-invoice.dto";
 import { UpdateInvoiceDto } from "./dto/update-invoice.dto";
 import { InvoiceStatus } from "./schemas/invoice.schema";
 import { InvoicesService } from "./invoices.service";
 
 @Controller("invoices")
-@UseGuards(AuthGuard("jwt"), RolesGuard)
+@UseGuards(AuthGuard("jwt"), PermissionsGuard)
 export class InvoicesController {
   constructor(private readonly invoicesService: InvoicesService) {}
 
   @Get()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   findAllAccessible(@Request() req) {
     return this.invoicesService.findAccessible(req.user);
   }
 
   @Get("next-number")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   getNextInvoiceNumber(@Request() req, @Query("companyId") companyId?: string) {
     return this.invoicesService.getNextInvoiceNumberForUser(
       req.user,
@@ -45,32 +45,32 @@ export class InvoicesController {
   }
 
   @Post()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   create(@Request() req, @Body() createInvoiceDto: CreateInvoiceDto) {
     return this.invoicesService.create(createInvoiceDto, req.user);
   }
 
   @Post(":id/copy")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   copy(@Request() req, @Param("id") id: string) {
     return this.invoicesService.copy(id, req.user);
   }
 
   @Post(":id/credit")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   creditNote(@Request() req, @Param("id") id: string) {
     return this.invoicesService.createCreditNote(id, req.user);
   }
 
   @Get(":id/html")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   @Header("Content-Type", "text/html; charset=utf-8")
   previewHtml(@Request() req, @Param("id") id: string) {
     return this.invoicesService.buildInvoiceHtml(id, req.user);
   }
 
   @Get(":id/pdf")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   async downloadPdf(
     @Request() req,
     @Param("id") id: string,
@@ -88,7 +88,7 @@ export class InvoicesController {
   }
 
   @Post(":id/send")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   sendByEmail(
     @Request() req,
     @Param("id") id: string,
@@ -103,7 +103,7 @@ export class InvoicesController {
   }
 
   @Patch(":id/status")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   setStatus(
     @Request() req,
     @Param("id") id: string,
@@ -116,13 +116,13 @@ export class InvoicesController {
   }
 
   @Get(":id")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   findOne(@Request() req, @Param("id") id: string) {
     return this.invoicesService.findOne(id, req.user);
   }
 
   @Put(":id")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   update(
     @Request() req,
     @Param("id") id: string,
@@ -132,7 +132,7 @@ export class InvoicesController {
   }
 
   @Delete(":id")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   remove(@Request() req, @Param("id") id: string) {
     return this.invoicesService.remove(id, req.user);
   }

@@ -14,51 +14,51 @@ import {
 } from "@nestjs/common";
 import type { Response } from "express";
 import { AuthGuard } from "@nestjs/passport";
-import { Roles } from "../common/decorators/roles.decorator";
-import { RolesGuard } from "../common/guards/roles.guard";
-import { UserRole } from "../users/schemas/user.schema";
+import { Permissions } from "../common/decorators/permissions.decorator";
+import { PermissionsGuard } from "../common/guards/permissions.guard";
+import { PERMISSIONS } from "../common/permissions/permissions.constants";
 import { CreateOfferDto } from "./dto/create-offer.dto";
 import { UpdateOfferDto } from "./dto/update-offer.dto";
 import { OffersService } from "./offers.service";
 
 @Controller("offers")
-@UseGuards(AuthGuard("jwt"), RolesGuard)
+@UseGuards(AuthGuard("jwt"), PermissionsGuard)
 export class OffersController {
   constructor(private readonly offersService: OffersService) {}
 
   @Get()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   findAllAccessible(@Request() req) {
     return this.offersService.findAccessible(req.user);
   }
 
   @Get("next-number")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   getNextOfferNumber(@Request() req, @Query("companyId") companyId?: string) {
     return this.offersService.getNextOfferNumberForUser(req.user, companyId);
   }
 
   @Post()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   create(@Request() req, @Body() createOfferDto: CreateOfferDto) {
     return this.offersService.create(createOfferDto, req.user);
   }
 
   @Post(":id/copy")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   copy(@Request() req, @Param("id") id: string) {
     return this.offersService.copy(id, req.user);
   }
 
   @Get(":id/html")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   @Header("Content-Type", "text/html; charset=utf-8")
   previewHtml(@Request() req, @Param("id") id: string) {
     return this.offersService.buildOfferHtml(id, req.user);
   }
 
   @Get(":id/pdf")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   async downloadPdf(
     @Request() req,
     @Param("id") id: string,
@@ -76,13 +76,13 @@ export class OffersController {
   }
 
   @Get(":id")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   findOne(@Request() req, @Param("id") id: string) {
     return this.offersService.findOne(id, req.user);
   }
 
   @Put(":id")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   update(
     @Request() req,
     @Param("id") id: string,
@@ -92,7 +92,7 @@ export class OffersController {
   }
 
   @Delete(":id")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   remove(@Request() req, @Param("id") id: string) {
     return this.offersService.remove(id, req.user);
   }

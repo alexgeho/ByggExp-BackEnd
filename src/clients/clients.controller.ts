@@ -11,26 +11,26 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
-import { Roles } from "../common/decorators/roles.decorator";
-import { RolesGuard } from "../common/guards/roles.guard";
-import { UserRole } from "../users/schemas/user.schema";
+import { Permissions } from "../common/decorators/permissions.decorator";
+import { PermissionsGuard } from "../common/guards/permissions.guard";
+import { PERMISSIONS } from "../common/permissions/permissions.constants";
 import { ClientsService } from "./clients.service";
 import { CreateClientDto } from "./dto/create-client.dto";
 import { UpdateClientDto } from "./dto/update-client.dto";
 
 @Controller("clients")
-@UseGuards(AuthGuard("jwt"), RolesGuard)
+@UseGuards(AuthGuard("jwt"), PermissionsGuard)
 export class ClientsController {
   constructor(private readonly clientsService: ClientsService) {}
 
   @Get()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   findAllAccessible(@Request() req) {
     return this.clientsService.findAccessible(req.user);
   }
 
   @Get("next-number")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   getNextCustomerNumber(
     @Request() req,
     @Query("companyId") companyId?: string,
@@ -42,19 +42,19 @@ export class ClientsController {
   }
 
   @Post()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   create(@Request() req, @Body() createClientDto: CreateClientDto) {
     return this.clientsService.create(createClientDto, req.user);
   }
 
   @Get(":id")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   findOne(@Request() req, @Param("id") id: string) {
     return this.clientsService.findOne(id, req.user);
   }
 
   @Put(":id")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   update(
     @Request() req,
     @Param("id") id: string,
@@ -64,7 +64,7 @@ export class ClientsController {
   }
 
   @Delete(":id")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
   remove(@Request() req, @Param("id") id: string) {
     return this.clientsService.remove(id, req.user);
   }
