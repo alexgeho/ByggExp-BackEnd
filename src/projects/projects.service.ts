@@ -642,10 +642,10 @@ export class ProjectsService {
       .findByIdAndUpdate(
         id,
         {
-          documents: [
+          documents: this.dedupeDocuments([
             ...(existingProject.documents || []),
             ...enrichedDocuments,
-          ],
+          ]),
         },
         { new: true },
       )
@@ -658,6 +658,24 @@ export class ProjectsService {
     return this.findOneWithPopulated(id);
   }
 
+  // Collapse a documents array so the same file (by url) never appears twice.
+  // The edit-project form resends the existing documents on save, and uploads
+  // append — without this, every save doubled the list.
+  private dedupeDocuments<T>(documents: T[]): T[] {
+    const seen = new Set<string>();
+    const result: T[] = [];
+    for (const doc of documents || []) {
+      const key =
+        typeof doc === "string"
+          ? doc
+          : (doc as { url?: string })?.url || JSON.stringify(doc);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(doc);
+    }
+    return result;
+  }
+
   async update(
     id: string,
     updateProjectDto: Partial<CreateProjectDto>,
@@ -666,7 +684,10 @@ export class ProjectsService {
     const nextDocuments =
       Array.isArray(updateProjectDto.documents) &&
       updateProjectDto.documents.length > 0
-        ? [...(existingProject.documents || []), ...updateProjectDto.documents]
+        ? this.dedupeDocuments([
+            ...(existingProject.documents || []),
+            ...updateProjectDto.documents,
+          ])
         : existingProject.documents;
 
     // Validate the customer belongs to the project's company only
