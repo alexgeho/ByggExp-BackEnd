@@ -127,6 +127,12 @@ type UserDetailResponse = {
     canDelete: boolean;
     canComment: boolean;
   };
+  // Capability delegation: the user's raw overrides + the resulting effective
+  // set, for the admin permissions editor ("office admin").
+  capabilities: {
+    overrides: { granted: string[]; revoked: string[] };
+    effective: string[];
+  };
   activePushTokens: Array<{
     id: string;
     installationId: string;
@@ -1036,6 +1042,15 @@ export class UsersService {
         photoUrl: tool.photoUrl || "",
       })),
       permissions,
+      capabilities: {
+        overrides: {
+          granted: user.permissions?.granted || [],
+          revoked: user.permissions?.revoked || [],
+        },
+        effective: Array.from(
+          getEffectivePermissions(user.role, user.permissions),
+        ),
+      },
       activePushTokens: activePushTokens.map((token) => ({
         id: this.normalizeId(token._id),
         installationId: token.installationId,
