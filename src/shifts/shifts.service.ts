@@ -30,6 +30,7 @@ import { CompleteShiftDto } from "./dto/complete-shift.dto";
 import { ExportShiftsDto, HoursSource } from "./dto/export-shifts.dto";
 import { ListShiftsDto } from "./dto/list-shifts.dto";
 import { SetManualHoursDto } from "./dto/set-manual-hours.dto";
+import { AddManualHoursDto } from "./dto/add-manual-hours.dto";
 import { StartShiftDto } from "./dto/start-shift.dto";
 import {
   Shift,
@@ -489,6 +490,71 @@ export class ShiftsService {
     await shift.save();
 
     return this.serializeShift(shift);
+  }
+
+  // Admin-side manual hours: an admin / project admin records a worker's hours
+  // for a day when there is no GPS shift (forgot to clock in) or the hours must
+  // be entered by hand. If a shift already exists for that worker/project/day we
+  // set its Manual value; otherwise we create a completed manual-only shift so
+  // the hours land in the log and the "Manual" totals — same field the worker's
+  // own entry uses in the app.
+  async addManualHours(user: AuthenticatedUser, dto: AddManualHoursDto) {
+    const project = await this.ensureProjectAccess(user, dto.projectId);
+
+    const worker = await this.userModel
+      .findById(dto.workerId)
+      .select("companyId name")
+      .exec();
+    if (!worker) {
+      throw new NotFoundException("Worker not found");
+    }
+    if (
+      (user.role === UserRole.CompanyAdmin ||
+        user.role === UserRole.SuperAdmin) &&
+      worker.companyId &&
+      user.companyId &&
+      String(worker.companyId) !== String(user.companyId)
+    ) {
+      throw new ForbiddenException("Worker belongs to another company.");
+    }
+
+    const durationMs = Math.max(0, Math.round(dto.durationMs));
+
+    const existing = await this.shiftModel
+      .findOne({
+        workerId: dto.workerId,
+        projectId: dto.projectId,
+        shiftDate: dto.date,
+      })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    if (existing) {
+      existing.manualDurationMs = durationMs;
+      await existing.save();
+      return this.serializeShift(existing);
+    }
+
+    const startedAt = new Date(`${dto.date}T08:00:00`);
+    const endedAt = new Date(startedAt.getTime() + durationMs);
+    const created = await new this.shiftModel({
+      workerId: dto.workerId,
+      projectId: dto.projectId,
+      projectNameSnapshot: project.name,
+      locationSnapshot: project.location || "",
+      shiftDate: dto.date,
+      startedAt,
+      endedAt,
+      status: ShiftStatus.Completed,
+      durationMs: 0,
+      manualDurationMs: durationMs,
+      completionReason: "manual",
+      completionSource: "admin",
+      segments: [],
+      photos: [],
+    }).save();
+
+    return this.serializeShift(created);
   }
 
   async uploadPhotos(

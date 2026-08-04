@@ -24,6 +24,7 @@ import { CompleteShiftDto } from "./dto/complete-shift.dto";
 import { ExportShiftsDto } from "./dto/export-shifts.dto";
 import { ListShiftsDto } from "./dto/list-shifts.dto";
 import { SetManualHoursDto } from "./dto/set-manual-hours.dto";
+import { AddManualHoursDto } from "./dto/add-manual-hours.dto";
 import { StartShiftDto } from "./dto/start-shift.dto";
 import { ShiftsService } from "./shifts.service";
 
@@ -64,6 +65,13 @@ export class ShiftsController {
   )
   start(@Request() req, @Body() dto: StartShiftDto) {
     return this.shiftsService.start(req.user, dto);
+  }
+
+  // Admin-entered manual hours for a worker (no clock-in on the app).
+  @Post("manual")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  addManualHours(@Request() req, @Body() dto: AddManualHoursDto) {
+    return this.shiftsService.addManualHours(req.user, dto);
   }
 
   @Get("personalliggare/:projectId")
