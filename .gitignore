@@ -25,3 +25,6 @@ npm-debug.log*
 
 # IDE
 .vscode/
+
+# local dev scripts & data backups (not for the repo)
+/scripts/
