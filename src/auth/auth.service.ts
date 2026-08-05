@@ -7,6 +7,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { randomBytes } from "crypto";
 import * as bcrypt from "bcrypt";
 import { UsersService } from "../users/users.service";
 import { CompanyService } from "../company/company.service";
@@ -122,13 +123,19 @@ export class AuthService {
   }
 
   async registerCompany(dto: RegisterCompanyPublicDto) {
+    // The mobile app signs up without a password and relies on the tokens we
+    // return here (and magic-login later). Generate a strong random password
+    // when the client didn't supply one so the account always has a credential.
+    const adminPassword =
+      dto.password ?? randomBytes(24).toString("base64url");
+
     const fullDto: RegisterCompanyWithAdminDto = {
       name: dto.companyName.trim(),
       address: "—",
       email: dto.email.trim().toLowerCase(),
       adminName: dto.userName.trim(),
       adminEmail: dto.email.trim().toLowerCase(),
-      adminPassword: dto.password,
+      adminPassword,
     };
 
     const { admin } =
