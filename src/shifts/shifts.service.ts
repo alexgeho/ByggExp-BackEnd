@@ -50,12 +50,6 @@ import {
 
 const MS_PER_HOUR = 1000 * 60 * 60;
 
-// How long an active shift's device can go without checking in (polling
-// /shifts/current) before a shift on a project WITHOUT a geofence is
-// auto-paused. Override with SHIFT_HEARTBEAT_TIMEOUT_MIN.
-const HEARTBEAT_TIMEOUT_MS =
-  (Number(process.env.SHIFT_HEARTBEAT_TIMEOUT_MIN) || 15) * 60 * 1000;
-
 type AuthenticatedUser = {
   userId: string;
   role: UserRole;
@@ -1004,88 +998,6 @@ export class ShiftsService {
   private async finalizeStaleShifts(userId: string) {
     await this.finalizeExpiredOpenShifts(userId);
     await this.finalizeShiftsPastScheduleDeadline(userId);
-    await this.finalizeShiftsPastHeartbeat(userId);
-  }
-
-  /**
-   * Auto-pauses an active shift whose device stopped checking in for longer than
-   * the heartbeat timeout (default 15 min) — the app was closed/killed/removed
-   * or the phone went silent, which iOS can't report in the background.
-   *
-   * Gated to projects WITHOUT a geofence: when the project has coordinates and a
-   * radius, presence is decided by GPS (the app reports outside_project_area on
-   * a real exit), so we must NOT silence-pause on-site crews whose app is merely
-   * backgrounded. When the project has no address/geofence, signal silence is
-   * the only signal that the worker is gone, so the shift is paused there.
-   *
-   * Time is banked only up to the last heartbeat (away time is never counted).
-   * Reason "offline" lets getCurrent() auto-resume the moment the phone polls
-   * again; the schedule / day-end finalizers close it for good.
-   */
-  private async finalizeShiftsPastHeartbeat(userId: string) {
-    const today = this.getDateKey(new Date());
-    const activeShifts = await this.shiftModel
-      .find({
-        workerId: userId,
-        shiftDate: today,
-        status: ShiftStatus.Active,
-      })
-      .exec();
-
-    if (!activeShifts.length) {
-      return;
-    }
-
-    const now = new Date();
-    const lastSeenAt = await this.usersService.getLastSeenAt(userId);
-
-    for (const shift of activeShifts) {
-      // Reference point = last heartbeat, falling back to the shift start if we
-      // have never seen the device.
-      const reference = lastSeenAt || shift.startedAt || now;
-      if (now.getTime() - new Date(reference).getTime() < HEARTBEAT_TIMEOUT_MS) {
-        continue;
-      }
-
-      // Projects with a geofence rely on GPS (outside_project_area) for
-      // presence — silence alone must not pause them, or an on-site worker with
-      // a backgrounded app would drop to Off duty. Only silence-pause when the
-      // project has no coordinates/radius to fall back on.
-      const project = await this.projectModel.findById(shift.projectId).exec();
-      const hasGeofence =
-        project?.locationLatitude != null &&
-        project?.locationLongitude != null &&
-        (project?.locationRadiusMeters ?? 0) > 0;
-      if (hasGeofence) {
-        continue;
-      }
-
-      // Bank time only up to the last heartbeat, clamped inside the open segment
-      // so we never produce a negative or future duration.
-      const openSegmentStart =
-        shift.segments[shift.segments.length - 1]?.startedAt ||
-        shift.lastResumedAt ||
-        shift.startedAt ||
-        now;
-      let pauseAt = new Date(reference);
-      if (pauseAt < openSegmentStart) {
-        pauseAt = new Date(openSegmentStart);
-      }
-      if (pauseAt > now) {
-        pauseAt = now;
-      }
-
-      this.pauseShiftDocument(shift, pauseAt, "offline");
-      await shift.save();
-
-      await this.usersService.setOutsideProjectAreaStatus(userId, {
-        projectId: shift.projectId,
-        projectName: shift.projectNameSnapshot,
-        shiftId: shift._id.toString(),
-        reason: "no_signal",
-        updatedAt: pauseAt,
-      });
-    }
   }
 
   /**
