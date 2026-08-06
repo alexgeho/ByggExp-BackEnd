@@ -771,11 +771,19 @@ export class UsersService {
     }
 
     const projectIds = Array.isArray(me.projectIds) ? me.projectIds : [];
+    const scopeCompanyId = companyId ?? me.companyId;
+
+    // Co-members of the user's own projects, PLUS the company's admin(s):
+    // admins usually aren't assigned to projects, so workers must still be
+    // able to see and message them (e.g. to reply to a message the admin
+    // started). Kept tenant-isolated by the companyId filter below.
     const query: Record<string, unknown> = {
       _id: { $ne: userId },
-      projectIds: { $in: projectIds },
+      $or: [
+        { projectIds: { $in: projectIds } },
+        { role: UserRole.CompanyAdmin },
+      ],
     };
-    const scopeCompanyId = companyId ?? me.companyId;
     if (scopeCompanyId) {
       query.companyId = scopeCompanyId;
     }
