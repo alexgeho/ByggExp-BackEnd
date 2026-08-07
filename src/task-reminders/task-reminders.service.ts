@@ -69,9 +69,12 @@ export class TaskRemindersService {
       preferenceKey: "tasks",
       data: {
         type: "task_assignment",
-        screen: params.projectId ? "Project" : "Tasks",
-        ...(params.projectId ? { projectId: params.projectId } : {}),
+        // Deep-link straight to the task so tapping the notification opens the
+        // task itself, not the project/list.
+        screen: "Task",
+        taskId: params.taskId,
         entityId: params.taskId,
+        ...(params.projectId ? { projectId: params.projectId } : {}),
       },
     });
   }
@@ -170,9 +173,12 @@ export class TaskRemindersService {
         preferenceKey: "tasks",
         data: {
           type: "task_reminder",
-          screen: reminder.projectId ? "Project" : "Tasks",
-          ...(reminder.projectId ? { projectId: reminder.projectId } : {}),
+          // Deep-link straight to the task so tapping the reminder opens the
+          // task itself, not the project/list.
+          screen: "Task",
+          taskId: reminder.taskId,
           entityId: reminder.taskId,
+          ...(reminder.projectId ? { projectId: reminder.projectId } : {}),
         },
       });
     } catch (error) {
