@@ -750,9 +750,13 @@ export class TasksService {
     if (recipients.length) {
       const data = {
         type: escalated ? "task_escalated" : "task_overdue",
-        screen: task.projectId ? "Project" : "Tasks",
-        ...(task.projectId ? { projectId: task.projectId.toString() } : {}),
+        // Deep-link straight to the task so tapping the overdue/escalation
+        // reminder opens the task itself (with Complete/Reopen), not the
+        // project or task list where it can be buried or missing.
+        screen: "Task",
+        taskId: task._id.toString(),
         entityId: task._id.toString(),
+        ...(task.projectId ? { projectId: task.projectId.toString() } : {}),
       };
 
       // Localize per recipient (Swedish / English) — send one push per language
