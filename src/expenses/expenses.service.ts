@@ -132,7 +132,10 @@ export class ExpensesService {
     return doc;
   }
 
-  // Approved/reimbursed expenses count as ex-VAT project cost.
+  // Every expense that isn't rejected counts as ex-VAT project cost — a logged
+  // expense (incl. subcontractors / underentreprenör) flows into the project's
+  // material cost immediately, without waiting for a separate approval step.
+  // Only explicitly rejected expenses are left out.
   async projectSummary(projectId: string, user: AuthUser) {
     if (!user.companyId) {
       return { total: 0, count: 0, pendingCount: 0, reimburseDue: 0 };
@@ -142,8 +145,8 @@ export class ExpensesService {
       .select("amount vat status paidBy")
       .lean()
       .exec();
-    const counted = docs.filter((d) =>
-      [ExpenseStatus.Approved, ExpenseStatus.Reimbursed].includes(d.status),
+    const counted = docs.filter(
+      (d) => d.status !== ExpenseStatus.Rejected,
     );
     const total = counted.reduce(
       (s, d) => s + ((d.amount || 0) - (d.vat || 0)),
