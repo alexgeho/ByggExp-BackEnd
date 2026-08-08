@@ -251,6 +251,55 @@ export class MailService {
     return { sent: true, to };
   }
 
+  // Expiry reminder for an employee certificate. Mirrors the push copy sent by
+  // CertificateRemindersService so the two channels read the same. Recipients are
+  // the company admin(s) and (optionally) the certificate holder. Log-only when
+  // SMTP is unconfigured, so the cron is safe to call before SMTP is wired up.
+  async sendCertificateReminderEmail(
+    to: string | string[],
+    opts: {
+      holderName: string;
+      certName: string;
+      daysLeft: number;
+      expiresAt?: Date | string | null;
+    },
+  ): Promise<void> {
+    const recipients = (Array.isArray(to) ? to : [to])
+      .map((address) => String(address || "").trim())
+      .filter(Boolean);
+    if (!recipients.length) return;
+
+    const certName = opts.certName || "Certifikat";
+    const holder = opts.holderName || "Anställd";
+    const when =
+      opts.daysLeft < 0
+        ? `gick ut för ${Math.abs(opts.daysLeft)} dagar sedan`
+        : opts.daysLeft === 0
+          ? "går ut idag"
+          : `går ut om ${opts.daysLeft} dagar`;
+    const dateStr = opts.expiresAt
+      ? new Date(opts.expiresAt).toISOString().slice(0, 10)
+      : "";
+    const subject =
+      opts.daysLeft < 0 ? "Certifikat utgånget" : "Certifikat går snart ut";
+    const line = `${holder} — certifikatet ${certName} ${when}${dateStr ? ` (${dateStr})` : ""}.`;
+    const text = line;
+    const html = `<p>${this.escapeHtml(holder)} — certifikatet <strong>${this.escapeHtml(certName)}</strong> ${this.escapeHtml(when)}${dateStr ? ` (${this.escapeHtml(dateStr)})` : ""}.</p>`;
+
+    if (!this.transporter) {
+      this.logger.log(`Certificate reminder (SMTP off) → ${recipients.join(", ")}: ${line}`);
+      return;
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to: recipients,
+      subject,
+      text,
+      html,
+    });
+  }
+
   async sendDemoRequestEmail(payload: DemoRequestPayload): Promise<void> {
     const recipients = this.getDemoRequestRecipients();
     const subject = "New demo request from byggexp.se";

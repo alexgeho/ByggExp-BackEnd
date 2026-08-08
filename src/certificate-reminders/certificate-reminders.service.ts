@@ -4,6 +4,7 @@ import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
 import { NotificationsService } from "../notifications/notifications.service";
+import { MailService } from "../mail/mail.service";
 import { cronsDisabled } from "../common/cron.util";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -30,6 +31,7 @@ export class CertificateRemindersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private readonly notificationsService: NotificationsService,
+    private readonly mailService: MailService,
   ) {}
 
   // Daily sweep. Fires once when a certificate crosses each milestone.
@@ -58,19 +60,27 @@ export class CertificateRemindersService {
       .find({ "certificates.0": { $exists: true } })
       .exec();
 
-    const adminsByCompany = new Map<string, string[]>();
-    const getAdmins = async (companyId: string): Promise<string[]> => {
+    const adminsByCompany = new Map<
+      string,
+      Array<{ id: string; email: string }>
+    >();
+    const getAdmins = async (
+      companyId: string,
+    ): Promise<Array<{ id: string; email: string }>> => {
       if (!companyId) return [];
       const cached = adminsByCompany.get(companyId);
       if (cached) return cached;
       const admins = await this.userModel
         .find({ companyId, role: UserRole.CompanyAdmin })
-        .select("_id")
+        .select("_id email")
         .lean()
         .exec();
-      const ids = admins.map((a) => String(a._id));
-      adminsByCompany.set(companyId, ids);
-      return ids;
+      const list = admins.map((a) => ({
+        id: String(a._id),
+        email: String(a.email || ""),
+      }));
+      adminsByCompany.set(companyId, list);
+      return list;
     };
 
     for (const user of users) {
@@ -101,8 +111,19 @@ export class CertificateRemindersService {
       if (!due.length) continue;
 
       const admins = await getAdmins(String(user.companyId || ""));
-      const recipients = [...new Set([...admins, String(user._id)])];
+      const recipients = [
+        ...new Set([...admins.map((a) => a.id), String(user._id)]),
+      ];
       if (!recipients.length) continue;
+      // Email goes to the same audience (admins + holder). MailService is
+      // log-only until SMTP is configured, so this is safe to call now.
+      const emailRecipients = [
+        ...new Set(
+          [...admins.map((a) => a.email), String(user.email || "")].filter(
+            Boolean,
+          ),
+        ),
+      ];
 
       const holder = user.name || user.email || "Anställd";
       for (const { cert, daysLeft } of due) {
@@ -124,6 +145,18 @@ export class CertificateRemindersService {
           });
         } catch (error) {
           this.logger.error("Failed to send certificate reminder", error);
+        }
+        if (emailRecipients.length) {
+          try {
+            await this.mailService.sendCertificateReminderEmail(emailRecipients, {
+              holderName: holder,
+              certName: cert.name || "Certifikat",
+              daysLeft,
+              expiresAt: cert.expiresAt,
+            });
+          } catch (error) {
+            this.logger.error("Failed to email certificate reminder", error);
+          }
         }
       }
     }
