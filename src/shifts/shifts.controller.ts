@@ -67,9 +67,16 @@ export class ShiftsController {
     return this.shiftsService.start(req.user, dto);
   }
 
-  // Admin-entered manual hours for a worker (no clock-in on the app).
+  // Manual hours with no clock-in on the app. Admins log for any worker on a
+  // project they manage; a worker may log only their own hours (enforced in the
+  // service by matching dto.workerId to the caller).
   @Post("manual")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
   addManualHours(@Request() req, @Body() dto: AddManualHoursDto) {
     return this.shiftsService.addManualHours(req.user, dto);
   }

@@ -499,6 +499,15 @@ export class ShiftsService {
   // the hours land in the log and the "Manual" totals — same field the worker's
   // own entry uses in the app.
   async addManualHours(user: AuthenticatedUser, dto: AddManualHoursDto) {
+    // Workers may only log their own hours; admins may log for any worker on a
+    // project they can access.
+    if (
+      user.role === UserRole.Worker &&
+      String(dto.workerId) !== String(user.userId)
+    ) {
+      throw new ForbiddenException("You can only log your own hours.");
+    }
+
     const project = await this.ensureProjectAccess(user, dto.projectId);
 
     const worker = await this.userModel
@@ -549,7 +558,7 @@ export class ShiftsService {
       durationMs: 0,
       manualDurationMs: durationMs,
       completionReason: "manual",
-      completionSource: "admin",
+      completionSource: user.role === UserRole.Worker ? "worker" : "admin",
       segments: [],
       photos: [],
     }).save();
