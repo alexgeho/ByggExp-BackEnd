@@ -108,11 +108,17 @@ async function bootstrap() {
     "https://tot-bygghub-admin-site.vercel.app",
     "http://localhost:8081",
     "https://admin.byggexp.se",
+    // Web/PWA build of the mobile app (custom domain, if mapped later).
+    "https://app.byggexp.se",
     ...extraOrigins,
   ]);
 
   const allowedOriginPatterns = [
     /^exp:\/\/(?:localhost|127\.0\.0\.1|\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?$/,
+    // EAS Hosting for the ByggExp web/PWA build only: the production alias
+    // (byggexp.expo.app) plus preview deploys (byggexp--<hash>.expo.app).
+    // Scoped to this project's slug so other *.expo.app sites are not allowed.
+    /^https:\/\/byggexp(?:--[a-z0-9-]+)?\.expo\.app$/,
   ];
 
   app.enableCors({
