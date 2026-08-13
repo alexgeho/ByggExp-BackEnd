@@ -3,6 +3,32 @@ import { Document } from "mongoose";
 
 export type CompanyDocument = Company & Document;
 
+// Recurring "workers, log your hours" rule (fired by the hours-reminders cron).
+@Schema({ _id: false })
+export class HoursReminderRule {
+  @Prop({ type: Boolean, default: false })
+  enabled: boolean;
+
+  // "HH:MM" 24h — the cron matches the hour in Europe/Stockholm.
+  @Prop({ default: "17:00" })
+  timeOfDay: string;
+
+  // ISO weekdays to fire on (1=Mon…7=Sun). Default Mon–Fri.
+  @Prop({ type: [Number], default: [1, 2, 3, 4, 5] })
+  weekdays: number[];
+
+  // Only ping workers who have not reported hours for today.
+  @Prop({ type: Boolean, default: true })
+  onlyMissing: boolean;
+
+  // Server-managed: last time this rule fired (dedupes within a day).
+  @Prop({ type: Date, default: null })
+  lastSentAt?: Date | null;
+}
+
+export const HoursReminderRuleSchema =
+  SchemaFactory.createForClass(HoursReminderRule);
+
 @Schema({ timestamps: true })
 export class Company {
   @Prop({ default: "" })
@@ -73,6 +99,10 @@ export class Company {
   // Absent key → inherit the plan default. See company/modules.ts.
   @Prop({ type: Object, default: {} })
   moduleOverrides?: Record<string, boolean>;
+
+  // ---- Hours reminder (daily "log your hours" nudge to workers) ----
+  @Prop({ type: HoursReminderRuleSchema, default: () => ({}) })
+  hoursReminderRule?: HoursReminderRule;
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);
