@@ -297,6 +297,34 @@ export class AuthService {
     return this.generateTokens(admin);
   }
 
+  // Re-issue a fresh verification code for a still-pending sign-up. Always
+  // resolves so we never reveal whether a pending registration exists.
+  async resendRegistrationCode(email: string): Promise<void> {
+    const normalizedEmail = email.trim().toLowerCase();
+    this.assertRegisterAllowed(normalizedEmail);
+    const pending = await this.pendingRegistrationModel
+      .findOne({ email: normalizedEmail })
+      .select("+codeHash")
+      .exec();
+    if (!pending) {
+      return;
+    }
+    const plainCode = String(100000 + (randomBytes(4).readUInt32BE(0) % 900000));
+    pending.codeHash = createHash("sha256").update(plainCode).digest("hex");
+    pending.expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    pending.attempts = 0;
+    await pending.save();
+    try {
+      await this.mailService.sendVerificationCodeEmail(
+        normalizedEmail,
+        pending.userName,
+        plainCode,
+      );
+    } catch (error) {
+      this.logger.error(`Failed to resend verification email: ${String(error)}`);
+    }
+  }
+
   // Email an existing active account a fresh 6-digit sign-in code (app
   // re-login). Always resolves — we never reveal whether the email exists.
   async requestLoginCode(email: string): Promise<void> {

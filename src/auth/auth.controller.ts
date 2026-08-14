@@ -41,6 +41,16 @@ export class AuthController {
     );
   }
 
+  // Re-send the verification code for a pending sign-up. Always 200.
+  @Post("register-company/resend")
+  async resendRegistration(@Body("email") email: string) {
+    if (!email?.trim()) {
+      throw new BadRequestException("Email is required");
+    }
+    await this.authService.resendRegistrationCode(email.trim());
+    return { success: true };
+  }
+
   @Post("register-superadmin")
   registerSuperAdmin(@Body() createUserDto: CreateUserDto) {
     return this.authService.registerSuperAdmin(createUserDto);
