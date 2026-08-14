@@ -349,10 +349,11 @@ export class UsersService {
       actor.role === UserRole.CompanyAdmin ||
       actor.role === UserRole.SuperAdmin
     ) {
-      if (
-        targetUser.role !== UserRole.Worker &&
-        targetUser.role !== UserRole.ProjectAdmin
-      ) {
+      // Company admins may manage/delete anyone in their own company
+      // (workers, project admins and other company admins) — the cross-tenant
+      // platform SuperAdmin is the only role they can never touch. Deleting
+      // self is blocked separately in canDeleteUser.
+      if (targetUser.role === UserRole.SuperAdmin) {
         return false;
       }
       return Boolean(
@@ -390,10 +391,11 @@ export class UsersService {
       actor.role === UserRole.CompanyAdmin ||
       actor.role === UserRole.SuperAdmin
     ) {
-      if (
-        targetUser.role !== UserRole.Worker &&
-        targetUser.role !== UserRole.ProjectAdmin
-      ) {
+      // Company admins may manage/delete anyone in their own company
+      // (workers, project admins and other company admins) — the cross-tenant
+      // platform SuperAdmin is the only role they can never touch. Deleting
+      // self is blocked separately in canDeleteUser.
+      if (targetUser.role === UserRole.SuperAdmin) {
         return false;
       }
       return Boolean(
