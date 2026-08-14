@@ -19,7 +19,7 @@ export class PendingRegistration {
 
   // bcrypt hash of the password — set at step 2 (after email confirmation), so
   // it doesn't exist yet at sign-up. Never stores the plaintext.
-  @Prop({ default: null, select: false })
+  @Prop({ type: String, default: null, select: false })
   passwordHash?: string | null;
 
   // sha256 of the 6-digit verification code.
