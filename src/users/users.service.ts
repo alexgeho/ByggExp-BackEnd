@@ -349,11 +349,14 @@ export class UsersService {
       actor.role === UserRole.CompanyAdmin ||
       actor.role === UserRole.SuperAdmin
     ) {
-      // Company admins may manage/delete anyone in their own company
-      // (workers, project admins and other company admins) — the cross-tenant
-      // platform SuperAdmin is the only role they can never touch. Deleting
-      // self is blocked separately in canDeleteUser.
-      if (targetUser.role === UserRole.SuperAdmin) {
+      // A company admin manages only workers and project admins in its own
+      // company — never another company admin or a superadmin. This keeps the
+      // hierarchy strict: only a superadmin can create/manage company admins,
+      // so admins can't quietly mint peer admins and resell access.
+      if (
+        targetUser.role !== UserRole.Worker &&
+        targetUser.role !== UserRole.ProjectAdmin
+      ) {
         return false;
       }
       return Boolean(
@@ -391,11 +394,14 @@ export class UsersService {
       actor.role === UserRole.CompanyAdmin ||
       actor.role === UserRole.SuperAdmin
     ) {
-      // Company admins may manage/delete anyone in their own company
-      // (workers, project admins and other company admins) — the cross-tenant
-      // platform SuperAdmin is the only role they can never touch. Deleting
-      // self is blocked separately in canDeleteUser.
-      if (targetUser.role === UserRole.SuperAdmin) {
+      // A company admin manages only workers and project admins in its own
+      // company — never another company admin or a superadmin. This keeps the
+      // hierarchy strict: only a superadmin can create/manage company admins,
+      // so admins can't quietly mint peer admins and resell access.
+      if (
+        targetUser.role !== UserRole.Worker &&
+        targetUser.role !== UserRole.ProjectAdmin
+      ) {
         return false;
       }
       return Boolean(
@@ -1339,17 +1345,17 @@ export class UsersService {
       delete cleaned.companyId;
     }
 
-    // Role: superadmin → any; companyAdmin → may set worker/projectAdmin/
-    // companyAdmin for OTHER users in its company (never self, never superadmin);
-    // anyone else (incl. a user editing self) cannot change role at all.
+    // Role: superadmin → any; companyAdmin → may set worker/projectAdmin for
+    // OTHER users in its company (NOT companyAdmin — only a superadmin can mint
+    // company admins — never self, never superadmin); anyone else (incl. a user
+    // editing self) cannot change role at all.
     if ("role" in cleaned) {
       const requested = cleaned.role;
       const companyAdminMayAssign =
         isCompanyAdmin &&
         !editingSelf &&
         (requested === UserRole.Worker ||
-          requested === UserRole.ProjectAdmin ||
-          requested === UserRole.CompanyAdmin);
+          requested === UserRole.ProjectAdmin);
       if (!isSuper && !companyAdminMayAssign) {
         delete cleaned.role;
       }

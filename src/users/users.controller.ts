@@ -126,11 +126,13 @@ export class UsersController {
       createUserDto.role = UserRole.Worker;
     }
 
-    // CompanyAdmin may assign any role within its own company except
-    // SuperAdmin (the cross-tenant platform role).
+    // CompanyAdmin may only create workers and project admins in its own
+    // company — never another company admin (only a superadmin mints company
+    // admins, so admins can't quietly resell access) or a superadmin.
     if (
       req.user.role === UserRole.CompanyAdmin &&
-      createUserDto.role === UserRole.SuperAdmin
+      createUserDto.role !== UserRole.Worker &&
+      createUserDto.role !== UserRole.ProjectAdmin
     ) {
       createUserDto.role = UserRole.Worker;
     }
