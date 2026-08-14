@@ -4,24 +4,39 @@ import {
   IsBoolean,
   IsInt,
   IsOptional,
-  IsString,
-  Matches,
   Max,
   Min,
 } from "class-validator";
 
-// Company-wide recurring "log your hours" rule settings (admin-editable).
+// Company-wide shift-anchored "log your hours" rule settings (admin-editable).
 export class UpdateHoursRuleDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
 
   @IsOptional()
-  @IsString()
-  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
-    message: "timeOfDay must be HH:MM (24h)",
-  })
-  timeOfDay?: string;
+  @IsInt()
+  @Min(0)
+  @Max(720)
+  startDelayMinutes?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(1440)
+  intervalMinutes?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  maxReminders?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  escalateAfterReminders?: number;
 
   @IsOptional()
   @IsArray()
@@ -29,9 +44,5 @@ export class UpdateHoursRuleDto {
   @IsInt({ each: true })
   @Min(1, { each: true })
   @Max(7, { each: true })
-  weekdays?: number[];
-
-  @IsOptional()
-  @IsBoolean()
-  onlyMissing?: boolean;
+  workingWeekdays?: number[];
 }

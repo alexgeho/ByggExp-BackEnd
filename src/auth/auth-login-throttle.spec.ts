@@ -8,6 +8,8 @@ describe("AuthService login throttling", () => {
       { findAllByEmail: async () => [] } as any, // always "invalid credentials"
       {} as any,
       {} as any,
+      {} as any, // mailService
+      { get: () => undefined } as any, // configService
     );
 
   const statusOf = async (fn: () => Promise<unknown>): Promise<number> => {

@@ -216,6 +216,23 @@ export class CompanyService {
     return { company: company.toObject(), admin };
   }
 
+  // Start a self-serve trial: mark the subscription "trialing", set the end
+  // date, and cap seats to the minimum-package size. Called right after a
+  // company self-registers from the app.
+  async startTrialForCompany(
+    companyId: string,
+    opts: { days: number; maxUsers: number },
+  ): Promise<void> {
+    const trialEndsAt = new Date(
+      Date.now() + opts.days * 24 * 60 * 60 * 1000,
+    );
+    await this.companyModel.findByIdAndUpdate(companyId, {
+      subscriptionStatus: "trialing",
+      trialEndsAt,
+      maxUsers: opts.maxUsers,
+    });
+  }
+
   async findAll(): Promise<Company[]> {
     return this.companyModel.find().exec();
   }

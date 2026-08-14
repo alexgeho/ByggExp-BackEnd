@@ -195,6 +195,101 @@ export class MailService {
     });
   }
 
+  // Sent right after a company self-registers from the mobile app. Delivers
+  // both access paths: a 6-digit code to sign in on the app, and a one-click
+  // link into the web admin panel. Also states the trial terms.
+  async sendCompanyWelcomeEmail(opts: {
+    email: string;
+    name: string;
+    companyName: string;
+    appCode: string;
+    adminMagicCode: string;
+    trialDays: number;
+    maxUsers: number;
+  }): Promise<void> {
+    const adminLink = `${this.getApiPublicUrl()}/auth/web-magic?code=${encodeURIComponent(
+      opts.adminMagicCode,
+    )}`;
+    const name = this.escapeHtml(opts.name || "there");
+    const companyName = this.escapeHtml(opts.companyName || "your company");
+    const subject = "Welcome to ByggExp — your trial is ready";
+    const text = [
+      `Hi ${opts.name || "there"},`,
+      "",
+      `Your company ${opts.companyName || ""} is set up on ByggExp and your ${opts.trialDays}-day free trial has started (up to ${opts.maxUsers} users).`,
+      "",
+      `Sign in on the ByggExp mobile app with this code: ${opts.appCode}`,
+      "(the code expires in 15 minutes — you can request a new one from the app).",
+      "",
+      `Open the web admin panel here: ${adminLink}`,
+      "",
+      "Welcome aboard!",
+    ].join("\n");
+    const html = `
+      <p>Hi ${name},</p>
+      <p>Your company <strong>${companyName}</strong> is set up on <strong>ByggExp</strong> and your <strong>${opts.trialDays}-day free trial</strong> has started (up to <strong>${opts.maxUsers} users</strong>).</p>
+      <p><strong>Sign in on the mobile app</strong> with this code:</p>
+      <p style="font-size:28px;font-weight:700;letter-spacing:4px;margin:8px 0;">${this.escapeHtml(opts.appCode)}</p>
+      <p style="color:#5a6b7d;font-size:13px;">The code expires in 15 minutes — you can request a new one from the app.</p>
+      <p><strong>Open the web admin panel:</strong></p>
+      <p><a href="${adminLink}">Sign in to the ByggExp admin panel</a></p>
+      <p>Welcome aboard!</p>
+    `;
+
+    if (!this.transporter) {
+      this.logger.log(
+        `Company welcome for ${opts.email}: appCode=${opts.appCode} | admin=${adminLink}`,
+      );
+      return;
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to: opts.email,
+      subject,
+      text,
+      html,
+    });
+  }
+
+  // A fresh 6-digit sign-in code for app re-login (requested from the app).
+  async sendLoginCodeEmail(
+    email: string,
+    name: string,
+    code: string,
+  ): Promise<void> {
+    const safeName = this.escapeHtml(name || "there");
+    const subject = "Your ByggExp sign-in code";
+    const text = [
+      `Hi ${name || "there"},`,
+      "",
+      `Your ByggExp sign-in code: ${code}`,
+      "It expires in 15 minutes.",
+      "",
+      "If you didn't request this, you can ignore this email.",
+    ].join("\n");
+    const html = `
+      <p>Hi ${safeName},</p>
+      <p>Your ByggExp sign-in code:</p>
+      <p style="font-size:28px;font-weight:700;letter-spacing:4px;margin:8px 0;">${this.escapeHtml(code)}</p>
+      <p style="color:#5a6b7d;font-size:13px;">It expires in 15 minutes.</p>
+      <p style="color:#5a6b7d;font-size:13px;">If you didn't request this, you can ignore this email.</p>
+    `;
+
+    if (!this.transporter) {
+      this.logger.log(`Login code for ${email}: ${code}`);
+      return;
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to: email,
+      subject,
+      text,
+      html,
+    });
+  }
+
   async sendInvoiceEmail(
     to: string,
     opts: {

@@ -5,6 +5,10 @@ import { Project, ProjectSchema } from "../projects/schemas/project.schema";
 import { Shift, ShiftSchema } from "../shifts/schemas/shift.schema";
 import { User, UserSchema } from "../users/schemas/user.schema";
 import { Company, CompanySchema } from "../company/schemas/company.schema";
+import {
+  HoursReminderState,
+  HoursReminderStateSchema,
+} from "./schemas/hours-reminder-state.schema";
 import { HoursRemindersController } from "./hours-reminders.controller";
 import { HoursRemindersService } from "./hours-reminders.service";
 
@@ -16,6 +20,7 @@ import { HoursRemindersService } from "./hours-reminders.service";
       { name: Shift.name, schema: ShiftSchema },
       { name: User.name, schema: UserSchema },
       { name: Company.name, schema: CompanySchema },
+      { name: HoursReminderState.name, schema: HoursReminderStateSchema },
     ]),
   ],
   controllers: [HoursRemindersController],

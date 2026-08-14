@@ -18,6 +18,8 @@ import { JwtPayload } from "./interfaces/jwt-payload.interface";
 import { UserAccountStatus, UserRole } from "../users/schemas/user.schema";
 import { getEffectivePermissions } from "../common/permissions/permissions.constants";
 import { UserActivityLogLevel } from "../users/schemas/user-activity-log.schema";
+import { ConfigService } from "@nestjs/config";
+import { MailService } from "../mail/mail.service";
 
 @Injectable()
 export class AuthService {
@@ -27,6 +29,8 @@ export class AuthService {
     private usersService: UsersService,
     private companyService: CompanyService,
     private jwtService: JwtService,
+    private mailService: MailService,
+    private configService: ConfigService,
   ) {}
 
   // In-memory brute-force protection for password login, keyed by email so it
@@ -138,9 +142,88 @@ export class AuthService {
       adminPassword,
     };
 
-    const { admin } =
+    const { company, admin } =
       await this.companyService.registerCompanyWithAdmin(fullDto);
+
+    // Self-serve trial: 14 days, minimum package = 10 seats.
+    const TRIAL_DAYS = 14;
+    const MAX_USERS = 10;
+    const companyId =
+      (company as { _id?: { toString(): string } })?._id?.toString?.() ??
+      admin.companyId;
+    try {
+      await this.companyService.startTrialForCompany(companyId, {
+        days: TRIAL_DAYS,
+        maxUsers: MAX_USERS,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to start trial for company ${companyId}: ${String(error)}`,
+      );
+    }
+
+    // Email the new admin: a 6-digit code to sign in on the mobile app, plus a
+    // one-click link into the web admin panel. Best-effort — a mail failure
+    // must not fail the registration (the client is already signed in below).
+    try {
+      const adminId = admin._id ? admin._id.toString() : admin.id;
+      const appCode = await this.usersService.createShortLoginCode(adminId);
+      const adminMagicCode =
+        await this.usersService.createMagicLoginCode(adminId);
+      await this.mailService.sendCompanyWelcomeEmail({
+        email: admin.email,
+        name: admin.name,
+        companyName: fullDto.name,
+        appCode,
+        adminMagicCode,
+        trialDays: TRIAL_DAYS,
+        maxUsers: MAX_USERS,
+      });
+    } catch (error) {
+      this.logger.error(`Failed to send welcome email: ${String(error)}`);
+    }
+
     return this.generateTokens(admin);
+  }
+
+  // Email an existing active account a fresh 6-digit sign-in code (app
+  // re-login). Always resolves — we never reveal whether the email exists.
+  async requestLoginCode(email: string): Promise<void> {
+    const result = await this.usersService.issueShortLoginCodeForEmail(email);
+    if (result) {
+      try {
+        await this.mailService.sendLoginCodeEmail(
+          result.user.email,
+          result.user.name,
+          result.code,
+        );
+      } catch (error) {
+        this.logger.error(`Failed to send login code: ${String(error)}`);
+      }
+    }
+  }
+
+  // Exchange an emailed 6-digit code for a session (mobile app sign-in).
+  async codeLogin(email: string, code: string) {
+    const user = await this.usersService.consumeShortLoginCode(email, code);
+    return this.generateTokens(user);
+  }
+
+  // Consume a (long) magic code and build the web admin-panel callback URL with
+  // freshly minted tokens in the hash, so the emailed admin link is one-click.
+  async webMagicRedirectUrl(code: string): Promise<string> {
+    const tokens = await this.magicLogin(code);
+    const adminUrl = (
+      this.configService.get<string>("ADMIN_APP_URL") ||
+      this.configService.get<string>("WEB_APP_URL") ||
+      "https://admin.byggexp.se"
+    ).replace(/\/$/, "");
+    const params = new URLSearchParams({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      user: JSON.stringify(tokens.user),
+    });
+    return `${adminUrl}/auth/callback#${params.toString()}`;
   }
 
   // Register the SuperAdmin (first-time only)

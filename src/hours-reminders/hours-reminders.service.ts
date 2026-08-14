@@ -10,14 +10,20 @@ import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { cronsDisabled } from "../common/cron.util";
 import { NotificationsService } from "../notifications/notifications.service";
+import { getScheduledShiftDeadline } from "../shifts/shift-schedule.util";
 import { Project, ProjectDocument } from "../projects/schemas/project.schema";
 import { Shift, ShiftDocument } from "../shifts/schemas/shift.schema";
-import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
+import { UserRole } from "../users/schemas/user.schema";
 import {
   Company,
   CompanyDocument,
   HoursReminderRule,
 } from "../company/schemas/company.schema";
+import {
+  HoursReminderState,
+  HoursReminderStateDocument,
+  HoursReminderStatus,
+} from "./schemas/hours-reminder-state.schema";
 
 const TZ = "Europe/Stockholm";
 
@@ -38,10 +44,11 @@ export type NudgeResult = {
 
 const DEFAULT_RULE: HoursReminderRule = {
   enabled: false,
-  timeOfDay: "17:00",
-  weekdays: [1, 2, 3, 4, 5],
-  onlyMissing: true,
-  lastSentAt: null,
+  startDelayMinutes: 15,
+  intervalMinutes: 15,
+  maxReminders: 0,
+  escalateAfterReminders: 3,
+  workingWeekdays: [1, 2, 3, 4, 5],
 };
 
 @Injectable()
@@ -54,10 +61,10 @@ export class HoursRemindersService {
     private readonly projectModel: Model<ProjectDocument>,
     @InjectModel(Shift.name)
     private readonly shiftModel: Model<ShiftDocument>,
-    @InjectModel(User.name)
-    private readonly userModel: Model<UserDocument>,
     @InjectModel(Company.name)
     private readonly companyModel: Model<CompanyDocument>,
+    @InjectModel(HoursReminderState.name)
+    private readonly stateModel: Model<HoursReminderStateDocument>,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -70,23 +77,21 @@ export class HoursRemindersService {
     return `${year}-${month}-${day}`;
   }
 
-  // Local (Stockholm) hour, YYYY-MM-DD day key and ISO weekday (1=Mon…7=Sun).
-  private localParts(now: Date) {
-    const hour = Number(
-      now.toLocaleString("en-GB", {
-        timeZone: TZ,
-        hour: "2-digit",
-        hour12: false,
-      }),
-    );
+  // ISO weekday (1=Mon…7=Sun) in the reminder timezone.
+  private weekdayOf(now: Date): number {
     const dayKey = now.toLocaleDateString("en-CA", { timeZone: TZ });
     const dow = new Date(`${dayKey}T00:00:00Z`).getUTCDay(); // 0=Sun
-    const weekday = ((dow + 6) % 7) + 1; // 1=Mon…7=Sun
-    return { hour, dayKey, weekday };
+    return ((dow + 6) % 7) + 1;
   }
 
-  // Drop workers who already reported hours for today (a shift for today with
-  // worker-entered manual hours), then push to the rest.
+  private normalizeRule(
+    rule?: Partial<HoursReminderRule> | null,
+  ): HoursReminderRule {
+    return { ...DEFAULT_RULE, ...(rule || {}) };
+  }
+
+  // ---- One-off nudge (admin buttons on the project Team tab) ----
+
   private async remind(
     targetIds: string[],
     opts: {
@@ -139,7 +144,6 @@ export class HoursRemindersService {
         : "Please report how many hours you worked today.",
       data: {
         type: "hours_reminder",
-        // Deep-link into the app's shift/hours screen for today.
         screen: "Shifts",
         date: today,
         ...(opts.projectId ? { projectId: opts.projectId } : {}),
@@ -196,13 +200,9 @@ export class HoursRemindersService {
     });
   }
 
-  // ---- Recurring rule (company-wide daily nudge) ----
+  // ---- Rule config (company-wide, shift-anchored) ----
 
-  private normalizeRule(rule?: Partial<HoursReminderRule> | null) {
-    return { ...DEFAULT_RULE, ...(rule || {}) };
-  }
-
-  async getRule(companyId?: string) {
+  async getRule(companyId?: string): Promise<HoursReminderRule> {
     if (!companyId) {
       throw new BadRequestException("No company in context");
     }
@@ -225,12 +225,7 @@ export class HoursRemindersService {
       throw new BadRequestException("No company in context");
     }
     const current = await this.getRule(companyId);
-    // lastSentAt stays server-managed and is never taken from the client.
-    const next = this.normalizeRule({
-      ...current,
-      ...patch,
-      lastSentAt: current.lastSentAt,
-    });
+    const next = this.normalizeRule({ ...current, ...patch });
 
     await this.companyModel
       .updateOne({ _id: companyId }, { $set: { hoursReminderRule: next } })
@@ -239,39 +234,25 @@ export class HoursRemindersService {
     return next;
   }
 
-  private isRuleDue(rule: HoursReminderRule, now: Date): boolean {
-    if (!rule.enabled) {
-      return false;
-    }
-    const { hour, dayKey, weekday } = this.localParts(now);
-    if (!rule.weekdays?.includes(weekday)) {
-      return false;
-    }
-    if (hour !== Number(String(rule.timeOfDay).slice(0, 2))) {
-      return false;
-    }
-    // Fire at most once per local day.
-    const last = rule.lastSentAt ? new Date(rule.lastSentAt) : null;
-    const lastDay = last
-      ? last.toLocaleDateString("en-CA", { timeZone: TZ })
-      : null;
-    return lastDay !== dayKey;
-  }
+  // ---- Shift-anchored cron ----
 
-  private async nudgeCompanyWorkers(
-    companyId: string,
-    onlyMissing: boolean,
-  ): Promise<NudgeResult> {
-    const workers = await this.userModel
-      .find({ role: UserRole.Worker, companyId })
-      .select("_id")
-      .lean()
+  private async hasReportedHours(
+    workerId: string,
+    projectId: string,
+    date: string,
+  ): Promise<boolean> {
+    const shift = await this.shiftModel
+      .exists({
+        workerId,
+        projectId,
+        shiftDate: date,
+        manualDurationMs: { $ne: null },
+      })
       .exec();
-    const workerIds = workers.map((worker) => String(worker._id));
-    return this.remind(workerIds, { onlyMissing });
+    return Boolean(shift);
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async processHoursReminders(): Promise<void> {
     if (cronsDisabled() || this.isRunning) {
       return;
@@ -279,44 +260,223 @@ export class HoursRemindersService {
     this.isRunning = true;
     try {
       const now = new Date();
+      const today = this.getDateKey(now);
+      const weekday = this.weekdayOf(now);
+
+      // Close states left over from previous days that never resolved.
+      await this.stateModel
+        .updateMany(
+          { status: HoursReminderStatus.Active, date: { $lt: today } },
+          { $set: { status: HoursReminderStatus.Stopped } },
+        )
+        .exec();
+
       const companies = await this.companyModel
         .find({ "hoursReminderRule.enabled": true })
         .select("_id hoursReminderRule")
+        .lean<Array<{ _id: unknown; hoursReminderRule?: HoursReminderRule }>>()
         .exec();
 
+      const ruleByCompany = new Map<string, HoursReminderRule>();
       for (const company of companies) {
-        const rule = this.normalizeRule(company.hoursReminderRule);
-        if (!this.isRuleDue(rule, now)) {
-          continue;
-        }
-
-        try {
-          const result = await this.nudgeCompanyWorkers(
-            String(company._id),
-            rule.onlyMissing,
-          );
-          this.logger.log(
-            `Hours reminder rule fired for company ${String(company._id)}: reminded=${result.reminded} sent=${result.sent}`,
-          );
-        } catch (error) {
-          this.logger.error(
-            `Hours reminder rule failed for company ${String(company._id)}`,
-            error,
-          );
-        }
-
-        // Stamp regardless so the cadence advances even on an all-clear tick.
-        await this.companyModel
-          .updateOne(
-            { _id: company._id },
-            { $set: { "hoursReminderRule.lastSentAt": now } },
-          )
-          .exec();
+        ruleByCompany.set(
+          String(company._id),
+          this.normalizeRule(company.hoursReminderRule),
+        );
       }
+
+      await this.seedDueStates(companies, ruleByCompany, now, today, weekday);
+      await this.fireDueStates(ruleByCompany, now, today);
     } catch (error) {
       this.logger.error("Failed to process hours reminders", error);
     } finally {
       this.isRunning = false;
+    }
+  }
+
+  // Create a reminder state per worker who owes hours once the scheduled shift
+  // end (+ start delay) has passed for a project today.
+  private async seedDueStates(
+    companies: Array<{ _id: unknown }>,
+    ruleByCompany: Map<string, HoursReminderRule>,
+    now: Date,
+    today: string,
+    weekday: number,
+  ): Promise<void> {
+    for (const company of companies) {
+      const companyId = String(company._id);
+      const rule = ruleByCompany.get(companyId);
+      if (!rule || !rule.workingWeekdays?.includes(weekday)) {
+        continue;
+      }
+
+      const projects = await this.projectModel
+        .find({ companyId, "shiftSchedule.enabled": true })
+        .select("_id workers shiftSchedule")
+        .lean<
+          Array<{ _id: unknown; workers?: string[]; shiftSchedule?: unknown }>
+        >()
+        .exec();
+
+      for (const project of projects) {
+        const projectId = String(project._id);
+        const deadline = getScheduledShiftDeadline(
+          project.shiftSchedule as never,
+          today,
+        );
+        if (!deadline) {
+          continue;
+        }
+        const startAt = deadline.getTime() + rule.startDelayMinutes * 60_000;
+        if (now.getTime() < startAt) {
+          continue;
+        }
+
+        const workerIds = (project.workers || []).map((id) => String(id));
+        if (!workerIds.length) {
+          continue;
+        }
+
+        const loggedShifts = await this.shiftModel
+          .find({
+            workerId: { $in: workerIds },
+            projectId,
+            shiftDate: today,
+            manualDurationMs: { $ne: null },
+          })
+          .select("workerId")
+          .lean()
+          .exec();
+        const loggedSet = new Set(
+          loggedShifts.map((shift) => String(shift.workerId)),
+        );
+
+        const existing = await this.stateModel
+          .find({ projectId, date: today })
+          .select("workerId")
+          .lean()
+          .exec();
+        const existingSet = new Set(
+          existing.map((state) => String(state.workerId)),
+        );
+
+        const toSeed = workerIds.filter(
+          (id) => !loggedSet.has(id) && !existingSet.has(id),
+        );
+        if (!toSeed.length) {
+          continue;
+        }
+
+        await this.stateModel
+          .insertMany(
+            toSeed.map((workerId) => ({
+              companyId,
+              projectId,
+              workerId,
+              date: today,
+              remindersSent: 0,
+              nextRunAt: now,
+              status: HoursReminderStatus.Active,
+            })),
+            { ordered: false },
+          )
+          .catch(() => {
+            // Ignore duplicate-key races from overlapping ticks.
+          });
+      }
+    }
+  }
+
+  private async fireDueStates(
+    ruleByCompany: Map<string, HoursReminderRule>,
+    now: Date,
+    today: string,
+  ): Promise<void> {
+    const due = await this.stateModel
+      .find({
+        status: HoursReminderStatus.Active,
+        date: today,
+        nextRunAt: { $lte: now },
+      })
+      .exec();
+
+    for (const state of due) {
+      const rule = ruleByCompany.get(String(state.companyId));
+      if (!rule || !rule.enabled) {
+        state.status = HoursReminderStatus.Stopped;
+        await state.save();
+        continue;
+      }
+
+      if (
+        await this.hasReportedHours(
+          String(state.workerId),
+          String(state.projectId),
+          today,
+        )
+      ) {
+        state.status = HoursReminderStatus.Done;
+        await state.save();
+        continue;
+      }
+
+      const project = await this.projectModel
+        .findById(state.projectId)
+        .select("name ownerId projectManagerId")
+        .lean<{
+          name?: string;
+          ownerId?: string;
+          projectManagerId?: string;
+        }>()
+        .exec();
+
+      await this.notificationsService.sendToUsers([String(state.workerId)], {
+        title: "Log your hours",
+        body: project?.name
+          ? `Please report how many hours you worked today on ${project.name}.`
+          : "Please report how many hours you worked today.",
+        data: {
+          type: "hours_reminder",
+          screen: "Shifts",
+          date: today,
+          projectId: String(state.projectId),
+        },
+      });
+
+      state.remindersSent += 1;
+      state.lastSentAt = now;
+      state.nextRunAt = new Date(now.getTime() + rule.intervalMinutes * 60_000);
+
+      if (
+        rule.escalateAfterReminders > 0 &&
+        state.remindersSent >= rule.escalateAfterReminders &&
+        !state.escalatedAt
+      ) {
+        const bosses = [project?.projectManagerId, project?.ownerId]
+          .filter(Boolean)
+          .map((id) => String(id));
+        if (bosses.length) {
+          await this.notificationsService.sendToUsers(bosses, {
+            title: "Hours not reported",
+            body: project?.name
+              ? `A worker still hasn't reported hours today on ${project.name}.`
+              : "A worker still hasn't reported hours today.",
+            data: {
+              type: "hours_reminder_escalation",
+              screen: "Shifts",
+              date: today,
+              projectId: String(state.projectId),
+            },
+          });
+        }
+        state.escalatedAt = now;
+      }
+
+      if (rule.maxReminders > 0 && state.remindersSent >= rule.maxReminders) {
+        state.status = HoursReminderStatus.Stopped;
+      }
+
+      await state.save();
     }
   }
 }

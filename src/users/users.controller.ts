@@ -141,6 +141,14 @@ export class UsersController {
       createUserDto.companyId = req.user.companyId;
     }
 
+    // Enforce the plan/trial seat limit (e.g. 10 on the minimum package).
+    // SuperAdmin (cross-tenant platform role) is exempt.
+    if (req.user.role !== UserRole.SuperAdmin) {
+      await this.usersService.assertCompanySeatAvailable(
+        createUserDto.companyId ?? null,
+      );
+    }
+
     const role = createUserDto.role ?? UserRole.Worker;
 
     // A duplicate email otherwise surfaces as a raw Mongo E11000 → 500. Check

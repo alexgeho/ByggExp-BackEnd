@@ -727,6 +727,87 @@ export class UsersService {
     return user.save();
   }
 
+  // --- Short numeric login code: the "enter the code from your email" flow the
+  // mobile app uses so a user who registered without a password can sign in. ---
+  async createShortLoginCode(userId: string): Promise<string> {
+    // 6 digits, crypto-random and uniform over [100000, 999999].
+    const plainCode = String(100000 + (randomBytes(4).readUInt32BE(0) % 900000));
+    const hashedCode = this.hashVerificationToken(plainCode);
+    await this.userModel.findByIdAndUpdate(userId, {
+      shortLoginCode: hashedCode,
+      shortLoginExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+    });
+    return plainCode;
+  }
+
+  // Issue a fresh code for an existing active account (re-login). Returns null
+  // when no matching account exists, so callers can respond identically and not
+  // leak which emails are registered.
+  async issueShortLoginCodeForEmail(
+    email: string,
+  ): Promise<{ user: UserDocument; code: string } | null> {
+    const normalizedEmail = email?.trim().toLowerCase() || "";
+    const user = await this.userModel
+      .findOne({
+        email: normalizedEmail,
+        accountStatus: UserAccountStatus.Active,
+      })
+      .exec();
+    if (!user) {
+      return null;
+    }
+    const code = await this.createShortLoginCode(user._id.toString());
+    return { user, code };
+  }
+
+  async consumeShortLoginCode(
+    email: string,
+    code: string,
+  ): Promise<UserDocument> {
+    const normalizedEmail = email?.trim().toLowerCase() || "";
+    const hashedCode = this.hashVerificationToken(String(code || "").trim());
+    const user = await this.userModel
+      .findOne({
+        email: normalizedEmail,
+        shortLoginCode: hashedCode,
+        shortLoginExpiresAt: { $gt: new Date() },
+        accountStatus: UserAccountStatus.Active,
+      })
+      .select("+shortLoginCode +shortLoginExpiresAt")
+      .exec();
+
+    if (!user) {
+      throw new BadRequestException("Invalid or expired code");
+    }
+
+    user.shortLoginCode = null;
+    user.shortLoginExpiresAt = null;
+
+    return user.save();
+  }
+
+  // Enforce the company's seat limit (plan/trial). No-op when the company has
+  // no maxUsers set (unlimited). Counts the users already in the tenant.
+  async assertCompanySeatAvailable(companyId: string | null): Promise<void> {
+    if (!companyId) {
+      return;
+    }
+    const company = await this.companyModel
+      .findById(companyId)
+      .select("maxUsers")
+      .exec();
+    const max = company?.maxUsers;
+    if (max == null) {
+      return;
+    }
+    const count = await this.userModel.countDocuments({ companyId });
+    if (count >= max) {
+      throw new ForbiddenException(
+        `Your plan is limited to ${max} users. Upgrade to add more.`,
+      );
+    }
+  }
+
   async findAll(): Promise<User[]> {
     return this.userModel.find().exec();
   }

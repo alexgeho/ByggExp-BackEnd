@@ -241,6 +241,13 @@ export class User {
   @Prop({ type: Date, default: null, select: false })
   magicLoginExpiresAt?: Date | null;
 
+  // Short 6-digit "enter the code from your email" sign-in code (mobile app).
+  @Prop({ type: String, default: null, select: false })
+  shortLoginCode?: string | null;
+
+  @Prop({ type: Date, default: null, select: false })
+  shortLoginExpiresAt?: Date | null;
+
   @Prop({ type: String, ref: "Company", default: null })
   companyId: string | null;
 
