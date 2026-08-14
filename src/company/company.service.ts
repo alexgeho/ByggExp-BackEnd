@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   GoneException,
   Injectable,
   Logger,
@@ -405,6 +406,23 @@ export class CompanyService {
     }
     const companyId = String(id);
 
+    // 0) GUARD: never let a company deletion take out a superadmin. Superadmins
+    //    are the platform's top-level access; a mistaken company delete must not
+    //    be able to wipe the last superadmin and lock everyone out.
+    const userModelGuard = this.connection.models["User"];
+    if (userModelGuard) {
+      const hostedSuperadmin = await userModelGuard
+        .findOne({ companyId, role: UserRole.SuperAdmin })
+        .select("_id")
+        .lean()
+        .exec();
+      if (hostedSuperadmin) {
+        throw new ForbiddenException(
+          "This company hosts a superadmin account and cannot be deleted.",
+        );
+      }
+    }
+
     // 1) Collect this company's project ids BEFORE deleting projects, so we can
     //    cascade the records that are scoped by projectId (not companyId).
     const projectModel = this.connection.models["Project"];
@@ -434,7 +452,13 @@ export class CompanyService {
     for (const model of Object.values(this.connection.models)) {
       if (model.modelName === Company.name) continue;
       if (model.schema.path("companyId")) {
-        await model.deleteMany({ companyId });
+        // Belt-and-suspenders: even if the guard above is ever bypassed, never
+        // cascade-delete a superadmin user.
+        const filter =
+          model.modelName === "User"
+            ? { companyId, role: { $ne: UserRole.SuperAdmin } }
+            : { companyId };
+        await model.deleteMany(filter);
       }
     }
 
