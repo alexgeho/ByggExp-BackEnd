@@ -116,13 +116,9 @@ export class HoursRemindersService {
     let remindIds = uniqueTargets;
 
     if (opts.onlyMissing) {
+      // "Missing" = no shift at all today (GPS or manual) — skip GPS reporters.
       const loggedShifts = await this.shiftModel
-        .find({
-          workerId: { $in: uniqueTargets },
-          shiftDate: today,
-          manualDurationMs: { $ne: null },
-          ...(opts.projectId ? { projectId: opts.projectId } : {}),
-        })
+        .find({ workerId: { $in: uniqueTargets }, shiftDate: today })
         .select("workerId")
         .lean()
         .exec();
@@ -236,18 +232,15 @@ export class HoursRemindersService {
 
   // ---- Shift-anchored cron ----
 
+  // A worker has "reported" for the day if ANY shift exists for them that day —
+  // whether GPS-tracked (clock-in) or a manual entry. So GPS reporters are never
+  // nagged, and a manual submit stops the reminder on the next tick.
   private async hasReportedHours(
     workerId: string,
-    projectId: string,
     date: string,
   ): Promise<boolean> {
     const shift = await this.shiftModel
-      .exists({
-        workerId,
-        projectId,
-        shiftDate: date,
-        manualDurationMs: { $ne: null },
-      })
+      .exists({ workerId, shiftDate: date })
       .exec();
     return Boolean(shift);
   }
@@ -337,13 +330,10 @@ export class HoursRemindersService {
           continue;
         }
 
+        // Any shift today (GPS clock-in OR manual entry, any project) means the
+        // worker is already reporting — don't seed a reminder for them.
         const loggedShifts = await this.shiftModel
-          .find({
-            workerId: { $in: workerIds },
-            projectId,
-            shiftDate: today,
-            manualDurationMs: { $ne: null },
-          })
+          .find({ workerId: { $in: workerIds }, shiftDate: today })
           .select("workerId")
           .lean()
           .exec();
@@ -408,13 +398,7 @@ export class HoursRemindersService {
         continue;
       }
 
-      if (
-        await this.hasReportedHours(
-          String(state.workerId),
-          String(state.projectId),
-          today,
-        )
-      ) {
+      if (await this.hasReportedHours(String(state.workerId), today)) {
         state.status = HoursReminderStatus.Done;
         await state.save();
         continue;
