@@ -248,6 +248,14 @@ export class User {
   @Prop({ type: Date, default: null, select: false })
   shortLoginExpiresAt?: Date | null;
 
+  // Password-reset link token (sha256 hash). Set when the user requests a reset
+  // and cleared once they choose a new password. Short-lived (see auth.service).
+  @Prop({ type: String, default: null, select: false })
+  passwordResetToken?: string | null;
+
+  @Prop({ type: Date, default: null, select: false })
+  passwordResetExpiresAt?: Date | null;
+
   @Prop({ type: String, ref: "Company", default: null })
   companyId: string | null;
 

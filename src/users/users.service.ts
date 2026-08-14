@@ -794,6 +794,67 @@ export class UsersService {
     return user.save();
   }
 
+  // Issue a password-reset token for EVERY active account sharing this email
+  // (one email can back several company accounts — see findAllByEmail). The same
+  // token unlocks all of them, so whichever one they had, the new password works.
+  // Returns the plain token + a representative user (for the email), or null.
+  async issuePasswordResetForEmail(
+    email: string,
+  ): Promise<{ user: UserDocument; token: string } | null> {
+    const normalizedEmail = email?.trim().toLowerCase() || "";
+    const users = await this.userModel
+      .find({
+        email: normalizedEmail,
+        accountStatus: UserAccountStatus.Active,
+      })
+      .exec();
+    if (!users.length) {
+      return null;
+    }
+    const plainToken = randomBytes(32).toString("hex");
+    const hashedToken = this.hashVerificationToken(plainToken);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await this.userModel.updateMany(
+      { email: normalizedEmail, accountStatus: UserAccountStatus.Active },
+      { passwordResetToken: hashedToken, passwordResetExpiresAt: expiresAt },
+    );
+    return { user: users[0], token: plainToken };
+  }
+
+  // How many active accounts a reset token currently unlocks (0 = invalid/expired).
+  async countPasswordResetToken(token: string): Promise<number> {
+    const hashedToken = this.hashVerificationToken(String(token || "").trim());
+    return this.userModel
+      .countDocuments({
+        passwordResetToken: hashedToken,
+        passwordResetExpiresAt: { $gt: new Date() },
+        accountStatus: UserAccountStatus.Active,
+      })
+      .exec();
+  }
+
+  // Set an already-hashed password on every active account the reset token
+  // unlocks, then clear the token. Returns the number of accounts updated.
+  async applyPasswordReset(
+    token: string,
+    hashedPassword: string,
+  ): Promise<number> {
+    const hashedToken = this.hashVerificationToken(String(token || "").trim());
+    const result = await this.userModel.updateMany(
+      {
+        passwordResetToken: hashedToken,
+        passwordResetExpiresAt: { $gt: new Date() },
+        accountStatus: UserAccountStatus.Active,
+      },
+      {
+        password: hashedPassword,
+        passwordResetToken: null,
+        passwordResetExpiresAt: null,
+      },
+    );
+    return result.modifiedCount ?? 0;
+  }
+
   // Enforce the company's seat limit (plan/trial). No-op when the company has
   // no maxUsers set (unlimited). Counts the users already in the tenant.
   async assertCompanySeatAvailable(companyId: string | null): Promise<void> {

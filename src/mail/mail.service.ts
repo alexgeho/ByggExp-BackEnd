@@ -283,6 +283,46 @@ export class MailService {
     });
   }
 
+  // A "reset your password" link. Opens a web page where the user picks a new
+  // password (works for both the admin panel and the app — they then sign in
+  // with email + the new password).
+  async sendPasswordResetEmail(
+    email: string,
+    name: string,
+    token: string,
+  ): Promise<void> {
+    const resetUrl = `${this.getApiPublicUrl()}/auth/reset-password?token=${encodeURIComponent(token)}`;
+    const safeName = this.escapeHtml(name || "there");
+    const subject = "Reset your ByggExp password";
+    const text = [
+      `Hi ${name || "there"},`,
+      "",
+      "We received a request to reset your ByggExp password. Open the link below to choose a new one:",
+      resetUrl,
+      "",
+      "This link expires in 1 hour. If you didn't request this, you can ignore this email — your password stays the same.",
+    ].join("\n");
+    const html = `
+      <p>Hi ${safeName},</p>
+      <p>We received a request to reset your ByggExp password. Click below to choose a new one:</p>
+      <p><a href="${resetUrl}">Reset my password</a></p>
+      <p style="color:#5a6b7d;font-size:13px;">This link expires in 1 hour. If you didn't request this, you can ignore this email — your password stays the same.</p>
+    `;
+
+    if (!this.transporter) {
+      this.logger.log(`Password reset for ${email}: ${resetUrl}`);
+      return;
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to: email,
+      subject,
+      text,
+      html,
+    });
+  }
+
   // A fresh 6-digit sign-in code for app re-login (requested from the app).
   async sendLoginCodeEmail(
     email: string,

@@ -381,6 +381,61 @@ export class AuthService {
     return `${adminUrl}/auth/callback#${params.toString()}`;
   }
 
+  // "Forgot password" step 1: email a reset link. Always resolves (and never
+  // reveals whether the email is registered) so it can't be used to probe for
+  // accounts. Rate-limited per email like sign-up.
+  async requestPasswordReset(email: string): Promise<void> {
+    const normalizedEmail = email?.trim().toLowerCase() || "";
+    if (!normalizedEmail) {
+      return;
+    }
+    this.assertRegisterAllowed(`reset:${normalizedEmail}`);
+    const result =
+      await this.usersService.issuePasswordResetForEmail(normalizedEmail);
+    if (result) {
+      try {
+        await this.mailService.sendPasswordResetEmail(
+          result.user.email,
+          result.user.name,
+          result.token,
+        );
+      } catch (error) {
+        this.logger.error(`Failed to send password reset: ${String(error)}`);
+      }
+    }
+  }
+
+  // Validate a reset token so the controller can show the "choose a new
+  // password" page. Throws if it's invalid or expired.
+  async assertPasswordResetTokenValid(token: string): Promise<void> {
+    const count = await this.usersService.countPasswordResetToken(token);
+    if (count < 1) {
+      throw new BadRequestException(
+        "This password reset link is invalid or has expired. Please request a new one.",
+      );
+    }
+  }
+
+  // "Forgot password" step 2: the user submitted a new password on the reset
+  // page. Hash it and apply it to every account the token unlocks.
+  async resetPassword(token: string, password: string): Promise<void> {
+    if (!password || password.length < 6) {
+      throw new BadRequestException(
+        "Password must be at least 6 characters long.",
+      );
+    }
+    const hashedPassword = await this.hashPassword(password);
+    const updated = await this.usersService.applyPasswordReset(
+      token,
+      hashedPassword,
+    );
+    if (updated < 1) {
+      throw new BadRequestException(
+        "This password reset link is invalid or has expired. Please request a new one.",
+      );
+    }
+  }
+
   // Register the SuperAdmin (first-time only)
   async registerSuperAdmin(createUserDto: CreateUserDto) {
     const { email, password, ...userData } = createUserDto;
