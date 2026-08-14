@@ -175,9 +175,10 @@ export class AuthService {
       );
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
-    // A long token that goes into the emailed confirmation link (not a code the
-    // user types). We store only its hash.
+    // No password yet — the user sets it on the page opened from the emailed
+    // link (step 2). We only store a hashed link token here.
+    const companyName = dto.companyName.trim();
+    const userName = (dto.userName || dto.companyName).trim();
     const plainToken = randomBytes(32).toString("hex");
     const codeHash = createHash("sha256").update(plainToken).digest("hex");
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -186,9 +187,9 @@ export class AuthService {
       { email },
       {
         email,
-        companyName: dto.companyName.trim(),
-        userName: dto.userName.trim(),
-        passwordHash,
+        companyName,
+        userName,
+        passwordHash: null,
         codeHash,
         expiresAt,
         attempts: 0,
@@ -199,7 +200,7 @@ export class AuthService {
     try {
       await this.mailService.sendCompanyVerificationEmail(
         email,
-        dto.userName.trim(),
+        userName,
         plainToken,
       );
     } catch (error) {
@@ -209,18 +210,40 @@ export class AuthService {
     return { pendingVerification: true, email };
   }
 
-  // Step 2 of sign-up: the user clicked the emailed link. Look the pending
-  // registration up by its token, create the company + admin (with the chosen
-  // password), and mint a magic code so the app can sign them in via deep link.
-  async confirmCompanyRegistration(
-    token: string,
-  ): Promise<{ magicLoginCode: string }> {
-    const tokenHash = createHash("sha256")
+  private hashToken(token: string): string {
+    return createHash("sha256")
       .update(String(token || "").trim())
       .digest("hex");
+  }
+
+  // Step 2a: the user clicked the link. Validate the token so the controller
+  // can show the "choose a password" page. Returns the pending record.
+  async getPendingByToken(token: string) {
     const pending = await this.pendingRegistrationModel
-      .findOne({ codeHash: tokenHash })
-      .select("+passwordHash +codeHash")
+      .findOne({ codeHash: this.hashToken(token) })
+      .exec();
+    if (!pending || pending.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException(
+        "This confirmation link is invalid or has expired. Please sign up again.",
+      );
+    }
+    return pending;
+  }
+
+  // Step 2b: the user submitted a password on the confirmation page. Create the
+  // company + admin with that password and mint a magic code so the app can
+  // sign them in via the deep link.
+  async completeRegistration(
+    token: string,
+    password: string,
+  ): Promise<{ magicLoginCode: string }> {
+    if (!password || password.length < 6) {
+      throw new BadRequestException(
+        "Password must be at least 6 characters.",
+      );
+    }
+    const pending = await this.pendingRegistrationModel
+      .findOne({ codeHash: this.hashToken(token) })
       .exec();
 
     if (!pending || pending.expiresAt.getTime() < Date.now()) {
@@ -242,10 +265,9 @@ export class AuthService {
       name: pending.companyName,
       address: "—",
       email: pending.email,
-      adminName: pending.userName,
+      adminName: pending.userName || pending.companyName,
       adminEmail: pending.email,
-      adminPassword: pending.passwordHash,
-      adminPasswordIsHashed: true,
+      adminPassword: password,
     };
 
     const { company, admin } =

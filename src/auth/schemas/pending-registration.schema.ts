@@ -14,12 +14,13 @@ export class PendingRegistration {
   @Prop({ required: true })
   companyName: string;
 
-  @Prop({ required: true })
+  @Prop({ default: "" })
   userName: string;
 
-  // bcrypt hash of the password the user chose — we never store the plaintext.
-  @Prop({ required: true, select: false })
-  passwordHash: string;
+  // bcrypt hash of the password — set at step 2 (after email confirmation), so
+  // it doesn't exist yet at sign-up. Never stores the plaintext.
+  @Prop({ default: null, select: false })
+  passwordHash?: string | null;
 
   // sha256 of the 6-digit verification code.
   @Prop({ required: true, select: false })
