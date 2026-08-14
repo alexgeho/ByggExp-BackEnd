@@ -47,6 +47,7 @@ describe("AuthService login across companies (email unique per company)", () => 
       { sign: () => "token" } as any,
       {} as any, // mailService
       { get: () => undefined } as any, // configService
+      {} as any, // pendingRegistrationModel
     );
 
   it("logs into the company whose password matches", async () => {

@@ -1,4 +1,10 @@
-import { IsString, IsEmail, IsNotEmpty, IsOptional } from "class-validator";
+import {
+  IsString,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsBoolean,
+} from "class-validator";
 
 export class RegisterCompanyWithAdminDto {
   @IsString()
@@ -24,6 +30,12 @@ export class RegisterCompanyWithAdminDto {
   @IsString()
   @IsNotEmpty()
   adminPassword: string;
+
+  // When true, adminPassword is already a bcrypt hash (from a verified pending
+  // registration) and must not be hashed again.
+  @IsOptional()
+  @IsBoolean()
+  adminPasswordIsHashed?: boolean;
 
   @IsString()
   @IsOptional()

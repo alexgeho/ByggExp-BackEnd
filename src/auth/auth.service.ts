@@ -4,11 +4,18 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  BadRequestException,
   Logger,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import { randomBytes } from "crypto";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { randomBytes, createHash } from "crypto";
 import * as bcrypt from "bcrypt";
+import {
+  PendingRegistration,
+  PendingRegistrationDocument,
+} from "./schemas/pending-registration.schema";
 import { UsersService } from "../users/users.service";
 import { CompanyService } from "../company/company.service";
 import { RegisterCompanyWithAdminDto } from "../company/dto/register-company-with-admin.dto";
@@ -31,7 +38,31 @@ export class AuthService {
     private jwtService: JwtService,
     private mailService: MailService,
     private configService: ConfigService,
+    @InjectModel(PendingRegistration.name)
+    private pendingRegistrationModel: Model<PendingRegistrationDocument>,
   ) {}
+
+  // Simple in-memory rate limit for sign-up requests, keyed by email. Blunts a
+  // bot spamming registrations; pending records also self-expire (TTL) and no
+  // Company is created until the email is verified.
+  private readonly registerAttempts = new Map<string, number[]>();
+  private static readonly MAX_REGISTER_ATTEMPTS = 5;
+  private static readonly REGISTER_WINDOW_MS = 10 * 60 * 1000;
+
+  private assertRegisterAllowed(email: string): void {
+    const now = Date.now();
+    const recent = (this.registerAttempts.get(email) || []).filter(
+      (t) => now - t < AuthService.REGISTER_WINDOW_MS,
+    );
+    if (recent.length >= AuthService.MAX_REGISTER_ATTEMPTS) {
+      throw new HttpException(
+        "Too many registration attempts. Please try again later.",
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    recent.push(now);
+    this.registerAttempts.set(email, recent);
+  }
 
   // In-memory brute-force protection for password login, keyed by email so it
   // works regardless of the reverse proxy's IP. Single-instance (PM2); move to
@@ -126,35 +157,116 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
+  private static readonly TRIAL_DAYS = 14;
+  private static readonly TRIAL_MAX_USERS = 10;
+
+  // Step 1 of sign-up: DON'T create the company yet. Validate, store a pending
+  // registration (with the user's chosen password hashed) and email a 6-digit
+  // code. The company is only created once the code is verified — so spammed
+  // sign-ups never create real tenants.
   async registerCompany(dto: RegisterCompanyPublicDto) {
-    // The mobile app signs up without a password and relies on the tokens we
-    // return here (and magic-login later). Generate a strong random password
-    // when the client didn't supply one so the account always has a credential.
-    const adminPassword =
-      dto.password ?? randomBytes(24).toString("base64url");
+    const email = dto.email.trim().toLowerCase();
+    this.assertRegisterAllowed(email);
+
+    const existing = await this.usersService.findByEmail(email);
+    if (existing) {
+      throw new ConflictException(
+        "An account with this email already exists. Please log in instead.",
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const plainCode = String(100000 + (randomBytes(4).readUInt32BE(0) % 900000));
+    const codeHash = createHash("sha256").update(plainCode).digest("hex");
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+    await this.pendingRegistrationModel.findOneAndUpdate(
+      { email },
+      {
+        email,
+        companyName: dto.companyName.trim(),
+        userName: dto.userName.trim(),
+        passwordHash,
+        codeHash,
+        expiresAt,
+        attempts: 0,
+      },
+      { upsert: true, new: true },
+    );
+
+    try {
+      await this.mailService.sendVerificationCodeEmail(
+        email,
+        dto.userName.trim(),
+        plainCode,
+      );
+    } catch (error) {
+      this.logger.error(`Failed to send verification email: ${String(error)}`);
+    }
+
+    return { pendingVerification: true, email };
+  }
+
+  // Step 2 of sign-up: verify the emailed code, then actually create the
+  // company + admin (with the password the user chose) and sign them in.
+  async verifyCompanyRegistration(email: string, code: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const pending = await this.pendingRegistrationModel
+      .findOne({ email: normalizedEmail })
+      .select("+passwordHash +codeHash")
+      .exec();
+
+    if (!pending || pending.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException(
+        "Your verification code has expired. Please sign up again.",
+      );
+    }
+
+    if (pending.attempts >= 5) {
+      await this.pendingRegistrationModel.deleteOne({ _id: pending._id });
+      throw new BadRequestException(
+        "Too many attempts. Please sign up again.",
+      );
+    }
+
+    const codeHash = createHash("sha256")
+      .update(String(code || "").trim())
+      .digest("hex");
+    if (codeHash !== pending.codeHash) {
+      pending.attempts += 1;
+      await pending.save();
+      throw new BadRequestException("Invalid code.");
+    }
+
+    // Guard against a race where the account was created in the meantime.
+    const existing = await this.usersService.findByEmail(normalizedEmail);
+    if (existing) {
+      await this.pendingRegistrationModel.deleteOne({ _id: pending._id });
+      throw new ConflictException(
+        "An account with this email already exists. Please log in instead.",
+      );
+    }
 
     const fullDto: RegisterCompanyWithAdminDto = {
-      name: dto.companyName.trim(),
+      name: pending.companyName,
       address: "—",
-      email: dto.email.trim().toLowerCase(),
-      adminName: dto.userName.trim(),
-      adminEmail: dto.email.trim().toLowerCase(),
-      adminPassword,
+      email: normalizedEmail,
+      adminName: pending.userName,
+      adminEmail: normalizedEmail,
+      adminPassword: pending.passwordHash,
+      adminPasswordIsHashed: true,
     };
 
     const { company, admin } =
       await this.companyService.registerCompanyWithAdmin(fullDto);
 
-    // Self-serve trial: 14 days, minimum package = 10 seats.
-    const TRIAL_DAYS = 14;
-    const MAX_USERS = 10;
     const companyId =
       (company as { _id?: { toString(): string } })?._id?.toString?.() ??
       admin.companyId;
     try {
       await this.companyService.startTrialForCompany(companyId, {
-        days: TRIAL_DAYS,
-        maxUsers: MAX_USERS,
+        days: AuthService.TRIAL_DAYS,
+        maxUsers: AuthService.TRIAL_MAX_USERS,
       });
     } catch (error) {
       this.logger.error(
@@ -162,22 +274,21 @@ export class AuthService {
       );
     }
 
-    // Email the new admin: a 6-digit code to sign in on the mobile app, plus a
-    // one-click link into the web admin panel. Best-effort — a mail failure
-    // must not fail the registration (the client is already signed in below).
+    await this.pendingRegistrationModel.deleteOne({ _id: pending._id });
+
+    // Welcome email with a one-click link into the web admin panel. They sign
+    // in everywhere else with the email + password they chose.
     try {
       const adminId = admin._id ? admin._id.toString() : admin.id;
-      const appCode = await this.usersService.createShortLoginCode(adminId);
       const adminMagicCode =
         await this.usersService.createMagicLoginCode(adminId);
       await this.mailService.sendCompanyWelcomeEmail({
-        email: admin.email,
+        email: normalizedEmail,
         name: admin.name,
-        companyName: fullDto.name,
-        appCode,
+        companyName: pending.companyName,
         adminMagicCode,
-        trialDays: TRIAL_DAYS,
-        maxUsers: MAX_USERS,
+        trialDays: AuthService.TRIAL_DAYS,
+        maxUsers: AuthService.TRIAL_MAX_USERS,
       });
     } catch (error) {
       this.logger.error(`Failed to send welcome email: ${String(error)}`);

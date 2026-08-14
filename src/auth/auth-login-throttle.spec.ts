@@ -10,6 +10,7 @@ describe("AuthService login throttling", () => {
       {} as any,
       {} as any, // mailService
       { get: () => undefined } as any, // configService
+      {} as any, // pendingRegistrationModel
     );
 
   const statusOf = async (fn: () => Promise<unknown>): Promise<number> => {
