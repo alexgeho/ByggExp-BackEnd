@@ -13,6 +13,71 @@ import { CreateUserDto } from "../users/dto/create-user.dto";
 import { RegisterCompanyPublicDto } from "./dto/register-company-public.dto";
 import { Public } from "../common/decorators/public.decorator";
 
+// A page that deep-links into the app to finish sign-in with a magic code.
+// Shared by verify-email (worker invites) and register-company/confirm.
+function magicRedirectHtml(magicLoginCode: string, message: string): string {
+  const encodedCode = encodeURIComponent(magicLoginCode);
+  const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
+  const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end`;
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="refresh" content="0;url=${magicUrl}" />
+    <title>Email confirmed</title>
+    <style>
+      body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
+      .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
+      h1 { font-size: 24px; margin: 0 0 12px; }
+      p { margin: 0 0 16px; line-height: 1.5; color: #5a6b7d; }
+      a.button { display: inline-block; background: #0785f4; color: #fff; text-decoration: none; padding: 14px 20px; border-radius: 999px; font-weight: 600; margin: 4px; }
+      .hint { font-size: 14px; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Email confirmed</h1>
+      <p>${message}</p>
+      <a class="button" href="${magicUrl}">Open ByggExp</a>
+      <a class="button" href="${androidIntentUrl}">Open on Android</a>
+      <p class="hint">If the app does not open, install ByggExp and tap the button again, then sign in with your email and password.</p>
+    </div>
+    <script>
+      (function () {
+        var magicUrl = ${JSON.stringify(magicUrl)};
+        var androidIntentUrl = ${JSON.stringify(androidIntentUrl)};
+        var isAndroid = /Android/i.test(navigator.userAgent || '');
+        window.location.href = isAndroid ? androidIntentUrl : magicUrl;
+        window.setTimeout(function () {
+          window.location.href = magicUrl;
+        }, 400);
+      })();
+    </script>
+  </body>
+</html>`;
+}
+
+function errorHtml(title: string, message: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${title}</title>
+    <style>
+      body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+      .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
+      h1 { font-size: 24px; margin: 0 0 12px; }
+      p { margin: 0; line-height: 1.5; color: #5a6b7d; }
+    </style>
+  </head>
+  <body>
+    <div class="card"><h1>${title}</h1><p>${message}</p></div>
+  </body>
+</html>`;
+}
+
 @Public()
 @Controller("auth")
 export class AuthController {
@@ -23,31 +88,47 @@ export class AuthController {
     return this.authService.register(createUserDto);
   }
 
-  // Step 1: validate + email a code (no company created yet).
+  // Step 1: validate + email a confirmation link (no company created yet).
   @Post("register-company")
   registerCompany(@Body() dto: RegisterCompanyPublicDto) {
     return this.authService.registerCompany(dto);
   }
 
-  // Step 2: verify the emailed code, create the company, and sign in.
-  @Post("register-company/verify")
-  async verifyRegistration(@Body() body: { email: string; code: string }) {
-    if (!body?.email?.trim() || !body?.code?.trim()) {
-      throw new BadRequestException("Email and code are required");
+  // Step 2: the user clicks the emailed link. Create the company, then deep-link
+  // into the app to sign them in automatically (same as worker verify-email).
+  @Get("register-company/confirm")
+  async confirmRegistration(@Query("token") token: string, @Res() res: Response) {
+    if (!token?.trim()) {
+      throw new BadRequestException("Confirmation token is required");
     }
-    return this.authService.verifyCompanyRegistration(
-      body.email.trim(),
-      body.code.trim(),
-    );
+    try {
+      const { magicLoginCode } =
+        await this.authService.confirmCompanyRegistration(token.trim());
+      res
+        .status(200)
+        .type("html")
+        .send(
+          magicRedirectHtml(
+            magicLoginCode,
+            "Your account is ready. Opening ByggExp to sign you in…",
+          ),
+        );
+    } catch (error) {
+      const message =
+        error instanceof BadRequestException
+          ? error.message
+          : "This confirmation link is invalid or has expired. Please sign up again.";
+      res.status(400).type("html").send(errorHtml("Confirmation failed", message));
+    }
   }
 
-  // Re-send the verification code for a pending sign-up. Always 200.
+  // Re-send the confirmation link for a pending sign-up. Always 200.
   @Post("register-company/resend")
   async resendRegistration(@Body("email") email: string) {
     if (!email?.trim()) {
       throw new BadRequestException("Email is required");
     }
-    await this.authService.resendRegistrationCode(email.trim());
+    await this.authService.resendRegistrationLink(email.trim());
     return { success: true };
   }
 
@@ -125,73 +206,19 @@ export class AuthController {
 
     try {
       const result = await this.authService.verifyEmail(token.trim());
-      const encodedCode = encodeURIComponent(result.magicLoginCode);
-      const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
-      const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end`;
-
-      res.status(200).type("html").send(`<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="refresh" content="0;url=${magicUrl}" />
-    <title>Email confirmed</title>
-    <style>
-      body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
-      .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
-      h1 { font-size: 24px; margin: 0 0 12px; }
-      p { margin: 0 0 16px; line-height: 1.5; color: #5a6b7d; }
-      a.button { display: inline-block; background: #0785f4; color: #fff; text-decoration: none; padding: 14px 20px; border-radius: 999px; font-weight: 600; margin: 4px; }
-      .hint { font-size: 14px; margin-top: 8px; }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h1>Email confirmed</h1>
-      <p>${result.message}</p>
-      <a class="button" href="${magicUrl}">Open ByggExp</a>
-      <a class="button" href="${androidIntentUrl}">Open on Android</a>
-      <p class="hint">If the app does not open, install ByggExp and tap the button again. You can also sign in with your email and temporary password.</p>
-    </div>
-    <script>
-      (function () {
-        var magicUrl = ${JSON.stringify(magicUrl)};
-        var androidIntentUrl = ${JSON.stringify(androidIntentUrl)};
-        var isAndroid = /Android/i.test(navigator.userAgent || '');
-        window.location.href = isAndroid ? androidIntentUrl : magicUrl;
-        window.setTimeout(function () {
-          window.location.href = magicUrl;
-        }, 400);
-      })();
-    </script>
-  </body>
-</html>`);
+      res
+        .status(200)
+        .type("html")
+        .send(magicRedirectHtml(result.magicLoginCode, result.message));
     } catch (error) {
       const message =
         error instanceof BadRequestException
           ? error.message
           : "Unable to verify email.";
-
-      res.status(400).type("html").send(`<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Verification failed</title>
-    <style>
-      body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-      .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
-      h1 { font-size: 24px; margin: 0 0 12px; }
-      p { margin: 0; line-height: 1.5; color: #5a6b7d; }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h1>Verification failed</h1>
-      <p>${message}</p>
-    </div>
-  </body>
-</html>`);
+      res
+        .status(400)
+        .type("html")
+        .send(errorHtml("Verification failed", message));
     }
   }
 }

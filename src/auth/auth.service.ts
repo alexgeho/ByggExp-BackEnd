@@ -176,9 +176,11 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const plainCode = String(100000 + (randomBytes(4).readUInt32BE(0) % 900000));
-    const codeHash = createHash("sha256").update(plainCode).digest("hex");
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    // A long token that goes into the emailed confirmation link (not a code the
+    // user types). We store only its hash.
+    const plainToken = randomBytes(32).toString("hex");
+    const codeHash = createHash("sha256").update(plainToken).digest("hex");
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await this.pendingRegistrationModel.findOneAndUpdate(
       { email },
@@ -195,10 +197,10 @@ export class AuthService {
     );
 
     try {
-      await this.mailService.sendVerificationCodeEmail(
+      await this.mailService.sendCompanyVerificationEmail(
         email,
         dto.userName.trim(),
-        plainCode,
+        plainToken,
       );
     } catch (error) {
       this.logger.error(`Failed to send verification email: ${String(error)}`);
@@ -207,39 +209,28 @@ export class AuthService {
     return { pendingVerification: true, email };
   }
 
-  // Step 2 of sign-up: verify the emailed code, then actually create the
-  // company + admin (with the password the user chose) and sign them in.
-  async verifyCompanyRegistration(email: string, code: string) {
-    const normalizedEmail = email.trim().toLowerCase();
+  // Step 2 of sign-up: the user clicked the emailed link. Look the pending
+  // registration up by its token, create the company + admin (with the chosen
+  // password), and mint a magic code so the app can sign them in via deep link.
+  async confirmCompanyRegistration(
+    token: string,
+  ): Promise<{ magicLoginCode: string }> {
+    const tokenHash = createHash("sha256")
+      .update(String(token || "").trim())
+      .digest("hex");
     const pending = await this.pendingRegistrationModel
-      .findOne({ email: normalizedEmail })
+      .findOne({ codeHash: tokenHash })
       .select("+passwordHash +codeHash")
       .exec();
 
     if (!pending || pending.expiresAt.getTime() < Date.now()) {
       throw new BadRequestException(
-        "Your verification code has expired. Please sign up again.",
+        "This confirmation link is invalid or has expired. Please sign up again.",
       );
     }
 
-    if (pending.attempts >= 5) {
-      await this.pendingRegistrationModel.deleteOne({ _id: pending._id });
-      throw new BadRequestException(
-        "Too many attempts. Please sign up again.",
-      );
-    }
-
-    const codeHash = createHash("sha256")
-      .update(String(code || "").trim())
-      .digest("hex");
-    if (codeHash !== pending.codeHash) {
-      pending.attempts += 1;
-      await pending.save();
-      throw new BadRequestException("Invalid code.");
-    }
-
-    // Guard against a race where the account was created in the meantime.
-    const existing = await this.usersService.findByEmail(normalizedEmail);
+    // Guard against a race / double-click where the account already exists.
+    const existing = await this.usersService.findByEmail(pending.email);
     if (existing) {
       await this.pendingRegistrationModel.deleteOne({ _id: pending._id });
       throw new ConflictException(
@@ -250,9 +241,9 @@ export class AuthService {
     const fullDto: RegisterCompanyWithAdminDto = {
       name: pending.companyName,
       address: "—",
-      email: normalizedEmail,
+      email: pending.email,
       adminName: pending.userName,
-      adminEmail: normalizedEmail,
+      adminEmail: pending.email,
       adminPassword: pending.passwordHash,
       adminPasswordIsHashed: true,
     };
@@ -276,17 +267,16 @@ export class AuthService {
 
     await this.pendingRegistrationModel.deleteOne({ _id: pending._id });
 
-    // Welcome email with a one-click link into the web admin panel. They sign
-    // in everywhere else with the email + password they chose.
+    const adminId = admin._id ? admin._id.toString() : admin.id;
+
+    // Welcome email pointing to the web admin panel. They sign in there (and in
+    // the app) with the email + password they chose — no magic code needed, so
+    // it can't clash with the app's sign-in code below.
     try {
-      const adminId = admin._id ? admin._id.toString() : admin.id;
-      const adminMagicCode =
-        await this.usersService.createMagicLoginCode(adminId);
       await this.mailService.sendCompanyWelcomeEmail({
-        email: normalizedEmail,
+        email: pending.email,
         name: admin.name,
         companyName: pending.companyName,
-        adminMagicCode,
         trialDays: AuthService.TRIAL_DAYS,
         maxUsers: AuthService.TRIAL_MAX_USERS,
       });
@@ -294,12 +284,16 @@ export class AuthService {
       this.logger.error(`Failed to send welcome email: ${String(error)}`);
     }
 
-    return this.generateTokens(admin);
+    // Single-use magic code the app consumes via the deep link to sign in.
+    const magicLoginCode =
+      await this.usersService.createMagicLoginCode(adminId);
+
+    return { magicLoginCode };
   }
 
-  // Re-issue a fresh verification code for a still-pending sign-up. Always
+  // Re-issue a fresh confirmation link for a still-pending sign-up. Always
   // resolves so we never reveal whether a pending registration exists.
-  async resendRegistrationCode(email: string): Promise<void> {
+  async resendRegistrationLink(email: string): Promise<void> {
     const normalizedEmail = email.trim().toLowerCase();
     this.assertRegisterAllowed(normalizedEmail);
     const pending = await this.pendingRegistrationModel
@@ -309,16 +303,16 @@ export class AuthService {
     if (!pending) {
       return;
     }
-    const plainCode = String(100000 + (randomBytes(4).readUInt32BE(0) % 900000));
-    pending.codeHash = createHash("sha256").update(plainCode).digest("hex");
-    pending.expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    const plainToken = randomBytes(32).toString("hex");
+    pending.codeHash = createHash("sha256").update(plainToken).digest("hex");
+    pending.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     pending.attempts = 0;
     await pending.save();
     try {
-      await this.mailService.sendVerificationCodeEmail(
+      await this.mailService.sendCompanyVerificationEmail(
         normalizedEmail,
         pending.userName,
-        plainCode,
+        plainToken,
       );
     } catch (error) {
       this.logger.error(`Failed to resend verification email: ${String(error)}`);
