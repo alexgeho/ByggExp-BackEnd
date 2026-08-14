@@ -110,8 +110,13 @@ async function bootstrap() {
     "https://admin.byggexp.se",
     // Web/PWA build of the mobile app (custom domain, if mapped later).
     "https://app.byggexp.se",
+    // The API's own origin: server-rendered pages (password reset, registration
+    // confirmation) POST back here, and the browser sends Origin: <api host> on
+    // those same-origin form submits. Without this the CORS check rejects them.
+    "https://api.byggexp.se",
+    (process.env.API_PUBLIC_URL || "").replace(/\/$/, ""),
     ...extraOrigins,
-  ]);
+  ].filter(Boolean));
 
   const allowedOriginPatterns = [
     /^exp:\/\/(?:localhost|127\.0\.0\.1|\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?$/,
@@ -140,7 +145,10 @@ async function bootstrap() {
         return;
       }
 
-      callback(new Error(`Origin ${origin} not allowed by CORS`));
+      // Deny by omitting CORS headers (browser blocks it) instead of throwing —
+      // a thrown Error here surfaces as a 500 for the caller, which turned
+      // legitimate same-origin form posts into "unexpected error" pages.
+      callback(null, false);
     },
     credentials: true,
   });
