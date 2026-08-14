@@ -83,10 +83,27 @@ export class AllExceptionsFilter implements ExceptionFilter {
       exception instanceof Error ? exception.stack : String(exception),
     );
 
+    // TEMP DIAGNOSTIC (remove after): on unexpected 500s, echo the real error +
+    // stack in the response so we can pin down the password-reset failure
+    // without server log access.
+    const diag =
+      status === HttpStatus.INTERNAL_SERVER_ERROR
+        ? {
+            _diag: {
+              name: (exception as any)?.name ?? null,
+              raw: String((exception as any)?.message ?? exception),
+              stack: String((exception as any)?.stack ?? "")
+                .split("\n")
+                .slice(0, 8),
+            },
+          }
+        : {};
+
     response.status(status).json({
       statusCode: status,
       message,
       timestamp: new Date().toISOString(),
+      ...diag,
     });
   }
 }
