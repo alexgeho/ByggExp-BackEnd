@@ -23,9 +23,32 @@ export class AuthController {
     return this.authService.register(createUserDto);
   }
 
+  // Step 1: validate + email a code (no company created yet).
   @Post("register-company")
   registerCompany(@Body() dto: RegisterCompanyPublicDto) {
     return this.authService.registerCompany(dto);
+  }
+
+  // Step 2: verify the emailed code, create the company, and sign in.
+  @Post("register-company/verify")
+  async verifyRegistration(@Body() body: { email: string; code: string }) {
+    if (!body?.email?.trim() || !body?.code?.trim()) {
+      throw new BadRequestException("Email and code are required");
+    }
+    return this.authService.verifyCompanyRegistration(
+      body.email.trim(),
+      body.code.trim(),
+    );
+  }
+
+  // Re-send the verification code for a pending sign-up. Always 200.
+  @Post("register-company/resend")
+  async resendRegistration(@Body("email") email: string) {
+    if (!email?.trim()) {
+      throw new BadRequestException("Email is required");
+    }
+    await this.authService.resendRegistrationCode(email.trim());
+    return { success: true };
   }
 
   @Post("register-superadmin")

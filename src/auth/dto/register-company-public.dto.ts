@@ -1,10 +1,4 @@
-import {
-  IsEmail,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MinLength,
-} from "class-validator";
+import { IsEmail, IsNotEmpty, IsString, MinLength } from "class-validator";
 
 export class RegisterCompanyPublicDto {
   @IsString()
@@ -19,11 +13,10 @@ export class RegisterCompanyPublicDto {
   @IsNotEmpty()
   email: string;
 
-  // Optional: the mobile app registers without a password (session is issued
-  // immediately via returned tokens). When omitted, the server generates a
-  // secure random password so the account still has a valid credential.
-  @IsOptional()
+  // The user chooses their own password at sign-up. We only ever store its
+  // bcrypt hash — the plaintext is never persisted or logged.
   @IsString()
+  @IsNotEmpty()
   @MinLength(6)
-  password?: string;
+  password: string;
 }

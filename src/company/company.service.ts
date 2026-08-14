@@ -191,8 +191,11 @@ export class CompanyService {
       projects: [],
     });
 
-    // Create the CompanyAdmin
-    const hashedPassword = await bcrypt.hash(dto.adminPassword, 10);
+    // Create the CompanyAdmin. The password may already be a bcrypt hash (from
+    // a verified pending registration) — don't hash it twice.
+    const hashedPassword = dto.adminPasswordIsHashed
+      ? dto.adminPassword
+      : await bcrypt.hash(dto.adminPassword, 10);
     const admin = await this.usersService.create({
       email: dto.adminEmail,
       password: hashedPassword,
