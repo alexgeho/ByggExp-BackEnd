@@ -202,13 +202,10 @@ export class MailService {
     email: string;
     name: string;
     companyName: string;
-    adminMagicCode: string;
     trialDays: number;
     maxUsers: number;
   }): Promise<void> {
-    const adminLink = `${this.getApiPublicUrl()}/auth/web-magic?code=${encodeURIComponent(
-      opts.adminMagicCode,
-    )}`;
+    const adminLink = this.getWebAppUrl();
     const name = this.escapeHtml(opts.name || "there");
     const companyName = this.escapeHtml(opts.companyName || "your company");
     const subject = "Welcome to ByggExp — your trial is ready";
@@ -246,34 +243,34 @@ export class MailService {
     });
   }
 
-  // Sent at sign-up step 1: the 6-digit code the user must enter to confirm
-  // their email before the account is created.
-  async sendVerificationCodeEmail(
+  // Sent at sign-up step 1: a link the user clicks to confirm their email. The
+  // account is created only when the link is opened, and the app signs them in
+  // automatically via the deep link (same mechanism as worker invites).
+  async sendCompanyVerificationEmail(
     email: string,
     name: string,
-    code: string,
+    token: string,
   ): Promise<void> {
+    const confirmUrl = `${this.getApiPublicUrl()}/auth/register-company/confirm?token=${encodeURIComponent(token)}`;
     const safeName = this.escapeHtml(name || "there");
-    const subject = "Confirm your email — your ByggExp code";
+    const subject = "Confirm your email to finish creating your ByggExp account";
     const text = [
       `Hi ${name || "there"},`,
       "",
-      `Your ByggExp confirmation code: ${code}`,
-      "Enter it in the app to finish creating your account.",
-      "It expires in 30 minutes.",
+      "Open the link below to confirm your email and finish creating your ByggExp account — you'll be signed in automatically:",
+      confirmUrl,
       "",
-      "If you didn't request this, you can ignore this email.",
+      "This link expires in 24 hours. If you didn't request this, you can ignore this email.",
     ].join("\n");
     const html = `
       <p>Hi ${safeName},</p>
-      <p>Your ByggExp confirmation code:</p>
-      <p style="font-size:28px;font-weight:700;letter-spacing:4px;margin:8px 0;">${this.escapeHtml(code)}</p>
-      <p style="color:#5a6b7d;font-size:13px;">Enter it in the app to finish creating your account. It expires in 30 minutes.</p>
-      <p style="color:#5a6b7d;font-size:13px;">If you didn't request this, you can ignore this email.</p>
+      <p>Open the link below to confirm your email and finish creating your ByggExp account — you'll be signed in automatically:</p>
+      <p><a href="${confirmUrl}">Confirm email and create account</a></p>
+      <p style="color:#5a6b7d;font-size:13px;">This link expires in 24 hours. If you didn't request this, you can ignore this email.</p>
     `;
 
     if (!this.transporter) {
-      this.logger.log(`Verification code for ${email}: ${code}`);
+      this.logger.log(`Registration confirm for ${email}: ${confirmUrl}`);
       return;
     }
 
