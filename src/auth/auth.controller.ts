@@ -78,6 +78,54 @@ function errorHtml(title: string, message: string): string {
 </html>`;
 }
 
+// Step-2 page: after clicking the confirmation link, the user chooses a
+// password here. Posts back to /auth/register-company/set-password.
+function passwordFormHtml(token: string, error?: string): string {
+  const safeToken = token.replace(/"/g, "&quot;");
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Choose your password</title>
+    <style>
+      body { font-family: Arial, sans-serif; background: #eef4fb; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
+      .card { background: #fff; border-radius: 16px; padding: 28px; max-width: 380px; width: 100%; box-shadow: 0 8px 24px rgba(5,45,80,.08); }
+      h1 { font-size: 22px; margin: 0 0 6px; }
+      p { margin: 0 0 18px; color: #5a6b7d; font-size: 14px; line-height: 1.4; }
+      label { display: block; font-size: 12px; color: #052d50; margin: 12px 0 6px; }
+      input { width: 100%; box-sizing: border-box; height: 46px; padding: 0 14px; border: 1px solid #e0e7ee; border-radius: 12px; font-size: 15px; }
+      button { width: 100%; height: 48px; margin-top: 20px; border: 0; border-radius: 24px; background: #3183ff; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
+      .err { color: #c62828; font-size: 13px; margin-bottom: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Choose your password</h1>
+      <p>Set a password to finish creating your ByggExp account. You'll sign in with your email and this password.</p>
+      ${error ? `<div class="err">${error}</div>` : ""}
+      <form method="POST" action="/auth/register-company/set-password" onsubmit="return checkForm()">
+        <input type="hidden" name="token" value="${safeToken}" />
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" minlength="6" required placeholder="At least 6 characters" />
+        <label for="confirm">Confirm password</label>
+        <input id="confirm" name="confirm" type="password" minlength="6" required placeholder="Repeat your password" />
+        <button type="submit">Create account</button>
+      </form>
+    </div>
+    <script>
+      function checkForm() {
+        var p = document.getElementById('password').value;
+        var c = document.getElementById('confirm').value;
+        if (p.length < 6) { alert('Password must be at least 6 characters.'); return false; }
+        if (p !== c) { alert("Passwords don't match."); return false; }
+        return true;
+      }
+    </script>
+  </body>
+</html>`;
+}
+
 @Public()
 @Controller("auth")
 export class AuthController {
@@ -94,16 +142,46 @@ export class AuthController {
     return this.authService.registerCompany(dto);
   }
 
-  // Step 2: the user clicks the emailed link. Create the company, then deep-link
-  // into the app to sign them in automatically (same as worker verify-email).
+  // Step 2a: the user clicks the emailed link. Show the "choose a password"
+  // page (the account is created when they submit it).
   @Get("register-company/confirm")
   async confirmRegistration(@Query("token") token: string, @Res() res: Response) {
     if (!token?.trim()) {
       throw new BadRequestException("Confirmation token is required");
     }
     try {
-      const { magicLoginCode } =
-        await this.authService.confirmCompanyRegistration(token.trim());
+      await this.authService.getPendingByToken(token.trim());
+      res.status(200).type("html").send(passwordFormHtml(token.trim()));
+    } catch (error) {
+      const message =
+        error instanceof BadRequestException
+          ? error.message
+          : "This confirmation link is invalid or has expired. Please sign up again.";
+      res.status(400).type("html").send(errorHtml("Confirmation failed", message));
+    }
+  }
+
+  // Step 2b: the password form posts here. Create the account, then deep-link
+  // into the app to sign them in automatically.
+  @Post("register-company/set-password")
+  async setRegistrationPassword(
+    @Body() body: { token?: string; password?: string },
+    @Res() res: Response,
+  ) {
+    const token = (body?.token || "").trim();
+    const password = body?.password || "";
+    if (!token) {
+      res
+        .status(400)
+        .type("html")
+        .send(errorHtml("Something went wrong", "Missing confirmation token."));
+      return;
+    }
+    try {
+      const { magicLoginCode } = await this.authService.completeRegistration(
+        token,
+        password,
+      );
       res
         .status(200)
         .type("html")
@@ -117,8 +195,9 @@ export class AuthController {
       const message =
         error instanceof BadRequestException
           ? error.message
-          : "This confirmation link is invalid or has expired. Please sign up again.";
-      res.status(400).type("html").send(errorHtml("Confirmation failed", message));
+          : "Unable to create your account. Please try again.";
+      // Re-show the form with the error so they can retry.
+      res.status(400).type("html").send(passwordFormHtml(token, message));
     }
   }
 

@@ -1,22 +1,18 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength } from "class-validator";
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from "class-validator";
 
+// Minimal-friction sign-up: just a name (person or company) + email. The user
+// chooses a password later, on the page opened from the confirmation link.
 export class RegisterCompanyPublicDto {
   @IsString()
   @IsNotEmpty()
   companyName: string;
 
-  @IsString()
-  @IsNotEmpty()
-  userName: string;
-
   @IsEmail()
   @IsNotEmpty()
   email: string;
 
-  // The user chooses their own password at sign-up. We only ever store its
-  // bcrypt hash — the plaintext is never persisted or logged.
+  // Optional separate person name; defaults to companyName when omitted.
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  @MinLength(6)
-  password: string;
+  userName?: string;
 }
