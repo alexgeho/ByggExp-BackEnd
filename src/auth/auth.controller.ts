@@ -39,19 +39,25 @@ function magicRedirectHtml(magicLoginCode: string, message: string): string {
     <div class="card">
       <h1>Email confirmed</h1>
       <p>${message}</p>
-      <a class="button" href="${magicUrl}">Open ByggExp</a>
-      <a class="button" href="${androidIntentUrl}">Open on Android</a>
-      <p class="hint">If the app does not open, install ByggExp and tap the button again, then sign in with your email and password.</p>
+      <a class="button" id="openIos" href="${magicUrl}">Open ByggExp</a>
+      <a class="button" id="openAndroid" href="${androidIntentUrl}" style="display:none;">Open ByggExp</a>
+      <p class="hint">If the app doesn't open automatically, tap the button above. New here? Install ByggExp, then open it and sign in with your email and password.</p>
     </div>
     <script>
       (function () {
         var magicUrl = ${JSON.stringify(magicUrl)};
         var androidIntentUrl = ${JSON.stringify(androidIntentUrl)};
         var isAndroid = /Android/i.test(navigator.userAgent || '');
+        if (isAndroid) {
+          document.getElementById('openIos').style.display = 'none';
+          document.getElementById('openAndroid').style.display = 'inline-block';
+        }
+        // Try to open the app immediately; the button is the fallback (iOS
+        // Safari blocks tap-free custom-scheme opens).
         window.location.href = isAndroid ? androidIntentUrl : magicUrl;
         window.setTimeout(function () {
           window.location.href = magicUrl;
-        }, 400);
+        }, 500);
       })();
     </script>
   </body>
