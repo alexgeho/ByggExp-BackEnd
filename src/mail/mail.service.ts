@@ -56,11 +56,15 @@ export class MailService {
   }
 
   private getFromAddress(): string {
-    return (
+    const address =
       this.configService.get<string>("SMTP_FROM") ||
       this.configService.get<string>("SMTP_USER") ||
-      "noreply@byggexp.se"
-    );
+      "noreply@byggexp.se";
+    // Show a friendly sender name ("ByggExp") unless one is already provided.
+    if (address.includes("<") || address.includes('"')) {
+      return address;
+    }
+    return `"ByggExp" <${address}>`;
   }
 
   private getApiPublicUrl(): string {
