@@ -1,6 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import nodemailer, { Transporter } from "nodemailer";
+import { existsSync } from "fs";
+import { join } from "path";
 
 type DemoRequestPayload = {
   name: string;
@@ -83,6 +85,51 @@ export class MailService {
       return configured.replace(/\/$/, "");
     }
     return "http://localhost:5173";
+  }
+
+  // The BYGGEXP logo, embedded as a CID attachment so it renders inline in every
+  // email client (base64/data: URIs get stripped by Gmail/Outlook). Returns null
+  // if the asset is missing so sends still work.
+  private logoAttachment(): { filename: string; path: string; cid: string } | null {
+    const logoPath = join(process.cwd(), "assets", "email-logo.png");
+    if (!existsSync(logoPath)) {
+      return null;
+    }
+    return { filename: "byggexp-logo.png", path: logoPath, cid: "byggexplogo" };
+  }
+
+  // Wrap an email body in a branded shell: centered logo header on a light card.
+  private brandedHtml(innerHtml: string): string {
+    const hasLogo = this.logoAttachment() !== null;
+    const logo = hasLogo
+      ? `<img src="cid:byggexplogo" alt="ByggExp" width="150" style="width:150px;max-width:150px;height:auto;display:inline-block;" />`
+      : `<span style="font-size:22px;font-weight:800;letter-spacing:1px;color:#052d50;">BYGGEXP</span>`;
+    return `<!DOCTYPE html>
+<html lang="en">
+  <body style="margin:0;padding:0;background:#eef4fb;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef4fb;padding:24px 0;">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;">
+          <tr><td align="center" style="padding:28px 24px 8px;">${logo}</td></tr>
+          <tr><td style="padding:8px 32px 32px;font-family:Arial,Helvetica,sans-serif;color:#052d50;font-size:15px;line-height:1.55;">
+            ${innerHtml}
+          </td></tr>
+        </table>
+        <div style="max-width:480px;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#8a97a8;font-size:12px;text-align:center;">© ByggExp</div>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+  }
+
+  // Attachments array carrying the inline logo (empty if the asset is missing).
+  private brandedAttachments(): Array<{
+    filename: string;
+    path: string;
+    cid: string;
+  }> {
+    const logo = this.logoAttachment();
+    return logo ? [logo] : [];
   }
 
   // Invite the recipient to set up a company's admin account. No password —
@@ -220,14 +267,13 @@ export class MailService {
       "",
       "Welcome aboard!",
     ].join("\n");
-    const html = `
-      <p>Hi ${name},</p>
-      <p>Your company <strong>${companyName}</strong> is set up on <strong>ByggExp</strong> and your <strong>${opts.trialDays}-day free trial</strong> has started (up to <strong>${opts.maxUsers} users</strong>).</p>
-      <p>Sign in on the mobile app and the web admin panel with your email and the password you chose at sign-up.</p>
-      <p><strong>Open the web admin panel:</strong></p>
-      <p><a href="${adminLink}">Sign in to the ByggExp admin panel</a></p>
-      <p>Welcome aboard!</p>
-    `;
+    const html = this.brandedHtml(`
+      <p style="margin:0 0 12px;">Hi ${name},</p>
+      <p style="margin:0 0 12px;">Your company <strong>${companyName}</strong> is set up on <strong>ByggExp</strong> and your <strong>${opts.trialDays}-day free trial</strong> has started (up to <strong>${opts.maxUsers} users</strong>).</p>
+      <p style="margin:0 0 20px;">Sign in on the mobile app and the web admin panel with your email and the password you chose at sign-up.</p>
+      <p style="margin:0 0 20px;"><a href="${adminLink}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Sign in to the admin panel</a></p>
+      <p style="margin:0;">Welcome aboard!</p>
+    `);
 
     if (!this.transporter) {
       this.logger.log(`Company welcome for ${opts.email}: admin=${adminLink}`);
@@ -240,6 +286,7 @@ export class MailService {
       subject,
       text,
       html,
+      attachments: this.brandedAttachments(),
     });
   }
 
@@ -262,12 +309,12 @@ export class MailService {
       "",
       "This link expires in 24 hours. If you didn't request this, you can ignore this email.",
     ].join("\n");
-    const html = `
-      <p>Hi ${safeName},</p>
-      <p>Open the link below to confirm your email and finish creating your ByggExp account — you'll be signed in automatically:</p>
-      <p><a href="${confirmUrl}">Confirm email and create account</a></p>
-      <p style="color:#5a6b7d;font-size:13px;">This link expires in 24 hours. If you didn't request this, you can ignore this email.</p>
-    `;
+    const html = this.brandedHtml(`
+      <p style="margin:0 0 12px;">Hi ${safeName},</p>
+      <p style="margin:0 0 20px;">Open the link below to confirm your email and finish creating your ByggExp account — you'll be signed in automatically:</p>
+      <p style="margin:0 0 20px;"><a href="${confirmUrl}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Confirm email and create account</a></p>
+      <p style="color:#5a6b7d;font-size:13px;margin:0;">This link expires in 24 hours. If you didn't request this, you can ignore this email.</p>
+    `);
 
     if (!this.transporter) {
       this.logger.log(`Registration confirm for ${email}: ${confirmUrl}`);
@@ -280,6 +327,7 @@ export class MailService {
       subject,
       text,
       html,
+      attachments: this.brandedAttachments(),
     });
   }
 
@@ -302,12 +350,12 @@ export class MailService {
       "",
       "This link expires in 1 hour. If you didn't request this, you can ignore this email — your password stays the same.",
     ].join("\n");
-    const html = `
-      <p>Hi ${safeName},</p>
-      <p>We received a request to reset your ByggExp password. Click below to choose a new one:</p>
-      <p><a href="${resetUrl}">Reset my password</a></p>
-      <p style="color:#5a6b7d;font-size:13px;">This link expires in 1 hour. If you didn't request this, you can ignore this email — your password stays the same.</p>
-    `;
+    const html = this.brandedHtml(`
+      <p style="margin:0 0 12px;">Hi ${safeName},</p>
+      <p style="margin:0 0 20px;">We received a request to reset your ByggExp password. Click below to choose a new one:</p>
+      <p style="margin:0 0 20px;"><a href="${resetUrl}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Reset my password</a></p>
+      <p style="color:#5a6b7d;font-size:13px;margin:0;">This link expires in 1 hour. If you didn't request this, you can ignore this email — your password stays the same.</p>
+    `);
 
     if (!this.transporter) {
       this.logger.log(`Password reset for ${email}: ${resetUrl}`);
@@ -320,6 +368,7 @@ export class MailService {
       subject,
       text,
       html,
+      attachments: this.brandedAttachments(),
     });
   }
 
@@ -339,13 +388,12 @@ export class MailService {
       "",
       "If you didn't request this, you can ignore this email.",
     ].join("\n");
-    const html = `
-      <p>Hi ${safeName},</p>
-      <p>Your ByggExp sign-in code:</p>
-      <p style="font-size:28px;font-weight:700;letter-spacing:4px;margin:8px 0;">${this.escapeHtml(code)}</p>
-      <p style="color:#5a6b7d;font-size:13px;">It expires in 15 minutes.</p>
-      <p style="color:#5a6b7d;font-size:13px;">If you didn't request this, you can ignore this email.</p>
-    `;
+    const html = this.brandedHtml(`
+      <p style="margin:0 0 8px;">Hi ${safeName},</p>
+      <p style="margin:0 0 8px;">Your ByggExp sign-in code:</p>
+      <p style="font-size:30px;font-weight:700;letter-spacing:6px;margin:8px 0 16px;color:#052d50;">${this.escapeHtml(code)}</p>
+      <p style="color:#5a6b7d;font-size:13px;margin:0;">It expires in 15 minutes. If you didn't request this, you can ignore this email.</p>
+    `);
 
     if (!this.transporter) {
       this.logger.log(`Login code for ${email}: ${code}`);
@@ -358,6 +406,7 @@ export class MailService {
       subject,
       text,
       html,
+      attachments: this.brandedAttachments(),
     });
   }
 
