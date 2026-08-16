@@ -13,6 +13,7 @@ import { TranslationService } from "../translation/translation.service";
 import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { Message, MessageDocument } from "./schemas/message.schema";
+import { ModerationService } from "../moderation/moderation.service";
 
 type AuthenticatedUser = {
   userId: string;
@@ -30,7 +31,28 @@ export class MessagesService {
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly notificationsService: NotificationsService,
     private readonly translationService: TranslationService,
+    private readonly moderationService: ModerationService,
   ) {}
+
+  // Block guard for one-to-one chats: if either participant has blocked the
+  // other, the message is refused. Group chats are left unaffected (a single
+  // block shouldn't silence someone for the whole team).
+  private async assertNotBlocked(
+    chat: { type?: string; members?: string[] },
+    senderId: string,
+  ): Promise<void> {
+    if (chat.type === "group") {
+      return;
+    }
+    const others = (chat.members || []).filter((id) => id !== senderId);
+    for (const otherId of others) {
+      if (await this.moderationService.isBlockedBetween(senderId, otherId)) {
+        throw new ForbiddenException(
+          "You can no longer send messages in this conversation.",
+        );
+      }
+    }
+  }
 
   async findByChat(chatId: string, user: AuthenticatedUser, lang?: string) {
     await this.findAccessibleChat(chatId, user);
@@ -95,6 +117,7 @@ export class MessagesService {
     user: AuthenticatedUser,
   ) {
     const chat = await this.findAccessibleChat(chatId, user);
+    await this.assertNotBlocked(chat, user.userId);
     const text = sendMessageDto.text?.trim();
 
     if (!text) {
@@ -161,6 +184,7 @@ export class MessagesService {
     user: AuthenticatedUser,
   ) {
     const chat = await this.findAccessibleChat(chatId, user);
+    await this.assertNotBlocked(chat, user.userId);
     const text = (rawText || "").trim();
     const attachments = (files || []).map((file) => ({
       url: `/uploads/chat-attachments/${file.filename}`,
