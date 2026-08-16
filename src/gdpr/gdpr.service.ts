@@ -29,6 +29,7 @@ import {
   UserActivityLog,
   UserActivityLogDocument,
 } from "../users/schemas/user-activity-log.schema";
+import { CompanyService } from "../company/company.service";
 
 type AuthUser = {
   role?: UserRole;
@@ -59,6 +60,7 @@ export class GdprService {
     private workerNoteModel: Model<WorkerNoteDocument>,
     @InjectModel(UserActivityLog.name)
     private activityLogModel: Model<UserActivityLogDocument>,
+    private companyService: CompanyService,
   ) {}
 
   private async loadUserInCompany(
@@ -124,6 +126,71 @@ export class GdprService {
     };
   }
 
+  // Self-service account deletion (the "Delete account" button in the app).
+  // Unlike admin-initiated erase(), this HARD-deletes:
+  //   - a company owner (CompanyAdmin) tears down the entire tenant — the
+  //     company and every user/record scoped to it — via CompanyService.remove;
+  //   - anyone else has only their own user record removed, with references in
+  //     retained data scrubbed so bookkeeping stays valid.
+  async deleteOwnAccount(actor?: AuthUser) {
+    const userId = actor?.userId;
+    if (!userId) {
+      throw new NotFoundException("No authenticated user");
+    }
+    const user = await this.loadUserInCompany(userId, actor);
+
+    // Never let the platform's top-level account delete itself from a phone.
+    if (user.role === UserRole.SuperAdmin) {
+      throw new ForbiddenException("A superadmin account cannot be self-deleted");
+    }
+
+    // Company owner → cascade-delete the whole company (tenant).
+    if (user.role === UserRole.CompanyAdmin) {
+      if (!user.companyId) {
+        throw new NotFoundException("Account is not linked to a company");
+      }
+      await this.companyService.remove(String(user.companyId));
+      return { ok: true, deleted: "company", companyId: String(user.companyId) };
+    }
+
+    // Everyone else → physically remove just this user + their personal data,
+    // scrubbing references so retained bookkeeping stays referentially valid.
+    await this.scrubUserReferences(userId);
+    await this.userModel.findByIdAndDelete(userId).exec();
+    return { ok: true, deleted: "user", userId };
+  }
+
+  // Remove personal side-data owned by a user and scrub their name where it was
+  // snapshotted into retained records. Shared by erase() and deleteOwnAccount().
+  private async scrubUserReferences(userId: string) {
+    await Promise.all([
+      this.deviceTokenModel.deleteMany({ userId }),
+      // Notes written ABOUT this worker and their activity trail are personal
+      // data with no bookkeeping value — remove them outright.
+      this.workerNoteModel.deleteMany({ workerId: userId }),
+      this.activityLogModel.deleteMany({ userId }),
+      this.shiftModel.updateMany(
+        { workerId: userId },
+        { $set: { locationSnapshot: "" } },
+      ),
+      this.taskModel.updateMany(
+        { assigneeUserId: userId },
+        { $set: { assigneeUserName: "Raderad användare" } },
+      ),
+      // Scrub the worker's name where it was snapshotted into a task's
+      // notification assignees.
+      this.taskModel.updateMany(
+        { "notificationSettings.assignees.id": userId },
+        {
+          $set: {
+            "notificationSettings.assignees.$[a].name": "Raderad användare",
+          },
+        },
+        { arrayFilters: [{ "a.id": userId }] },
+      ),
+    ]);
+  }
+
   // Right to erasure: de-identify the user and remove/scrub linked personal
   // data. The record is kept (anonymised) so retained data (e.g. bookkeeping)
   // stays referentially valid.
@@ -145,28 +212,7 @@ export class GdprService {
     });
     await user.save();
 
-    await Promise.all([
-      this.deviceTokenModel.deleteMany({ userId }),
-      // Notes written ABOUT this worker and their activity trail are personal
-      // data with no bookkeeping value — remove them outright.
-      this.workerNoteModel.deleteMany({ workerId: userId }),
-      this.activityLogModel.deleteMany({ userId }),
-      this.shiftModel.updateMany(
-        { workerId: userId },
-        { $set: { locationSnapshot: "" } },
-      ),
-      this.taskModel.updateMany(
-        { assigneeUserId: userId },
-        { $set: { assigneeUserName: "Raderad användare" } },
-      ),
-      // Scrub the worker's name where it was snapshotted into a task's
-      // notification assignees.
-      this.taskModel.updateMany(
-        { "notificationSettings.assignees.id": userId },
-        { $set: { "notificationSettings.assignees.$[a].name": "Raderad användare" } },
-        { arrayFilters: [{ "a.id": userId }] },
-      ),
-    ]);
+    await this.scrubUserReferences(userId);
 
     return { ok: true, erasedAt };
   }

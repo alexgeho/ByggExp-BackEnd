@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
 import { GdprController } from "./gdpr.controller";
 import { GdprService } from "./gdpr.service";
+import { CompanyModule } from "../company/company.module";
 import { User, UserSchema } from "../users/schemas/user.schema";
 import { Shift, ShiftSchema } from "../shifts/schemas/shift.schema";
 import { Task, TaskSchema } from "../tasks/schemas/task.schema";
@@ -29,6 +30,7 @@ import {
 
 @Module({
   imports: [
+    CompanyModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Shift.name, schema: ShiftSchema },

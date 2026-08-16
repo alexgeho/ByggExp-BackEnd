@@ -17,12 +17,14 @@ import { GdprService } from "./gdpr.service";
 export class GdprController {
   constructor(private readonly gdprService: GdprService) {}
 
-  // Self-service erasure: any authenticated user can erase their own account
-  // (required by App Store / Google Play). No @Roles, so every role is
-  // allowed; erase() only touches the caller's own data.
+  // Self-service account deletion: any authenticated user can delete their own
+  // account (required by App Store / Google Play). No @Roles, so every role is
+  // allowed. A company owner's deletion cascades to the whole company; a
+  // non-owner's removes only their own record. deleteOwnAccount() only ever
+  // acts on the caller's own tenant/record.
   @Post("me/erase")
   eraseSelf(@Request() req) {
-    return this.gdprService.erase(req.user.userId, req.user);
+    return this.gdprService.deleteOwnAccount(req.user);
   }
 
   @Get("users/:id/export")
