@@ -1,44 +1,41 @@
 # Environments: keeping development off the production database
 
-Today local development, tests and the production server can all point at the
-**same** Atlas database (`/ByggExp`). That means anything you try locally — a
-test user, a planned shift, a draft invoice — lands in real customer data. A
-world-class SaaS never mixes the two. This document describes the target setup
-and how to get there.
+Local development and the production server now use **separate Atlas clusters**,
+so nothing you try locally — a test user, a planned shift, a draft invoice — can
+ever land in real customer data. This document describes the setup.
 
-## The model: one cluster, one database per environment
+> History: dev and prod used to share one cluster/database (`/ByggExp`). The
+> local `.env` was switched to a dedicated dev cluster on 2026-08-16.
 
-Use the **same Atlas cluster** but a **different database name** per environment
-(no extra cost, full data isolation):
+## The model: a separate cluster per tier
 
-| Environment | `NODE_ENV`    | Database      | Where            |
-| ----------- | ------------- | ------------- | ---------------- |
-| Production  | `production`  | `ByggExp`     | VPS only         |
-| Staging     | `production`  | `ByggExp_stg` | staging host/CI  |
-| Development | `development` | `ByggExp_dev` | your machine     |
+| Environment | `NODE_ENV`    | Atlas cluster (project)               | Database      | Where        |
+| ----------- | ------------- | ------------------------------------- | ------------- | ------------ |
+| Production  | `production`  | `cluster0.zgjfrlf` (Project 0)        | `ByggExp`     | VPS only     |
+| Development | `development` | `cluster0.rfx8tac` (byggexp-dev)      | `ByggExp_dev` | your machine |
 
-The connection string only differs in the path segment:
+Both are free-tier **M0** clusters. Dev has its own database user, so local
+credentials cannot reach production even by accident. (A staging tier can be
+added later — see below.)
+
+## One-time setup (local development) — DONE 2026-08-16
+
+Local `.env` already points at the dev cluster:
 
 ```
-mongodb+srv://USER:PASSWORD@cluster0.zgjfrlf.mongodb.net/ByggExp_dev?retryWrites=true&w=majority
+NODE_ENV=development
+MONGODB_URI=mongodb+srv://USER:PASSWORD@cluster0.rfx8tac.mongodb.net/ByggExp_dev?retryWrites=true&w=majority&appName=Cluster0
 ```
 
-## One-time setup (local development)
+(The database is created automatically on first write — no Atlas console step.)
+Start the API; it logs the active database on boot:
 
-1. In your local `.env`, set:
-   ```
-   NODE_ENV=development
-   MONGODB_URI=mongodb+srv://USER:PASSWORD@cluster0.zgjfrlf.mongodb.net/ByggExp_dev?retryWrites=true&w=majority
-   ```
-   (A brand-new database name is created automatically on first write — no Atlas
-   console step needed.)
-2. Start the API. It logs the active database and **warns** if a non-production
-   process is connected to the production database:
-   ```
-   [Bootstrap] Environment: development | Database: ByggExp_dev
-   ```
-   If you ever see `Database: ByggExp` with `Environment: development`, stop —
-   you are about to write to production.
+```
+[Bootstrap] Environment: development | Database: ByggExp_dev
+```
+
+If you ever see `Database: ByggExp` with `Environment: development`, the process
+**refuses to start** (see Guardrails) — that is by design.
 
 ## Seeding demo data
 
@@ -56,8 +53,10 @@ npm run seed:demo
 
 ## Guardrails already in place
 
-- **Startup log + warning** (`src/main.ts`): prints the environment + database
-  on boot and warns when a non-production process targets the production DB.
+- **Startup hard-fail** (`src/main.ts`): prints the environment + database on
+  boot and **refuses to start** (`process.exit(1)`) when a non-production
+  process targets a production-looking DB. Escape hatch: `ALLOW_PROD_DB=true`
+  for a deliberate run (e.g. a one-off migration/cleanup script against prod).
 - **Seed guard** (`scripts/seed-demo.ts`): won't seed a prod-looking DB.
 - **CI gate** (`.github/workflows/ci.yml` + the deploy workflow): tests must
   pass before anything is built or deployed.
@@ -77,5 +76,8 @@ Reuse the existing deploy pipeline against a separate host + database:
 
 ## Still to do
 
-- Move existing **test/demo records** out of the production `ByggExp` database
-  (the ones created while dev shared the prod DB).
+- Seed the fresh dev database: `npm run seed:demo` (dev cluster starts empty).
+- When real customers arrive, consider promoting **production** to a paid tier
+  (M10) with automated backups + IP allowlist; migrate `ByggExp` via
+  `mongodump`/`mongorestore` in a short maintenance window. Not needed while the
+  data is all mock/throwaway.

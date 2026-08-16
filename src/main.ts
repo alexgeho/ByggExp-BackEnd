@@ -58,20 +58,24 @@ async function bootstrap() {
   const logger = new Logger("Bootstrap");
   app.useLogger(logger);
 
-  // Make the active environment + database obvious, and loudly warn when a
+  // Make the active environment + database obvious, and REFUSE TO START when a
   // non-production process is pointed at the production database — so local
-  // development and tests never silently write to real customer data.
+  // development and tests can never silently write to real customer data.
+  // Escape hatch: set ALLOW_PROD_DB=true to intentionally run against prod
+  // (e.g. a one-off migration/cleanup script).
   const dbName =
     (process.env.MONGODB_URI || "").split("/").pop()?.split("?")[0] || "unknown";
   const nodeEnv = process.env.NODE_ENV || "development";
   logger.log(`Environment: ${nodeEnv} | Database: ${dbName}`);
   const looksLikeProdDb =
     /byggexp/i.test(dbName) && !/dev|stag|test|local/i.test(dbName);
-  if (nodeEnv !== "production" && looksLikeProdDb) {
-    logger.warn(
-      `⚠️  A non-production process is connected to what looks like the PRODUCTION database ("${dbName}"). ` +
-        `Point local development at a separate database (e.g. "${dbName}_dev") to avoid writing to real data.`,
+  const allowProdDb = process.env.ALLOW_PROD_DB === "true";
+  if (nodeEnv !== "production" && looksLikeProdDb && !allowProdDb) {
+    logger.error(
+      `🛑  Refusing to start: a non-production process (NODE_ENV="${nodeEnv}") is pointed at what looks like the PRODUCTION database ("${dbName}"). ` +
+        `Point local development at a separate database (e.g. "${dbName}_dev"), or set ALLOW_PROD_DB=true if this is intentional.`,
     );
+    process.exit(1);
   }
 
   app.useGlobalFilters(new AllExceptionsFilter());
