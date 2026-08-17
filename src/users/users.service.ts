@@ -878,18 +878,23 @@ export class UsersService {
   }
 
   async findAll(): Promise<User[]> {
-    return this.userModel.find().exec();
+    // erasedAt: null excludes GDPR-erased ("Raderad användare") tombstones from
+    // every user-facing list; the anonymised record is kept for retained data.
+    return this.userModel.find({ erasedAt: null }).exec();
   }
 
   async findAllByCompany(companyId: string): Promise<User[]> {
-    return this.userModel.find({ companyId }).exec();
+    return this.userModel.find({ companyId, erasedAt: null }).exec();
   }
 
   async findAllByProject(
     projectId: string,
     scopeCompanyId?: string | null,
   ): Promise<User[]> {
-    const query: Record<string, unknown> = { projectIds: projectId };
+    const query: Record<string, unknown> = {
+      projectIds: projectId,
+      erasedAt: null,
+    };
     if (scopeCompanyId) {
       query.companyId = scopeCompanyId;
     }
@@ -908,7 +913,7 @@ export class UsersService {
 
     if (isAdmin && companyId) {
       return this.userModel
-        .find({ companyId, _id: { $ne: userId } })
+        .find({ companyId, _id: { $ne: userId }, erasedAt: null })
         .exec();
     }
 
@@ -929,6 +934,7 @@ export class UsersService {
     // started). Kept tenant-isolated by the companyId filter below.
     const query: Record<string, unknown> = {
       _id: { $ne: userId },
+      erasedAt: null,
       $or: [
         { projectIds: { $in: projectIds } },
         { role: UserRole.CompanyAdmin },
@@ -1373,7 +1379,7 @@ export class UsersService {
   }
 
   async findAllByRole(role: UserRole, companyId?: string): Promise<User[]> {
-    const query: Record<string, unknown> = { role };
+    const query: Record<string, unknown> = { role, erasedAt: null };
     if (companyId) {
       query.companyId = companyId;
     }
