@@ -829,4 +829,56 @@ export class ProjectsService {
       })
       .lean();
   }
+
+  // One-shot populated fetch of every project the caller can see. Access
+  // scoping mirrors GET /projects/my (SuperAdmin = all, CompanyAdmin = own
+  // company, ProjectAdmin/Worker = own/assigned projects) and each project is
+  // populated the same way as findOneWithPopulated (incl. tasks). Lets the
+  // mobile app replace its per-project N+1 loop over /projects/:id/populated
+  // with a single request.
+  async findMyPopulated(user: ProjectAuthUser) {
+    let filter: Record<string, unknown>;
+    if (user?.role === UserRole.SuperAdmin) {
+      filter = {};
+    } else if (user?.role === UserRole.CompanyAdmin) {
+      filter = user.companyId ? { companyId: user.companyId } : { _id: null };
+    } else {
+      // ProjectAdmin / Worker: only projects they own or are assigned to.
+      const owner = user?.userId
+        ? await this.usersService.findOne(user.userId)
+        : null;
+      const userProjectIds = Array.isArray(owner?.projectIds)
+        ? owner.projectIds.filter(Boolean).map((projectId) => String(projectId))
+        : [];
+      filter = {
+        $or: [
+          { ownerId: user?.userId },
+          { projectManagerId: user?.userId },
+          { projectAdmins: user?.userId },
+          { workers: user?.userId },
+          ...(userProjectIds.length ? [{ _id: { $in: userProjectIds } }] : []),
+        ],
+      };
+    }
+
+    return this.projectModel
+      .find(filter)
+      .populate("ownerId", "name email role avatarUrl")
+      .populate("projectManagerId", "name email role avatarUrl")
+      .populate("companyId", "name email")
+      .populate(
+        "clientId",
+        "clientType companyName firstName lastName contactPerson email phone",
+      )
+      .populate("projectAdmins", "name email role avatarUrl")
+      .populate(
+        "workers",
+        "name email role profession avatarUrl workStatus workStatusProjectId workStatusUpdatedAt",
+      )
+      .populate(
+        "tasks",
+        "taskTitle taskDescription startDate dueDate documents status completedAt completedByUserId assigneeUserId assigneeUserName",
+      )
+      .lean();
+  }
 }

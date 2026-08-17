@@ -159,6 +159,14 @@ describe("Tenant isolation (e2e)", () => {
       expect(JSON.stringify(res.body)).not.toContain(projectIdA);
     });
 
+    it("GET /projects/my/populated excludes A", async () => {
+      const res = await request(http)
+        .get("/projects/my/populated")
+        .set("Authorization", `Bearer ${tokenB}`)
+        .expect(200);
+      expect(JSON.stringify(res.body)).not.toContain(projectIdA);
+    });
+
     it("POST /projects/by-ids excludes A", async () => {
       const res = await request(http)
         .post("/projects/by-ids")

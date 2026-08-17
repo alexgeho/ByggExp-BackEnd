@@ -156,6 +156,19 @@ export class ProjectsController {
     return this.projectsService.findAllByUser(req.user.userId);
   }
 
+  // Batch: every accessible project, populated (incl. tasks), in one request.
+  // Declared before ":id/populated" so the literal "my" isn't captured as :id.
+  @Get("my/populated")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  async findMyPopulated(@Request() req) {
+    return this.projectsService.findMyPopulated(req.user);
+  }
+
   @Get("info/:id")
   @Roles(
     UserRole.SuperAdmin,
