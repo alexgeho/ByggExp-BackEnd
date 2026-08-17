@@ -182,6 +182,9 @@ function resetPasswordFormHtml(token: string, error?: string): string {
 
 // Shown after a successful password reset.
 function resetSuccessHtml(): string {
+  const appUrl = "byggexp://";
+  const androidIntentUrl =
+    "intent://#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end";
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -194,14 +197,26 @@ function resetSuccessHtml(): string {
       h1 { font-size: 24px; margin: 0 0 12px; }
       p { margin: 0 0 16px; line-height: 1.5; color: #5a6b7d; }
       a.button { display: inline-block; background: #0785f4; color: #fff; text-decoration: none; padding: 14px 20px; border-radius: 999px; font-weight: 600; }
+      a.secondary { display: inline-block; margin-top: 16px; font-size: 13px; color: #5a6b7d; }
     </style>
   </head>
   <body>
     <div class="card">
       <h1>Password updated</h1>
-      <p>Your password has been changed. You can now sign in with your email and new password — in the app or the web admin.</p>
-      <a class="button" href="https://admin.byggexp.se/login">Go to sign in</a>
+      <p>Your password has been changed. Open the app and sign in with your new password.</p>
+      <a class="button" id="openIos" href="${appUrl}">Open the app</a>
+      <a class="button" id="openAndroid" href="${androidIntentUrl}" style="display:none;">Open the app</a>
+      <p><a class="secondary" href="https://admin.byggexp.se/login">or sign in on the web admin</a></p>
     </div>
+    <script>
+      (function () {
+        var isAndroid = /Android/i.test(navigator.userAgent || '');
+        if (isAndroid) {
+          document.getElementById('openIos').style.display = 'none';
+          document.getElementById('openAndroid').style.display = 'inline-block';
+        }
+      })();
+    </script>
   </body>
 </html>`;
 }
