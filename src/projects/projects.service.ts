@@ -743,6 +743,34 @@ export class ProjectsService {
       ]);
     }
 
+    // Keep project-admin membership in sync too (create() already does this on
+    // add; update() previously only synced workers, so admins added/removed via
+    // the edit form never had their projectIds updated).
+    if (updateProjectDto.projectAdmins) {
+      const previousAdminIds = (existingProject.projectAdmins || []).map(
+        (admin) => this.getEntityId(admin),
+      );
+      const nextAdminIds = updateProjectDto.projectAdmins.map((admin) =>
+        this.getEntityId(admin),
+      );
+
+      const addedAdminIds = nextAdminIds.filter(
+        (adminId) => !previousAdminIds.includes(adminId),
+      );
+      const removedAdminIds = previousAdminIds.filter(
+        (adminId) => !nextAdminIds.includes(adminId),
+      );
+
+      await Promise.all([
+        ...addedAdminIds.map((adminId) =>
+          this.usersService.addUserToProject(adminId, id),
+        ),
+        ...removedAdminIds.map((adminId) =>
+          this.usersService.removeUserFromProject(adminId, id),
+        ),
+      ]);
+    }
+
     return updatedProject;
   }
 
