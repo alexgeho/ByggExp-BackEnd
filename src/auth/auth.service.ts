@@ -177,6 +177,13 @@ export class AuthService {
 
     // No password yet — the user sets it on the page opened from the emailed
     // link (step 2). We only store a hashed link token here.
+    // Not a confirmed account, but a pending registration may already exist for
+    // this email — surface that to the client so it can tell the user the link
+    // is being re-sent instead of looking like a brand-new sign-up.
+    const alreadyPending = !!(await this.pendingRegistrationModel.findOne({
+      email,
+    }));
+
     const companyName = dto.companyName.trim();
     const userName = (dto.userName || dto.companyName).trim();
     const plainToken = randomBytes(32).toString("hex");
@@ -207,7 +214,7 @@ export class AuthService {
       this.logger.error(`Failed to send verification email: ${String(error)}`);
     }
 
-    return { pendingVerification: true, email };
+    return { pendingVerification: true, email, alreadyPending };
   }
 
   private hashToken(token: string): string {
