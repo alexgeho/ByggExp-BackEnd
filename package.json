@@ -31,7 +31,8 @@
     "backfill:project-worker-ids": "ts-node scripts/backfill-project-worker-ids.ts",
     "backfill:company-id": "ts-node scripts/backfill-company-id.ts",
     "clean:company": "ts-node scripts/clean-company-data.ts",
-    "clean:orphan-projects": "ts-node scripts/clean-orphan-projects.ts"
+    "clean:orphan-projects": "ts-node scripts/clean-orphan-projects.ts",
+    "clean:project-dates": "ts-node scripts/clean-project-dates.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
