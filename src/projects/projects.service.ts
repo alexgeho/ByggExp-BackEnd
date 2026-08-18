@@ -230,6 +230,21 @@ export class ProjectsService {
     return match.display_name?.trim() || "";
   }
 
+  // Coerce a project date to a real Date or null. Empty strings, unparseable
+  // values and the Unix-epoch fallback (a zeroed/missing date often lands on
+  // 1970-01-01) all become null, so the DB never stores "Invalid Date" garbage
+  // and the app never has to render "1/1/1970".
+  private cleanProjectDate(value: unknown): Date | null {
+    if (value === undefined || value === null || value === "") {
+      return null;
+    }
+    const date = new Date(value as string | number | Date);
+    if (Number.isNaN(date.getTime()) || date.getUTCFullYear() <= 1970) {
+      return null;
+    }
+    return date;
+  }
+
   private async resolveCreatePayload(
     createProjectDto: CreateProjectDto,
     currentUser?: {
@@ -301,6 +316,8 @@ export class ProjectsService {
       clientId,
       ownerId,
       projectManagerId,
+      beginningDate: this.cleanProjectDate(createProjectDto.beginningDate) ?? undefined,
+      endDate: this.cleanProjectDate(createProjectDto.endDate) ?? undefined,
     };
   }
 
@@ -703,12 +720,25 @@ export class ProjectsService {
           }
         : {};
 
+    // Normalise any date the caller actually sends, so editing a project can
+    // both set a real date and clear a bad one (empty/invalid/epoch → null).
+    const datePatch: Record<string, Date | null> = {};
+    if ("beginningDate" in updateProjectDto) {
+      datePatch.beginningDate = this.cleanProjectDate(
+        updateProjectDto.beginningDate,
+      );
+    }
+    if ("endDate" in updateProjectDto) {
+      datePatch.endDate = this.cleanProjectDate(updateProjectDto.endDate);
+    }
+
     const updatedProject = await this.projectModel
       .findByIdAndUpdate(
         id,
         {
           ...updateProjectDto,
           ...clientPatch,
+          ...datePatch,
           documents: nextDocuments,
         },
         { new: true },
