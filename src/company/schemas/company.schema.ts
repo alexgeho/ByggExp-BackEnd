@@ -83,7 +83,8 @@ export class Company {
   @Prop({ type: String, default: null })
   stripeSubscriptionId?: string | null;
 
-  // "basic" | "pro" | null — the tier the active subscription maps to.
+  // "start" | "tillvaxt" | "professionell" | null — the tier the active
+  // subscription (or a manual superadmin assignment) maps to. See billing/plans.ts.
   @Prop({ type: String, default: null })
   plan?: string | null;
 

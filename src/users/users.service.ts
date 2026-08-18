@@ -859,7 +859,10 @@ export class UsersService {
   }
 
   // Enforce the company's seat limit (plan/trial). No-op when the company has
-  // no maxUsers set (unlimited). Counts the users already in the tenant.
+  // no maxUsers set (unlimited). Counts only ACTIVE seats — GDPR-erased
+  // tombstones (erasedAt set) are anonymised records, not employees, so they
+  // must not consume a seat (this also keeps the count in sync with the
+  // admin app's "X / N" banner, which lists erasedAt:null users).
   async assertCompanySeatAvailable(companyId: string | null): Promise<void> {
     if (!companyId) {
       return;
@@ -872,10 +875,13 @@ export class UsersService {
     if (max == null) {
       return;
     }
-    const count = await this.userModel.countDocuments({ companyId });
+    const count = await this.userModel.countDocuments({
+      companyId,
+      erasedAt: null,
+    });
     if (count >= max) {
       throw new ForbiddenException(
-        `Your plan is limited to ${max} users. Upgrade to add more.`,
+        `Din plan är begränsad till ${max} användare. Uppgradera för att lägga till fler.`,
       );
     }
   }
