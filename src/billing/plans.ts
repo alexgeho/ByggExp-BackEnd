@@ -47,3 +47,17 @@ export const tierForPriceId = (priceId: string): PlanTier | null => {
 };
 
 export const ACTIVE_STATUSES = new Set(["trialing", "active", "past_due"]);
+
+// Seat limit (max users) each plan tier includes by default. All features are
+// available on every tier — the tiers differ ONLY by how many employees a
+// company may have. A superadmin can override the number per company; "Anpassad"
+// (40+ users, contact-only) has no self-serve cap. These are the defaults
+// applied when a plan is assigned; change here to reprice seats.
+export const PLAN_MAX_USERS: Record<PlanTier, number> = {
+  start: 10,
+  tillvaxt: 25,
+  professionell: 40,
+};
+
+export const maxUsersForPlan = (plan?: string | null): number | null =>
+  plan && isPlanTier(plan) ? PLAN_MAX_USERS[plan] : null;

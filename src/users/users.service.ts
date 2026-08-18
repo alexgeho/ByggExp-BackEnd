@@ -568,6 +568,9 @@ export class UsersService {
       companyId?: string | null;
     },
   ): Promise<UserDocument> {
+    // Seat limit applies to every creation path — bulk import and invite go
+    // through here, so enforcing it once closes the single-create bypass.
+    await this.assertCompanySeatAvailable(createUserDto.companyId ?? null);
     const plainPassword = this.generateInvitePassword();
     const hashedPassword = await this.hashPassword(plainPassword);
     const { plainToken, hashedToken } = this.buildVerificationToken();

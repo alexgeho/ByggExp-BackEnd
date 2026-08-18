@@ -206,9 +206,9 @@ export class CompanyController {
   @Roles(UserRole.SuperAdmin)
   async setPlan(
     @Param("id") id: string,
-    @Body() body: { plan?: string | null },
+    @Body() body: { plan?: string | null; maxUsers?: number | null },
   ) {
-    return this.companyService.setPlan(id, body?.plan ?? null);
+    return this.companyService.setPlan(id, body?.plan ?? null, body?.maxUsers);
   }
 
   // Set the per-company override map. Superadmin: any company, no limits.

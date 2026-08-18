@@ -28,6 +28,7 @@ import {
   sanitizeOverrides,
   TOGGLEABLE_MODULES,
 } from "./modules";
+import { isPlanTier, maxUsersForPlan } from "../billing/plans";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -258,12 +259,23 @@ export class CompanyService {
   async setPlan(
     id: string,
     plan: string | null,
+    maxUsers?: number | null,
   ): Promise<ModuleResolution> {
-    const allowed = new Set(["start", "tillvaxt", "professionell"]);
-    const value = plan && allowed.has(plan) ? plan : null;
+    const value = plan && isPlanTier(plan) ? plan : null;
+    // Explicit maxUsers wins; otherwise assigning a plan applies its default
+    // seat count and clearing the plan lifts the cap (unlimited). A number
+    // clamps to a positive integer; null/0 means unlimited.
+    const seats =
+      maxUsers === undefined
+        ? value
+          ? maxUsersForPlan(value)
+          : null
+        : typeof maxUsers === "number" && maxUsers > 0
+          ? Math.floor(maxUsers)
+          : null;
     const company = await this.companyModel
-      .findByIdAndUpdate(id, { plan: value }, { new: true })
-      .select("plan moduleOverrides")
+      .findByIdAndUpdate(id, { plan: value, maxUsers: seats }, { new: true })
+      .select("plan moduleOverrides maxUsers")
       .exec();
     if (!company) {
       throw new NotFoundException(`Company with ID "${id}" not found`);
@@ -275,7 +287,7 @@ export class CompanyService {
   async getModules(id: string): Promise<ModuleResolution> {
     const company = await this.companyModel
       .findById(id)
-      .select("plan moduleOverrides")
+      .select("plan moduleOverrides maxUsers")
       .exec();
     if (!company) {
       throw new NotFoundException(`Company with ID "${id}" not found`);
@@ -316,7 +328,7 @@ export class CompanyService {
 
     const company = await this.companyModel
       .findByIdAndUpdate(id, { moduleOverrides: clean }, { new: true })
-      .select("plan moduleOverrides")
+      .select("plan moduleOverrides maxUsers")
       .exec();
     if (!company) {
       throw new NotFoundException(`Company with ID "${id}" not found`);

@@ -78,11 +78,13 @@ export interface ModuleResolution {
   planModules: string[];
   overrides: Record<string, boolean>;
   enabled: string[];
+  maxUsers: number | null;
 }
 
 export function resolveModules(company: {
   plan?: string | null;
   moduleOverrides?: Record<string, boolean> | null;
+  maxUsers?: number | null;
 }): ModuleResolution {
   const base = planBaseline(company.plan);
   const overrides = company.moduleOverrides || {};
@@ -94,6 +96,7 @@ export function resolveModules(company: {
     planModules: base,
     overrides,
     enabled: [...CORE_MODULES, ...enabledToggleable],
+    maxUsers: company.maxUsers ?? null,
   };
 }
 
