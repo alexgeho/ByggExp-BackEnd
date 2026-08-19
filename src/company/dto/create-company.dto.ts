@@ -45,6 +45,16 @@ export class CreateCompanyDto {
   @IsOptional()
   vatStatus?: string;
 
+  // ISO country code of the company's home market (e.g. "SE", "NO").
+  @IsString()
+  @IsOptional()
+  country?: string;
+
+  // ISO 4217 currency the company invoices in (e.g. "SEK", "NOK").
+  @IsString()
+  @IsOptional()
+  currency?: string;
+
   @IsString()
   @IsOptional()
   logoUrl?: string;
