@@ -96,7 +96,7 @@ body {
   display: grid;
   grid-template-columns: 1.15fr 1fr 0.95fr;
   gap: 20px;
-  min-height: 300px;
+  min-height: 255px;
   margin-bottom: 18px;
 }
 .invoice-header__col {
@@ -357,7 +357,7 @@ const REVERSE_VAT_NOTICE_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + 12);
 // so the bottom detail blocks pin near the base of the header (mirrors the
 // reference). Total = page top padding + header min-height + bottom margin.
 const HEADER_PAGE_TOP_PADDING_PX = Math.ceil(14 * MM_TO_PX);
-const HEADER_BLOCK_MIN_HEIGHT_PX = 300;
+const HEADER_BLOCK_MIN_HEIGHT_PX = 255;
 const HEADER_BOTTOM_MARGIN_PX = 18;
 const INVOICE_HEADER_HEIGHT_PX = Math.ceil(
   HEADER_PAGE_TOP_PADDING_PX + HEADER_BLOCK_MIN_HEIGHT_PX + HEADER_BOTTOM_MARGIN_PX,
