@@ -20,6 +20,9 @@ export type InvoicePdfItem = {
   price?: number;
   discount?: number;
   vatRate?: number;
+  // Text-only row (heading / note) — rendered under the priced rows spanning the
+  // description, with no numbers, and excluded from the totals.
+  isText?: boolean;
 };
 
 export type InvoicePdfData = {
@@ -233,6 +236,7 @@ function groupVatByRate(items: InvoicePdfItem[]): VatGroup[] {
   const map = new Map<number, { base: number; amount: number }>();
 
   for (const item of items) {
+    if (item.isText) continue;
     const price = typeof item.price === 'number' ? item.price : 0;
     const discount = typeof item.discount === 'number' ? item.discount : 0;
     const quantity = typeof item.quantity === 'number' ? item.quantity : 0;
@@ -309,6 +313,16 @@ function buildItemRows(items: InvoicePdfItem[]): string {
 
   return items
     .map((item) => {
+      // Text-only row: heading/note spanning the description, no numbers.
+      if (item.isText) {
+        return `
+        <tr class="invoice-lines__item invoice-lines__text">
+          <td></td>
+          <td class="description" colspan="5">${multilineText(item.description)}</td>
+        </tr>
+      `;
+      }
+
       const price = typeof item.price === 'number' ? item.price : 0;
       const discount = typeof item.discount === 'number' ? item.discount : 0;
       const quantity = typeof item.quantity === 'number' ? item.quantity : 0;
@@ -598,6 +612,13 @@ function buildFooter(footer: InvoicePdfCompanyFooter = {}): string {
 }
 
 export function buildInvoicePdfHtmlPuppeteer(data: InvoicePdfData, logoDataUrl = ''): string {
+  // Text-only rows always render under the priced rows, regardless of the order
+  // they were entered in (stable partition: priced first, then text).
+  const items = data.items || [];
+  if (items.some((it) => it.isText)) {
+    const ordered = [...items.filter((it) => !it.isText), ...items.filter((it) => it.isText)];
+    data = { ...data, items: ordered };
+  }
   const pages = paginateInvoiceItemsByCount(data);
   const pageCount = pages.length;
   const pagesHtml = pages

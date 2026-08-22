@@ -38,6 +38,10 @@ export class InvoiceItemDto {
   @IsOptional()
   @IsNumber()
   vatRate?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isText?: boolean;
 }
 
 export class InvoiceCompanyFooterDto {

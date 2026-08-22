@@ -33,6 +33,11 @@ export class InvoiceItem {
 
   @Prop({ type: Number, default: 25 })
   vatRate?: number;
+
+  // Text-only row (heading / note shown under the priced rows). No amount and
+  // excluded from the totals.
+  @Prop({ type: Boolean, default: false })
+  isText?: boolean;
 }
 
 const InvoiceItemSchema = SchemaFactory.createForClass(InvoiceItem);

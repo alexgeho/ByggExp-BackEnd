@@ -73,4 +73,25 @@ describe('invoice PDF template', () => {
     expect(html).toContain('Kreditfaktura');
     expect(html).toContain('Avser faktura');
   });
+
+  it('renders a text row spanning the description with no amount', () => {
+    const html = buildInvoicePdfHtmlPuppeteer({
+      ...base,
+      items: [...oneItem, { isText: true, description: 'Tillkommande arbeten' }],
+    });
+    expect(html).toContain('invoice-lines__text');
+    expect(html).toContain('colspan="5"');
+    expect(html).toContain('Tillkommande arbeten');
+  });
+
+  it('places text rows under the priced rows regardless of input order', () => {
+    const html = buildInvoicePdfHtmlPuppeteer({
+      ...base,
+      items: [
+        { isText: true, description: 'RUBRIK' },
+        { articleNumber: '1', description: 'Arbete', quantity: 1, unit: 'h', price: 500, vatRate: 25 },
+      ],
+    });
+    expect(html.indexOf('Arbete')).toBeLessThan(html.indexOf('RUBRIK'));
+  });
 });

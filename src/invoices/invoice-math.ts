@@ -6,6 +6,9 @@ export type MoneyItem = {
   price?: number;
   discount?: number;
   vatRate?: number;
+  // Text-only rows (headings / notes placed between priced rows) carry no
+  // amount and never affect the totals.
+  isText?: boolean;
 };
 
 export type InvoiceTotals = { subtotal: number; vat: number; total: number };
@@ -22,6 +25,7 @@ export function calculateInvoiceTotals(
   let subtotal = 0;
   let vat = 0;
   for (const item of items) {
+    if (item?.isText) continue;
     const quantity = Number(item?.quantity ?? 0);
     const price = Number(item?.price ?? 0);
     const discount = Number(item?.discount ?? 0);
