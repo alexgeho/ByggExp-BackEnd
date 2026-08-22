@@ -78,7 +78,19 @@ export class OffersService {
   async buildOfferHtml(id: string, user: AuthUser): Promise<string> {
     const offer = await this.findOne(id, user);
     const companyFooter = await this.resolveCompanyFooter(offer.companyId);
-    const logoDataUrl = await this.getLogoDataUrl(offer.logoUrl);
+    // Logo is snapshotted at offer creation, so offers made before a logo was
+    // uploaded have none. Fall back to the company's current logo — branding is
+    // cosmetic, not a frozen legal field like line items or amounts.
+    let logoUrl = offer.logoUrl;
+    if (!logoUrl) {
+      const company = await this.companyModel
+        .findById(offer.companyId)
+        .select('logoUrl')
+        .lean()
+        .exec();
+      logoUrl = company?.logoUrl ?? null;
+    }
+    const logoDataUrl = await this.getLogoDataUrl(logoUrl);
 
     const data: OfferPdfData = {
       offerNumber: String(offer.offerNumber),

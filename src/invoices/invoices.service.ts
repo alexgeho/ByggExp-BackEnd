@@ -335,22 +335,28 @@ export class InvoicesService {
   async buildInvoiceHtml(id: string, user: AuthUser): Promise<string> {
     const invoice = await this.findOne(id, user);
     const data = this.toPdfData(invoice);
-    const logoDataUrl = await this.getLogoDataUrl(data.logoUrl);
 
-    // Giro numbers drive both the printed Bankgiro/Plusgiro line and the payment
-    // QR. Older invoices were snapshotted before we captured giro, so fall back
-    // to the live company here — a giro is a stable payment detail, not a
-    // line-item that must stay frozen for legal immutability.
+    // Logo + giro are snapshotted at invoice creation, so invoices made before a
+    // logo/giro was configured have none. Fall back to the live company for both
+    // — branding and payment account are cosmetic/stable, not frozen legal fields
+    // like line items or amounts. Load the company once for both fallbacks.
     const footer = { ...(data.companyFooter || {}) };
-    if (!footer.bankgiro && !footer.plusgiro) {
+    let logoUrl = data.logoUrl;
+    if (!logoUrl || !footer.bankgiro && !footer.plusgiro) {
       const company = await this.companyModel
         .findById(invoice.companyId)
         .lean()
         .exec();
-      footer.bankgiro = company?.bankgiro || '';
-      footer.plusgiro = company?.plusgiro || '';
+      if (!logoUrl) {
+        logoUrl = company?.logoUrl ?? null;
+      }
+      if (!footer.bankgiro && !footer.plusgiro) {
+        footer.bankgiro = company?.bankgiro || '';
+        footer.plusgiro = company?.plusgiro || '';
+      }
     }
     data.companyFooter = footer;
+    const logoDataUrl = await this.getLogoDataUrl(logoUrl);
 
     data.qrDataUrl = await buildInvoiceQrDataUrl({
       companyName: footer.name || data.companyName,
