@@ -72,7 +72,7 @@ body {
   margin-bottom: 18px;
 }
 .offer-header__logo img { max-height: 110px; max-width: 100%; object-fit: contain; display: block; }
-.offer-header__title { font-size: 26px; font-weight: bold; margin-bottom: 6px; }
+.offer-header__title { font-size: 32px; font-weight: bold; margin-bottom: 8px; }
 .offer-header__recipient { font-size: 13px; }
 .offer-header__meta { display: grid; grid-template-columns: max-content 1fr; column-gap: 10px; row-gap: 2px; font-size: 13px; margin: 0; }
 .offer-header__meta dt { font-weight: bold; }
@@ -94,12 +94,13 @@ body {
   margin: 0 0 18px;
   white-space: pre-wrap;
 }
-.offer-items { width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 13px; }
+.offer-items { width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 13px; border: 1px solid #333; }
 .offer-items th {
-  text-align: left; border-bottom: 1.5px solid #1b2a3a; padding: 6px 8px;
+  text-align: left; border-bottom: 1px solid #333; padding: 6px 8px 8px;
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b;
 }
-.offer-items td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+.offer-items td { padding: 7px 8px 0; vertical-align: top; }
+.offer-items tbody tr:last-child td { padding-bottom: 8px; }
 .offer-items .num { text-align: right; white-space: nowrap; }
 .offer-totals { width: 100%; margin: 0 0 18px; }
 .offer-totals table { margin-left: auto; border-collapse: collapse; font-size: 14px; }
