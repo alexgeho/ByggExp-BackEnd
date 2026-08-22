@@ -131,6 +131,12 @@ function multiline(value?: string): string {
   return text(value);
 }
 
+// Like multiline(), but turns real newlines into <br> so multi-line line-item
+// descriptions render as separate rows instead of collapsing into one line.
+function multilineBr(value?: string): string {
+  return text(value).replaceAll('\n', '<br>');
+}
+
 function section(title: string, body: string): string {
   if (!body || !body.trim()) return '';
   return `
@@ -157,7 +163,7 @@ function buildItemsHtml(items: OfferPdfItem[], data: OfferPdfData): string {
       const amount = q * p * (1 - d / 100);
       return `
         <tr>
-          <td>${multiline(it.description || '')}</td>
+          <td>${multilineBr(it.description || '')}</td>
           <td class="num">${money(q).replace(',00', '')}</td>
           <td>${text(it.unit || 'st')}</td>
           <td class="num">${money(p)}</td>
