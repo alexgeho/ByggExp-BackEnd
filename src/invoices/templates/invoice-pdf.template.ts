@@ -168,6 +168,7 @@ body {
 
 .invoice-paybox {
   background: #efefef;
+  border-top: 1px solid #333;
   border-left: 1px solid #333;
   padding: 16px 18px;
   display: grid;
@@ -193,8 +194,6 @@ body {
 /* ---- Footer ---- */
 .invoice-footer {
   width: 100%;
-  border-top: 1px solid #cfcfcf;
-  padding-top: 10px;
   margin-top: 16px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);

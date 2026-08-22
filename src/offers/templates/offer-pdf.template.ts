@@ -105,12 +105,11 @@ body {
 .offer-totals { width: 100%; margin: 0 0 18px; }
 .offer-totals table { margin-left: auto; border-collapse: collapse; font-size: 14px; }
 .offer-totals td { padding: 3px 0 3px 24px; text-align: right; }
-.offer-totals .grand td { border-top: 1.5px solid #1b2a3a; font-size: 17px; font-weight: bold; padding-top: 7px; }
+.offer-totals .grand td { border-top: 1px solid #333; font-size: 17px; font-weight: bold; padding-top: 7px; }
 .offer-contacts { margin: 0 0 18px; }
 .offer-contacts__row { font-size: 14px; }
 .offer-footer {
   margin-top: auto;
-  border-top: 1px solid #1b2a3a;
   padding-top: 8px;
   width: 100%;
   border-collapse: separate;
