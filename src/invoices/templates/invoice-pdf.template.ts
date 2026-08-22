@@ -123,18 +123,18 @@ body {
   border-collapse: collapse;
   table-layout: fixed;
   align-self: stretch;
+  border: 1px solid #333;
 }
 .invoice-lines thead th {
   text-align: left;
   font-weight: bold;
-  padding: 4px 10px 8px;
-  border-bottom: 1.5px solid #1b1b1b;
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid #333;
   font-size: 14px;
   vertical-align: bottom;
 }
 .invoice-lines tbody td {
-  padding: 8px 10px;
-  border-bottom: 1px solid #e2e2e2;
+  padding: 7px 10px 0;
   font-size: 14px;
   vertical-align: top;
 }
@@ -147,20 +147,25 @@ body {
 .reverse-note { font-size: 14px; padding: 12px 10px 0; }
 
 /* ---- Summary: totals (left) + gray payment box with QR (right) ---- */
-.invoice-summary-cell { padding: 24px 0 0; }
+.invoice-summary-cell { padding: 0; }
 .invoice-summary-grid {
   display: grid;
   grid-template-columns: 2fr 3fr;
-  gap: 24px;
-  align-items: end;
+  align-items: stretch;
 }
-.invoice-totals { border-collapse: collapse; font-size: 15px; width: 100%; }
-.invoice-totals td { padding: 3px 0; }
+.invoice-summary-left {
+  display: flex;
+  align-items: flex-end;
+  padding: 0 10px 6px;
+}
+.invoice-totals { border-collapse: collapse; font-size: 15px; width: 100%; border-top: 1px solid #333; }
+.invoice-totals td { padding: 4px 0 0; }
 .invoice-totals td.k { font-weight: bold; padding-right: 40px; white-space: nowrap; }
 .invoice-totals td.v { text-align: right; white-space: nowrap; }
 
 .invoice-paybox {
   background: #efefef;
+  border-left: 1px solid #333;
   padding: 16px 18px;
   display: grid;
   grid-template-columns: auto 1fr;
@@ -501,12 +506,14 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
       <tr>
         <td colspan="6" class="invoice-summary-cell">
           <div class="invoice-summary-grid">
-            <table class="invoice-totals">
-              <tr><td class="k">Exkl. moms</td><td class="v">${formatInvoiceAmount(subtotal)}</td></tr>
-              ${vatLines}
-              ${rotLine}
-              ${roundingLine}
-            </table>
+            <div class="invoice-summary-left">
+              <table class="invoice-totals">
+                <tr><td class="k">Exkl. moms</td><td class="v">${formatInvoiceAmount(subtotal)}</td></tr>
+                ${vatLines}
+                ${rotLine}
+                ${roundingLine}
+              </table>
+            </div>
             ${buildPaymentBox(data, roundedTotal)}
           </div>
         </td>
