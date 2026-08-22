@@ -25,6 +25,9 @@ const OfferContactPersonSchema =
 @Schema({ _id: false })
 export class OfferItem {
   @Prop({ default: '' })
+  articleNumber?: string;
+
+  @Prop({ default: '' })
   description?: string;
 
   @Prop({ type: Number, default: 1 })

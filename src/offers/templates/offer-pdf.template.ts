@@ -16,6 +16,7 @@ export type OfferPdfContactPerson = {
 };
 
 export type OfferPdfItem = {
+  articleNumber?: string;
   description?: string;
   quantity?: number;
   unit?: string;
@@ -163,6 +164,7 @@ function buildItemsHtml(items: OfferPdfItem[], data: OfferPdfData): string {
       const amount = q * p * (1 - d / 100);
       return `
         <tr>
+          <td>${text(it.articleNumber || '')}</td>
           <td>${multilineBr(it.description || '')}</td>
           <td class="num">${money(q).replace(',00', '')}</td>
           <td>${text(it.unit || 'st')}</td>
@@ -176,6 +178,7 @@ function buildItemsHtml(items: OfferPdfItem[], data: OfferPdfData): string {
     <table class="offer-items">
       <thead>
         <tr>
+          <th>Art.nr</th>
           <th>Beskrivning</th>
           <th class="num">Antal</th>
           <th>Enhet</th>

@@ -22,6 +22,10 @@ export class OfferContactPersonDto {
 export class OfferItemDto {
   @IsOptional()
   @IsString()
+  articleNumber?: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
 
   @IsOptional()

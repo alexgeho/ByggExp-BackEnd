@@ -104,6 +104,7 @@ export class OffersService {
       clarifications: offer.clarifications,
       contactPersons: offer.contactPersons,
       items: (offer.items || []).map((it) => ({
+        articleNumber: it?.articleNumber,
         description: it?.description,
         quantity: it?.quantity,
         unit: it?.unit,
