@@ -1,3 +1,5 @@
+import sanitizeHtml from 'sanitize-html';
+
 export type OfferPdfCompanyFooter = {
   name?: string;
   address?: string;
@@ -79,7 +81,10 @@ body {
 .offer-subtitle { font-size: 19px; font-weight: bold; margin: 4px 0 14px; }
 .offer-section { margin: 0 0 18px; }
 .offer-section__title { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; margin: 0 0 4px; }
-.offer-section__text { white-space: pre-wrap; word-break: break-word; }
+.offer-section__text { word-break: break-word; }
+.offer-section__text p { margin: 0 0 6px; }
+.offer-section__text ul, .offer-section__text ol { margin: 4px 0 6px; padding-left: 20px; }
+.offer-section__text li { margin: 2px 0; }
 .offer-price {
   border: 1px solid #1b2a3a;
   background: antiquewhite;
@@ -138,12 +143,30 @@ function multilineBr(value?: string): string {
   return text(value).replaceAll('\n', '<br>');
 }
 
+// Rich-text fields (description, clarifications) may contain HTML from the
+// admin editor (bold, bullet/numbered lists). Sanitize to a safe whitelist so
+// nothing malicious reaches the PDF renderer. Plain-text values (older offers,
+// or typed without formatting) have no tags — render them with <br> for
+// newlines so they look the same as before.
+function richHtml(value?: string): string {
+  const raw = (value ?? '').toString();
+  if (!raw.trim()) return '';
+  const looksLikeHtml = /<[a-z][\s\S]*>/i.test(raw);
+  if (!looksLikeHtml) {
+    return multilineBr(raw);
+  }
+  return sanitizeHtml(raw, {
+    allowedTags: ['b', 'strong', 'i', 'em', 'u', 'p', 'br', 'ul', 'ol', 'li', 'span'],
+    allowedAttributes: {},
+  });
+}
+
 function section(title: string, body: string): string {
   if (!body || !body.trim()) return '';
   return `
     <div class="offer-section">
       <p class="offer-section__title">${title}</p>
-      <div class="offer-section__text">${multiline(body)}</div>
+      <div class="offer-section__text">${richHtml(body)}</div>
     </div>
   `;
 }
