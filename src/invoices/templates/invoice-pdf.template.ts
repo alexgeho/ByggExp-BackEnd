@@ -123,7 +123,8 @@ body {
 /* ---- Line items: light table, no outer box ---- */
 .invoice-lines {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
   align-self: stretch;
   border: 1px solid #333;
