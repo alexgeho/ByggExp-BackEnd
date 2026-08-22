@@ -91,18 +91,17 @@ body {
 .invoice-page__body { flex: 1; padding: 0 16mm; display: flex; flex-direction: column; }
 .invoice-page__footer { padding: 0 16mm 8mm; }
 
-/* ---- Header: 3 columns, each with a top block and a bottom detail block ---- */
-.invoice-header {
+/* ---- Header: a top band (logo | title+recipient | meta) and a detail row
+   whose two columns are top-aligned (Kundnr and Vår referens on one line). ---- */
+.invoice-header__top,
+.invoice-header__details {
   display: grid;
   grid-template-columns: 1.15fr 1fr 0.95fr;
   gap: 20px;
-  min-height: 255px;
-  margin-bottom: 18px;
+  align-items: start;
 }
-.invoice-header__col {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+.invoice-header__details {
+  margin: 24px 0 18px;
 }
 .invoice-header__logo img { max-height: 150px; max-width: 100%; object-fit: contain; display: block; }
 .invoice-header__sida { text-align: right; font-size: 13px; color: #333; margin-bottom: 14px; }
@@ -264,17 +263,9 @@ function buildHeader(
 
   return `
     <header class="invoice-header">
-      <!-- Column 1: logo (top) + customer-side references (bottom) -->
-      <div class="invoice-header__col">
+      <!-- Top band: logo | title + recipient | Sida + invoice meta -->
+      <div class="invoice-header__top">
         <div class="invoice-header__logo">${logo}</div>
-        <dl>
-          <dt>Kundnr</dt><dd>${text(data.customerNumber) || '&nbsp;'}</dd>
-          <dt>Er referens</dt><dd>${text(data.yourReference) || '&nbsp;'}</dd>
-          <dt>Er orderreferens</dt><dd>${text(data.orderReference) || '&nbsp;'}</dd>
-        </dl>
-      </div>
-      <!-- Column 2: title + recipient (top) + our references (bottom) -->
-      <div class="invoice-header__col">
         <div>
           <div class="invoice-header__title">${data.creditOfNumber ? 'Kreditfaktura' : 'Faktura'}</div>
           <div class="invoice-header__recipient">
@@ -283,15 +274,6 @@ function buildHeader(
             ${text(data.postalCode) || '&nbsp;'}
           </div>
         </div>
-        <dl>
-          <dt>Vår referens</dt><dd>${text(data.ourReference) || '&nbsp;'}</dd>
-          <dt>Leveransdatum</dt><dd>${text(data.deliveryDate) || '&nbsp;'}</dd>
-          <dt>Förfallodatum</dt><dd>${text(data.dueDate) || '&nbsp;'}</dd>
-          ${data.lateInterest ? `<dt>Dröjsmålsränta</dt><dd>${text(data.lateInterest)}</dd>` : ''}
-        </dl>
-      </div>
-      <!-- Column 3: Sida + invoice meta (top) -->
-      <div class="invoice-header__col">
         <div>
           <div class="invoice-header__sida">Sida ${pageIndex + 1}(${pageCount})</div>
           <dl>
@@ -301,6 +283,21 @@ function buildHeader(
             <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || '&nbsp;'}</dd>
           </dl>
         </div>
+      </div>
+      <!-- Detail row: customer refs | our refs, top-aligned -->
+      <div class="invoice-header__details">
+        <dl>
+          <dt>Kundnr</dt><dd>${text(data.customerNumber) || '&nbsp;'}</dd>
+          <dt>Er referens</dt><dd>${text(data.yourReference) || '&nbsp;'}</dd>
+          <dt>Er orderreferens</dt><dd>${text(data.orderReference) || '&nbsp;'}</dd>
+        </dl>
+        <dl>
+          <dt>Vår referens</dt><dd>${text(data.ourReference) || '&nbsp;'}</dd>
+          <dt>Leveransdatum</dt><dd>${text(data.deliveryDate) || '&nbsp;'}</dd>
+          <dt>Förfallodatum</dt><dd>${text(data.dueDate) || '&nbsp;'}</dd>
+          ${data.lateInterest ? `<dt>Dröjsmålsränta</dt><dd>${text(data.lateInterest)}</dd>` : ''}
+        </dl>
+        <div></div>
       </div>
     </header>
   `;
@@ -357,10 +354,16 @@ const REVERSE_VAT_NOTICE_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + 12);
 // so the bottom detail blocks pin near the base of the header (mirrors the
 // reference). Total = page top padding + header min-height + bottom margin.
 const HEADER_PAGE_TOP_PADDING_PX = Math.ceil(14 * MM_TO_PX);
-const HEADER_BLOCK_MIN_HEIGHT_PX = 255;
+const HEADER_TOP_BAND_PX = 150; // logo is the tallest element in the top band
+const HEADER_DETAILS_GAP_PX = 24; // margin above the detail row
+const HEADER_DETAILS_ROWS = 4;
 const HEADER_BOTTOM_MARGIN_PX = 18;
 const INVOICE_HEADER_HEIGHT_PX = Math.ceil(
-  HEADER_PAGE_TOP_PADDING_PX + HEADER_BLOCK_MIN_HEIGHT_PX + HEADER_BOTTOM_MARGIN_PX,
+  HEADER_PAGE_TOP_PADDING_PX
+    + HEADER_TOP_BAND_PX
+    + HEADER_DETAILS_GAP_PX
+    + HEADER_DETAILS_ROWS * (BODY_LINE_HEIGHT_PX + 3)
+    + HEADER_BOTTOM_MARGIN_PX,
 );
 
 // Footer: top border/margin + up to 5 text lines (Telefon column) + bottom padding.
