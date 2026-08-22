@@ -226,9 +226,9 @@ function buildFooter(footer: OfferPdfCompanyFooter = {}): string {
     <table class="offer-footer">
       <tr>
         <td><b>Adress</b><br>${text(footer.name)}<br>${text(footer.address)}<br>${text(footer.city)}</td>
-        <td><b>Telefon</b><br>${text(footer.phone)}<br><b>E-post</b><br>${text(footer.email)}</td>
-        <td><b>Webbplats</b><br>${text(footer.website)}<br><b>Organisationsnr</b><br>${text(footer.orgNumber)}</td>
-        <td><b>Momsreg.nr</b><br>${text(footer.vatNumber)}<br>${text(footer.vatStatus)}</td>
+        <td><b>Telefon</b><br>${text(footer.phone)}<br><b>E-post/Webbplats</b><br>${text(footer.email)}<br>${text(footer.website)}</td>
+        <td><b>Organisationsnr</b><br>${text(footer.orgNumber)}<br>${text(footer.vatStatus)}</td>
+        <td><b>Momsreg.nr</b><br>${text(footer.vatNumber)}</td>
       </tr>
     </table>
   `;
