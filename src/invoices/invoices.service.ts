@@ -20,6 +20,7 @@ import { generateOCR } from './generate-ocr';
 import { calculateInvoiceTotals, deriveInvoiceSettlement } from './invoice-math';
 import { Invoice, InvoiceDocument, InvoiceStatus } from './schemas/invoice.schema';
 import { launchForInvoicePdf } from './puppeteer-launch';
+import { buildInvoiceQrDataUrl } from './invoice-qr';
 import {
   buildInvoicePdfHtmlPuppeteer,
   InvoicePdfData,
@@ -336,6 +337,32 @@ export class InvoicesService {
     const data = this.toPdfData(invoice);
     const logoDataUrl = await this.getLogoDataUrl(data.logoUrl);
 
+    // Giro numbers drive both the printed Bankgiro/Plusgiro line and the payment
+    // QR. Older invoices were snapshotted before we captured giro, so fall back
+    // to the live company here — a giro is a stable payment detail, not a
+    // line-item that must stay frozen for legal immutability.
+    const footer = { ...(data.companyFooter || {}) };
+    if (!footer.bankgiro && !footer.plusgiro) {
+      const company = await this.companyModel
+        .findById(invoice.companyId)
+        .lean()
+        .exec();
+      footer.bankgiro = company?.bankgiro || '';
+      footer.plusgiro = company?.plusgiro || '';
+    }
+    data.companyFooter = footer;
+
+    data.qrDataUrl = await buildInvoiceQrDataUrl({
+      companyName: footer.name || data.companyName,
+      orgNumber: footer.orgNumber,
+      ocr: data.ocr || data.invoiceNumber,
+      invoiceDate: data.date,
+      dueDate: data.dueDate,
+      amount: data.roundedTotal ?? data.total,
+      bankgiro: footer.bankgiro,
+      plusgiro: footer.plusgiro,
+    });
+
     return buildInvoicePdfHtmlPuppeteer(data, logoDataUrl);
   }
 
@@ -408,6 +435,8 @@ export class InvoicesService {
       orgNumber: company?.orgNumber || '',
       vatNumber: company?.vatNumber || '',
       vatStatus,
+      bankgiro: company?.bankgiro || '',
+      plusgiro: company?.plusgiro || '',
     };
   }
 

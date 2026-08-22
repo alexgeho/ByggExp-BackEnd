@@ -65,6 +65,12 @@ export class InvoiceCompanyFooter {
 
   @Prop({ default: "Godkänd för F-skatt" })
   vatStatus?: string;
+
+  @Prop({ default: "" })
+  bankgiro?: string;
+
+  @Prop({ default: "" })
+  plusgiro?: string;
 }
 
 const InvoiceCompanyFooterSchema =

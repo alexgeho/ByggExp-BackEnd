@@ -8,6 +8,8 @@ export type InvoicePdfCompanyFooter = {
   orgNumber?: string;
   vatNumber?: string;
   vatStatus?: string;
+  bankgiro?: string;
+  plusgiro?: string;
 };
 
 export type InvoicePdfItem = {
@@ -49,6 +51,9 @@ export type InvoicePdfData = {
   dueDate?: string;
   ocr?: string;
   companyFooter?: InvoicePdfCompanyFooter;
+  // Data URL of the pre-rendered payment QR code (Swedish BGC format). When
+  // absent (e.g. no Bankgiro configured) the QR slot is simply omitted.
+  qrDataUrl?: string;
 };
 
 type VatGroup = {
@@ -63,8 +68,9 @@ const INVOICE_PDF_CSS = `
 html, body { margin: 0; padding: 0; }
 body {
   font-family: Helvetica, Arial, sans-serif;
-  font-size: 15px;
-  line-height: 1.3;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #1b1b1b;
   background: white;
 }
 .invoice-document { width: 210mm; margin: 0 auto; }
@@ -78,122 +84,129 @@ body {
   overflow: hidden;
 }
 .invoice-page:last-child { page-break-after: auto; }
-.invoice-page__header { padding: 4mm 15mm 1mm; }
-.invoice-page__body { flex: 1; padding: 0 15mm; }
-.invoice-page__footer { margin-top: 8px; padding: 0 15mm 8mm; }
+.invoice-page__header { padding: 14mm 16mm 0; }
+.invoice-page__body { flex: 1; padding: 0 16mm; display: flex; flex-direction: column; }
+.invoice-page__footer { padding: 0 16mm 8mm; }
+
+/* ---- Header: logo (left) | Sida + title + meta + recipient (right) ---- */
 .invoice-header__top {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
   align-items: start;
-  gap: 12px;
 }
-.invoice-header__logo img {
-  max-height: 120px;
-  width: auto;
-  height: auto;
-  display: block;
-  object-fit: contain;
-}
-.invoice-header__title {
-  font-size: 24px;
-  font-weight: bold;
-  margin-bottom: 4px;
-}
-.invoice-header__address,
-.invoice-header__meta,
-.invoice-header__details { font-size: 13px; }
-.invoice-header__meta,
-.invoice-header__details {
+.invoice-header__logo img { max-height: 130px; max-width: 100%; object-fit: contain; display: block; }
+.invoice-header__sida { text-align: right; font-size: 13px; color: #333; }
+.invoice-header__title { font-size: 32px; font-weight: bold; margin: 2px 0 16px; }
+.invoice-header__meta {
   display: grid;
   grid-template-columns: max-content 1fr;
-  column-gap: 10px;
-  row-gap: 2px;
+  column-gap: 24px;
+  row-gap: 3px;
+  font-size: 14px;
   margin: 0;
 }
-.invoice-header__meta dt,
-.invoice-header__details dt { font-weight: bold; margin: 0; }
-.invoice-header__meta dd,
-.invoice-header__details dd { margin: 0; }
-.invoice-header__bottom {
+.invoice-header__meta dt { margin: 0; }
+.invoice-header__meta dd { margin: 0; }
+.invoice-header__recipient { margin-top: 22px; font-weight: bold; font-size: 15px; line-height: 1.5; }
+
+/* ---- Details row (below header, above table) ---- */
+.invoice-details {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  align-items: end;
-  margin: 15px 0;
+  gap: 24px;
+  margin: 30px 0 20px;
+  font-size: 14px;
 }
+.invoice-details dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 22px;
+  row-gap: 4px;
+  margin: 0;
+  align-content: start;
+}
+.invoice-details dt { margin: 0; }
+.invoice-details dd { margin: 0; }
+
+/* ---- Line items: light table, no outer box ---- */
 .invoice-lines {
   width: 100%;
   border-collapse: collapse;
-  align-self: stretch;
-  border: 1px solid black;
   table-layout: fixed;
+  align-self: stretch;
 }
-.invoice-lines thead { border-bottom: 1px solid black; }
-.invoice-lines th,
-.invoice-lines td {
-  padding: 5px 8px;
-  font-size: 15px;
+.invoice-lines thead th {
+  text-align: left;
+  font-weight: bold;
+  padding: 4px 10px 8px;
+  border-bottom: 1.5px solid #1b1b1b;
+  font-size: 14px;
+  vertical-align: bottom;
+}
+.invoice-lines tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e2e2;
+  font-size: 14px;
   vertical-align: top;
 }
-.invoice-lines th { font-weight: bold; }
-.invoice-lines__filler td { padding: 0; line-height: 0; }
-.invoice-lines__footer td { vertical-align: bottom; }
-.description {
-  text-align: left;
-  white-space: normal;
-  word-break: break-word;
-}
-.nowrap,
-.quantity,
-.unit,
-.amount { white-space: nowrap; }
-.amount {
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-}
+.invoice-lines__filler td { padding: 0; line-height: 0; border: none; }
+.invoice-lines__footer td { vertical-align: bottom; border: none; padding: 0; }
+.description { text-align: left; white-space: normal; word-break: break-word; }
+.nowrap, .quantity, .unit, .amount { white-space: nowrap; }
+.amount { font-variant-numeric: tabular-nums; }
 .r { text-align: right; }
-.invoice-summary {
+.reverse-note { font-size: 14px; padding: 12px 10px 0; }
+
+/* ---- Summary: totals (left) + gray payment box with QR (right) ---- */
+.invoice-summary-cell { padding: 24px 0 0; }
+.invoice-summary-grid {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 24px;
+  align-items: end;
+}
+.invoice-totals { border-collapse: collapse; font-size: 15px; width: 100%; }
+.invoice-totals td { padding: 3px 0; }
+.invoice-totals td.k { font-weight: bold; padding-right: 40px; white-space: nowrap; }
+.invoice-totals td.v { text-align: right; white-space: nowrap; }
+
+.invoice-paybox {
+  background: #efefef;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 18px;
+  align-items: start;
+}
+.invoice-paybox__qr { width: 110px; height: 110px; display: block; }
+.invoice-paybox dl {
   display: grid;
   grid-template-columns: 1fr auto;
-  margin: 0;
-  row-gap: 4px;
-  border-top: 1px solid black;
-  padding-top: 4px;
-}
-.invoice-summary dt { font-weight: bold; }
-.invoice-summary dd { margin: 0; text-align: right; }
-.invoice-total-box {
-  border: 1px solid black;
-  border-bottom: none;
-  background: antiquewhite;
-  padding: 8px 8px 0;
-}
-.invoice-total-box dl {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  margin: 0;
+  column-gap: 12px;
   row-gap: 6px;
+  margin: 0;
+  align-content: start;
 }
-.invoice-total-box dt { font-weight: bold; }
-.invoice-total-box dd { margin: 0; text-align: right; }
-.invoice-total-box__total {
-  font-size: 16px;
-  font-weight: bold;
-}
+.invoice-paybox dt { font-weight: bold; margin: 0; }
+.invoice-paybox dd { margin: 0; text-align: right; white-space: nowrap; }
+.invoice-paybox .note { grid-column: 1 / -1; font-style: italic; color: #333; margin: -2px 0 2px; font-size: 13px; }
+.invoice-paybox dt.att, .invoice-paybox dd.att { font-size: 20px; font-weight: bold; padding-top: 12px; white-space: nowrap; }
+.invoice-paybox--noqr { grid-template-columns: 1fr; }
+
+/* ---- Footer ---- */
 .invoice-footer {
   width: 100%;
-  border: none;
-  border-collapse: separate;
-  border-spacing: 0 4px;
-  padding: 6px 0 8px;
-  font-family: Helvetica, Arial, sans-serif;
-  font-size: 15px;
+  border-top: 1px solid #cfcfcf;
+  padding-top: 10px;
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  font-size: 13px;
+  line-height: 1.5;
 }
-.invoice-footer td {
-  width: 25%;
-  vertical-align: top;
-  padding: 0;
-  border: none;
-}
+.invoice-footer b { display: block; }
 `;
 
 export function formatInvoiceAmount(value: number): string {
@@ -244,38 +257,45 @@ function groupVatByRate(items: InvoicePdfItem[]): VatGroup[] {
     .sort((a, b) => b.rate - a.rate);
 }
 
-function buildHeader(data: InvoicePdfData, logoDataUrl = ''): string {
+function buildHeader(
+  data: InvoicePdfData,
+  logoDataUrl: string,
+  pageIndex: number,
+  pageCount: number,
+): string {
   const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : '';
 
   return `
     <header class="invoice-header">
       <div class="invoice-header__top">
         <div class="invoice-header__logo">${logo}</div>
-        <div>
+        <div class="invoice-header__right">
+          <div class="invoice-header__sida">Sida ${pageIndex + 1}(${pageCount})</div>
           <div class="invoice-header__title">${data.creditOfNumber ? 'Kreditfaktura' : 'Faktura'}</div>
-          <div class="invoice-header__address">
+          <dl class="invoice-header__meta">
+            <dt>Fakturadatum</dt><dd>${text(data.date) || '&nbsp;'}</dd>
+            <dt>Fakturanr</dt><dd>${text(data.invoiceNumber) || '&nbsp;'}</dd>
+            ${data.creditOfNumber ? `<dt>Avser faktura</dt><dd>${text(data.creditOfNumber)}</dd>` : ''}
+            <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || '&nbsp;'}</dd>
+          </dl>
+          <div class="invoice-header__recipient">
             ${text(data.companyName) || '&nbsp;'}<br>
             ${text(data.address) || '&nbsp;'}<br>
             ${text(data.postalCode) || '&nbsp;'}
           </div>
         </div>
-        <dl class="invoice-header__meta">
-          <dt>Fakturadatum</dt><dd>${text(data.date) || '&nbsp;'}</dd>
-          <dt>Fakturanr</dt><dd>${text(data.invoiceNumber) || '&nbsp;'}</dd>
-          ${data.creditOfNumber ? `<dt>Avser faktura</dt><dd>${text(data.creditOfNumber)}</dd>` : ''}
-          <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || '&nbsp;'}</dd>
-        </dl>
       </div>
-      <div class="invoice-header__bottom">
-        <dl class="invoice-header__details">
+      <div class="invoice-details">
+        <dl>
           <dt>Kundnr</dt><dd>${text(data.customerNumber) || '&nbsp;'}</dd>
           <dt>Er referens</dt><dd>${text(data.yourReference) || '&nbsp;'}</dd>
           <dt>Er orderreferens</dt><dd>${text(data.orderReference) || '&nbsp;'}</dd>
         </dl>
-        <dl class="invoice-header__details">
+        <dl>
           <dt>Vår referens</dt><dd>${text(data.ourReference) || '&nbsp;'}</dd>
           <dt>Leveransdatum</dt><dd>${text(data.deliveryDate) || '&nbsp;'}</dd>
           <dt>Förfallodatum</dt><dd>${text(data.dueDate) || '&nbsp;'}</dd>
+          ${data.lateInterest ? `<dt>Dröjsmålsränta</dt><dd>${text(data.lateInterest)}</dd>` : ''}
         </dl>
       </div>
     </header>
@@ -310,34 +330,41 @@ function buildItemRows(items: InvoicePdfItem[]): string {
 
 const MM_TO_PX = 96 / 25.4;
 const A4_PAGE_HEIGHT_PX = Math.floor(297 * MM_TO_PX);
-const BODY_FONT_SIZE_PX = 15;
-const BODY_LINE_HEIGHT = 1.3;
+const BODY_FONT_SIZE_PX = 14;
+const BODY_LINE_HEIGHT = 1.4;
 const BODY_LINE_HEIGHT_PX = BODY_FONT_SIZE_PX * BODY_LINE_HEIGHT;
-const TABLE_CELL_VERTICAL_PADDING_PX = 10;
+const TABLE_CELL_VERTICAL_PADDING_PX = 16;
 const TABLE_ROW_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + TABLE_CELL_VERTICAL_PADDING_PX);
-const TABLE_HEADER_HEIGHT_PX = TABLE_ROW_HEIGHT_PX;
-const REVERSE_VAT_NOTICE_HEIGHT_PX = TABLE_ROW_HEIGHT_PX;
-const HEADER_TOP_SECTION_HEIGHT_PX = 150 + Math.ceil(7 * MM_TO_PX);
-const HEADER_DETAILS_ROWS = 7;
-const HEADER_DETAILS_GAP_PX = Math.ceil(3 * MM_TO_PX);
-const INVOICE_HEADER_HEIGHT_PX = Math.ceil(
-  HEADER_TOP_SECTION_HEIGHT_PX
-    + (HEADER_DETAILS_ROWS * BODY_LINE_HEIGHT_PX)
-    + HEADER_DETAILS_GAP_PX
-    + 1,
+// Header row uses 4+8 padding and a 1.5px rule.
+const TABLE_HEADER_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + 12 + 2);
+const REVERSE_VAT_NOTICE_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + 12);
+
+// Header block = page top padding + logo/right column + details row.
+// Right column: sida (~18) + title (32*1.2 + 18 margin) + meta 3 rows + recipient 4 lines.
+const HEADER_PAGE_TOP_PADDING_PX = Math.ceil(14 * MM_TO_PX);
+const HEADER_RIGHT_COLUMN_PX = Math.ceil(
+  18 + (32 * 1.2 + 18) + 3 * (BODY_LINE_HEIGHT_PX + 3) + 22 + 4 * (15 * 1.5),
 );
-const FOOTER_LINE_COUNT = 4;
-const FOOTER_MARGIN_TOP_PX = 8;
+const HEADER_LOGO_PX = 130;
+const HEADER_TOP_SECTION_HEIGHT_PX = Math.max(HEADER_RIGHT_COLUMN_PX, HEADER_LOGO_PX);
+// Details row: 30 top margin + up to 4 rows + 20 bottom margin.
+const HEADER_DETAILS_HEIGHT_PX = Math.ceil(30 + 4 * (BODY_LINE_HEIGHT_PX + 4) + 20);
+const INVOICE_HEADER_HEIGHT_PX = Math.ceil(
+  HEADER_PAGE_TOP_PADDING_PX + HEADER_TOP_SECTION_HEIGHT_PX + HEADER_DETAILS_HEIGHT_PX,
+);
+
+// Footer: top border/margin + up to 5 text lines (Telefon column) + bottom padding.
+const FOOTER_LINE_COUNT = 5;
+const FOOTER_MARGIN_TOP_PX = 16;
+const FOOTER_TOP_PADDING_PX = 10;
 const FOOTER_BOTTOM_PADDING_PX = Math.ceil(8 * MM_TO_PX);
-const FOOTER_TABLE_PADDING_PX = 14;
-const FOOTER_TABLE_ROW_GAP_PX = 4;
 const INVOICE_FOOTER_HEIGHT_PX = Math.ceil(
   FOOTER_MARGIN_TOP_PX
+    + FOOTER_TOP_PADDING_PX
     + FOOTER_BOTTOM_PADDING_PX
-    + FOOTER_TABLE_PADDING_PX
-    + FOOTER_TABLE_ROW_GAP_PX
-    + (FOOTER_LINE_COUNT * BODY_LINE_HEIGHT_PX),
+    + FOOTER_LINE_COUNT * BODY_LINE_HEIGHT_PX,
 );
+
 const INVOICE_TABLE_HEIGHT_PX = Math.max(
   TABLE_ROW_HEIGHT_PX,
   A4_PAGE_HEIGHT_PX - INVOICE_HEADER_HEIGHT_PX - INVOICE_FOOTER_HEIGHT_PX,
@@ -345,14 +372,14 @@ const INVOICE_TABLE_HEIGHT_PX = Math.max(
 
 function calculateSummaryHeightPx(data: InvoicePdfData, isReverseVAT: boolean): number {
   const vatGroups = groupVatByRate(data.items || []);
-  const leftLineCount = 1 + (isReverseVAT ? 1 : Math.max(1, vatGroups.length));
-  const rightLineCount = 3;
-  const leftBlockHeight = 12 + 4 + (leftLineCount * BODY_LINE_HEIGHT_PX)
-    + Math.max(0, leftLineCount - 1) * 4;
-  const rightBlockHeight = 1 + 8 + (rightLineCount * BODY_LINE_HEIGHT_PX)
-    + Math.max(0, rightLineCount - 1) * 6;
-
-  return Math.ceil(Math.max(leftBlockHeight, rightBlockHeight));
+  // Left totals: Exkl. moms + VAT lines + Avrundning.
+  const rounding = Number(data.rounding) || 0;
+  const leftLineCount =
+    1 + (isReverseVAT ? 1 : Math.max(1, vatGroups.length)) + (rounding ? 1 : 0);
+  const leftBlockHeight = leftLineCount * (15 * 1.4 + 6);
+  // Right payment box: QR (120) vs the text lines, whichever is taller, + padding.
+  const rightBlockHeight = 120 + 32;
+  return Math.ceil(24 + Math.max(leftBlockHeight, rightBlockHeight));
 }
 
 function calculateReservedTableHeightPx(
@@ -430,6 +457,29 @@ function paginateInvoiceItemsByCount(data: InvoicePdfData): Array<{
   return pages;
 }
 
+function buildPaymentBox(data: InvoicePdfData, roundedTotal: number): string {
+  const qr = data.qrDataUrl
+    ? `<img class="invoice-paybox__qr" src="${data.qrDataUrl}" alt="" />`
+    : '';
+  const footer = data.companyFooter || {};
+  const giroLabel = footer.bankgiro ? 'Bankgiro' : footer.plusgiro ? 'Plusgiro' : '';
+  const giroValue = footer.bankgiro || footer.plusgiro || '';
+  const giroLine = giroValue ? `<dt>${giroLabel}</dt><dd>${text(giroValue)}</dd>` : '';
+
+  return `
+    <div class="invoice-paybox${qr ? '' : ' invoice-paybox--noqr'}">
+      ${qr}
+      <dl>
+        <dt>Förfallodatum</dt><dd>${text(data.dueDate)}</dd>
+        <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber)}</dd>
+        <div class="note">Anges vid betalning.</div>
+        ${giroLine}
+        <dt class="att">Att betala</dt><dd class="att">${formatInvoiceAmount(roundedTotal)}</dd>
+      </dl>
+    </div>
+  `;
+}
+
 function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
   const items = data.items || [];
   const vatGroups = groupVatByRate(items);
@@ -439,42 +489,34 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
   const rotDeduction = Number(data.rotDeduction) || 0;
   const rounding = Number(data.rounding) || 0;
   const roundedTotal = data.roundedTotal ?? Math.round(total - rotDeduction);
+
   const vatLines = isReverseVAT
-    ? '<dt>Moms (0%)</dt><dd>0,00</dd>'
+    ? '<tr><td class="k">Moms (0 %)</td><td class="v">0,00</td></tr>'
     : vatGroups
-      .map((group) => `<dt>Moms (${group.rate}%)</dt><dd>${formatInvoiceAmount(group.amount)}</dd>`)
+      .map(
+        (group) =>
+          `<tr><td class="k">Moms (${group.rate} %)</td><td class="v">${formatInvoiceAmount(group.amount)}</td></tr>`,
+      )
       .join('');
 
-  // Extra settlement lines: ROT deduction and öresavrundning only show when set,
-  // and are only meaningful when "Att betala" differs from the raw total.
-  const hasSettlement = rotDeduction !== 0 || rounding !== 0;
-  const totalLabel = hasSettlement ? 'Totalbelopp' : 'Att betala';
-  const settlementLines = `
-    <dt>${totalLabel}</dt><dd>${formatInvoiceAmount(total)}</dd>
-    ${rotDeduction ? `<dt>ROT-avdrag</dt><dd>${formatInvoiceAmount(-rotDeduction)}</dd>` : ''}
-    ${rounding ? `<dt>Öresavrundning</dt><dd>${formatInvoiceAmount(rounding)}</dd>` : ''}
-    ${hasSettlement
-      ? `<dt class="invoice-total-box__total">Att betala</dt><dd class="invoice-total-box__total">${formatInvoiceAmount(roundedTotal)}</dd>`
-      : ''}`;
+  // ROT and öresavrundning only surface when they actually change the amount due.
+  const rotLine = rotDeduction
+    ? `<tr><td class="k">ROT-avdrag</td><td class="v">${formatInvoiceAmount(-rotDeduction)}</td></tr>`
+    : '';
+  const roundingLine = `<tr><td class="k">Avrundning</td><td class="v">${formatInvoiceAmount(rounding)}</td></tr>`;
 
   return `
     <tfoot class="invoice-lines__footer">
-      ${isReverseVAT ? '<tr><td colspan="6" style="font-style: italic;">Omvänd skattskyldighet för byggtjänster gäller</td></tr>' : ''}
-      ${data.rotEnabled ? `<tr><td colspan="6" style="font-style: italic;">ROT-avdrag: personnr ${text(data.rotPersonalNumber) || '—'}${data.rotProperty ? `, fastighet ${text(data.rotProperty)}` : ''}</td></tr>` : ''}
       <tr>
-        <td colspan="2" style="vertical-align: bottom; width: 40%;">
-          <dl class="invoice-summary">
-            <dt>Exkl. moms</dt><dd>${formatInvoiceAmount(subtotal)}</dd>
-            ${vatLines}
-          </dl>
-        </td>
-        <td colspan="4" style="vertical-align: bottom; padding: 0; width: 60%;">
-          <div class="invoice-total-box">
-            <dl>
-              <dt>Förfallodatum</dt><dd>${text(data.dueDate)}</dd>
-              <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber)}</dd>
-              ${settlementLines}
-            </dl>
+        <td colspan="6" class="invoice-summary-cell">
+          <div class="invoice-summary-grid">
+            <table class="invoice-totals">
+              <tr><td class="k">Exkl. moms</td><td class="v">${formatInvoiceAmount(subtotal)}</td></tr>
+              ${vatLines}
+              ${rotLine}
+              ${roundingLine}
+            </table>
+            ${buildPaymentBox(data, roundedTotal)}
           </div>
         </td>
       </tr>
@@ -488,29 +530,31 @@ function buildLinesTable(
   showSummary: boolean,
   isReverseVAT: boolean,
 ): string {
-  const noteRow = showSummary && isReverseVAT
-    ? '<tr><td colspan="6" style="font-style: italic;">Omvänd skattskyldighet för byggtjänster gäller</td></tr>'
-    : '';
   const fillerHeightPx = calculateFillerHeightPx(data, items.length, showSummary, isReverseVAT);
   const fillerRow = fillerHeightPx > 0
     ? `<tr class="invoice-lines__filler" style="height:${fillerHeightPx}px;"><td colspan="6"></td></tr>`
+    : '';
+  // Reverse-VAT / ROT notices sit directly under the line items (top), matching
+  // the reference layout — only on the page that carries the summary.
+  const noteRows = showSummary
+    ? `${isReverseVAT ? '<tr><td colspan="6" class="reverse-note" style="font-style: italic;">Omvänd skattskyldighet för byggtjänster gäller</td></tr>' : ''}${data.rotEnabled ? `<tr><td colspan="6" class="reverse-note" style="font-style: italic;">ROT-avdrag: personnr ${text(data.rotPersonalNumber) || '—'}${data.rotProperty ? `, fastighet ${text(data.rotProperty)}` : ''}</td></tr>` : ''}`
     : '';
   const summaryFooter = showSummary ? buildSummary(data, isReverseVAT) : '';
 
   return `
     <table class="invoice-lines" style="height:${INVOICE_TABLE_HEIGHT_PX}px;">
       <colgroup>
-        <col style="width: 9%;" />
-        <col style="width: 39%;" />
         <col style="width: 8%;" />
-        <col style="width: 6%;" />
-        <col style="width: 18%;" />
-        <col style="width: 20%;" />
+        <col style="width: 42%;" />
+        <col style="width: 12%;" />
+        <col style="width: 8%;" />
+        <col style="width: 14%;" />
+        <col style="width: 16%;" />
       </colgroup>
       <thead>
         <tr>
           <th>Art.nr</th>
-          <th class="description">Benämning</th>
+          <th class="description">Beskrivning</th>
           <th class="r nowrap quantity">Antal</th>
           <th class="nowrap unit">Enhet</th>
           <th class="r nowrap amount">À-pris</th>
@@ -519,7 +563,7 @@ function buildLinesTable(
       </thead>
       <tbody>
         ${buildItemRows(items)}
-        ${noteRow}
+        ${noteRows}
         ${fillerRow}
       </tbody>
       ${summaryFooter}
@@ -531,13 +575,13 @@ function buildInvoicePdfPage(
   data: InvoicePdfData,
   logoDataUrl: string,
   items: InvoicePdfItem[],
-  opts: { showSummary: boolean },
+  opts: { showSummary: boolean; pageIndex: number; pageCount: number },
 ): string {
   const isReverseVAT = data.reverseVAT === 'true';
 
   return `
     <section class="invoice-page">
-      <div class="invoice-page__header">${buildHeader(data, logoDataUrl)}</div>
+      <div class="invoice-page__header">${buildHeader(data, logoDataUrl, opts.pageIndex, opts.pageCount)}</div>
       <div class="invoice-page__body">${buildLinesTable(data, items, opts.showSummary, isReverseVAT)}</div>
       <div class="invoice-page__footer">${buildFooter(data.companyFooter)}</div>
     </section>
@@ -546,22 +590,23 @@ function buildInvoicePdfPage(
 
 function buildFooter(footer: InvoicePdfCompanyFooter = {}): string {
   return `
-    <table class="invoice-footer">
-      <tr>
-        <td><b>Adress</b><br>${text(footer.name)}<br>${text(footer.address)}<br>${text(footer.city)}</td>
-        <td><b>Telefon</b><br>${text(footer.phone)}<br><b>E-post</b><br>${text(footer.email)}</td>
-        <td><b>Webbplats</b><br>${text(footer.website)}<br><b>Organisationsnr</b><br>${text(footer.orgNumber)}</td>
-        <td><b>Momsreg.nr</b><br>${text(footer.vatNumber)}<br>${text(footer.vatStatus)}</td>
-      </tr>
-    </table>
+    <div class="invoice-footer">
+      <div><b>Adress</b>${text(footer.name)}<br>${text(footer.address)}<br>${text(footer.city)}</div>
+      <div><b>Telefon</b>${text(footer.phone)}<br><b style="margin-top:8px">E-post/Webbplats</b>${text(footer.email)}<br>${text(footer.website)}</div>
+      <div><b>Organisationsnr</b>${text(footer.orgNumber)}<br>${text(footer.vatStatus)}</div>
+      <div><b>Momsreg.nr</b>${text(footer.vatNumber)}</div>
+    </div>
   `;
 }
 
 export function buildInvoicePdfHtmlPuppeteer(data: InvoicePdfData, logoDataUrl = ''): string {
   const pages = paginateInvoiceItemsByCount(data);
+  const pageCount = pages.length;
   const pagesHtml = pages
-    .map((page) => buildInvoicePdfPage(data, logoDataUrl, page.items, {
+    .map((page, pageIndex) => buildInvoicePdfPage(data, logoDataUrl, page.items, {
       showSummary: page.showSummary,
+      pageIndex,
+      pageCount,
     }))
     .join('');
 

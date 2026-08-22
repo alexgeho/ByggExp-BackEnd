@@ -45,6 +45,16 @@ export class CreateCompanyDto {
   @IsOptional()
   vatStatus?: string;
 
+  // Bankgiro number shown on invoices and encoded into the payment QR code.
+  @IsString()
+  @IsOptional()
+  bankgiro?: string;
+
+  // Plusgiro number (alternative to Bankgiro).
+  @IsString()
+  @IsOptional()
+  plusgiro?: string;
+
   // ISO country code of the company's home market (e.g. "SE", "NO").
   @IsString()
   @IsOptional()

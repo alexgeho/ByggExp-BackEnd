@@ -65,6 +65,15 @@ export class Company {
   @Prop({ default: "" })
   vatStatus: string;
 
+  // Bankgiro number (e.g. "256-7030") used as the payment account on invoices
+  // and encoded into the invoice payment QR code. Empty = no Bankgiro.
+  @Prop({ default: "" })
+  bankgiro: string;
+
+  // Plusgiro number (alternative to Bankgiro). Only one is normally used.
+  @Prop({ default: "" })
+  plusgiro: string;
+
   // ISO country code of the company's home market (e.g. "SE", "NO"). Drives
   // market-specific behaviour in the admin: VAT rate options, ROT availability
   // (Sweden only) and the default currency. Defaults to Sweden for back-compat.
