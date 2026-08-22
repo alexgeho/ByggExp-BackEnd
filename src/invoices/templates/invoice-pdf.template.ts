@@ -88,46 +88,34 @@ body {
 .invoice-page__body { flex: 1; padding: 0 16mm; display: flex; flex-direction: column; }
 .invoice-page__footer { padding: 0 16mm 8mm; }
 
-/* ---- Header: logo (left) | Sida + title + meta + recipient (right) ---- */
-.invoice-header__top {
+/* ---- Header: 3 columns, each with a top block and a bottom detail block ---- */
+.invoice-header {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  align-items: start;
+  grid-template-columns: 1.15fr 1fr 0.95fr;
+  gap: 20px;
+  min-height: 300px;
+  margin-bottom: 18px;
 }
-.invoice-header__logo img { max-height: 130px; max-width: 100%; object-fit: contain; display: block; }
-.invoice-header__sida { text-align: right; font-size: 13px; color: #333; }
-.invoice-header__title { font-size: 32px; font-weight: bold; margin: 2px 0 16px; }
-.invoice-header__meta {
+.invoice-header__col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.invoice-header__logo img { max-height: 150px; max-width: 100%; object-fit: contain; display: block; }
+.invoice-header__sida { text-align: right; font-size: 13px; color: #333; margin-bottom: 14px; }
+.invoice-header__title { font-size: 32px; font-weight: bold; margin: 0 0 14px; }
+.invoice-header__recipient { font-weight: bold; font-size: 15px; line-height: 1.5; }
+.invoice-header dl {
   display: grid;
   grid-template-columns: max-content 1fr;
-  column-gap: 24px;
+  column-gap: 18px;
   row-gap: 3px;
   font-size: 14px;
   margin: 0;
-}
-.invoice-header__meta dt { margin: 0; }
-.invoice-header__meta dd { margin: 0; }
-.invoice-header__recipient { margin-top: 22px; font-weight: bold; font-size: 15px; line-height: 1.5; }
-
-/* ---- Details row (below header, above table) ---- */
-.invoice-details {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin: 30px 0 20px;
-  font-size: 14px;
-}
-.invoice-details dl {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  column-gap: 22px;
-  row-gap: 4px;
-  margin: 0;
   align-content: start;
 }
-.invoice-details dt { margin: 0; }
-.invoice-details dd { margin: 0; }
+.invoice-header dt { margin: 0; }
+.invoice-header dd { margin: 0; }
 
 /* ---- Line items: light table, no outer box ---- */
 .invoice-lines {
@@ -267,36 +255,43 @@ function buildHeader(
 
   return `
     <header class="invoice-header">
-      <div class="invoice-header__top">
+      <!-- Column 1: logo (top) + customer-side references (bottom) -->
+      <div class="invoice-header__col">
         <div class="invoice-header__logo">${logo}</div>
-        <div class="invoice-header__right">
-          <div class="invoice-header__sida">Sida ${pageIndex + 1}(${pageCount})</div>
+        <dl>
+          <dt>Kundnr</dt><dd>${text(data.customerNumber) || '&nbsp;'}</dd>
+          <dt>Er referens</dt><dd>${text(data.yourReference) || '&nbsp;'}</dd>
+          <dt>Er orderreferens</dt><dd>${text(data.orderReference) || '&nbsp;'}</dd>
+        </dl>
+      </div>
+      <!-- Column 2: title + recipient (top) + our references (bottom) -->
+      <div class="invoice-header__col">
+        <div>
           <div class="invoice-header__title">${data.creditOfNumber ? 'Kreditfaktura' : 'Faktura'}</div>
-          <dl class="invoice-header__meta">
-            <dt>Fakturadatum</dt><dd>${text(data.date) || '&nbsp;'}</dd>
-            <dt>Fakturanr</dt><dd>${text(data.invoiceNumber) || '&nbsp;'}</dd>
-            ${data.creditOfNumber ? `<dt>Avser faktura</dt><dd>${text(data.creditOfNumber)}</dd>` : ''}
-            <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || '&nbsp;'}</dd>
-          </dl>
           <div class="invoice-header__recipient">
             ${text(data.companyName) || '&nbsp;'}<br>
             ${text(data.address) || '&nbsp;'}<br>
             ${text(data.postalCode) || '&nbsp;'}
           </div>
         </div>
-      </div>
-      <div class="invoice-details">
-        <dl>
-          <dt>Kundnr</dt><dd>${text(data.customerNumber) || '&nbsp;'}</dd>
-          <dt>Er referens</dt><dd>${text(data.yourReference) || '&nbsp;'}</dd>
-          <dt>Er orderreferens</dt><dd>${text(data.orderReference) || '&nbsp;'}</dd>
-        </dl>
         <dl>
           <dt>Vår referens</dt><dd>${text(data.ourReference) || '&nbsp;'}</dd>
           <dt>Leveransdatum</dt><dd>${text(data.deliveryDate) || '&nbsp;'}</dd>
           <dt>Förfallodatum</dt><dd>${text(data.dueDate) || '&nbsp;'}</dd>
           ${data.lateInterest ? `<dt>Dröjsmålsränta</dt><dd>${text(data.lateInterest)}</dd>` : ''}
         </dl>
+      </div>
+      <!-- Column 3: Sida + invoice meta (top) -->
+      <div class="invoice-header__col">
+        <div>
+          <div class="invoice-header__sida">Sida ${pageIndex + 1}(${pageCount})</div>
+          <dl>
+            <dt>Fakturadatum</dt><dd>${text(data.date) || '&nbsp;'}</dd>
+            <dt>Fakturanr</dt><dd>${text(data.invoiceNumber) || '&nbsp;'}</dd>
+            ${data.creditOfNumber ? `<dt>Avser faktura</dt><dd>${text(data.creditOfNumber)}</dd>` : ''}
+            <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || '&nbsp;'}</dd>
+          </dl>
+        </div>
       </div>
     </header>
   `;
@@ -339,18 +334,14 @@ const TABLE_ROW_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + TABLE_CELL_VERTICAL_
 const TABLE_HEADER_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + 12 + 2);
 const REVERSE_VAT_NOTICE_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + 12);
 
-// Header block = page top padding + logo/right column + details row.
-// Right column: sida (~18) + title (32*1.2 + 18 margin) + meta 3 rows + recipient 4 lines.
+// Header block: 3 columns with top content + bottom details, fixed min-height
+// so the bottom detail blocks pin near the base of the header (mirrors the
+// reference). Total = page top padding + header min-height + bottom margin.
 const HEADER_PAGE_TOP_PADDING_PX = Math.ceil(14 * MM_TO_PX);
-const HEADER_RIGHT_COLUMN_PX = Math.ceil(
-  18 + (32 * 1.2 + 18) + 3 * (BODY_LINE_HEIGHT_PX + 3) + 22 + 4 * (15 * 1.5),
-);
-const HEADER_LOGO_PX = 130;
-const HEADER_TOP_SECTION_HEIGHT_PX = Math.max(HEADER_RIGHT_COLUMN_PX, HEADER_LOGO_PX);
-// Details row: 30 top margin + up to 4 rows + 20 bottom margin.
-const HEADER_DETAILS_HEIGHT_PX = Math.ceil(30 + 4 * (BODY_LINE_HEIGHT_PX + 4) + 20);
+const HEADER_BLOCK_MIN_HEIGHT_PX = 300;
+const HEADER_BOTTOM_MARGIN_PX = 18;
 const INVOICE_HEADER_HEIGHT_PX = Math.ceil(
-  HEADER_PAGE_TOP_PADDING_PX + HEADER_TOP_SECTION_HEIGHT_PX + HEADER_DETAILS_HEIGHT_PX,
+  HEADER_PAGE_TOP_PADDING_PX + HEADER_BLOCK_MIN_HEIGHT_PX + HEADER_BOTTOM_MARGIN_PX,
 );
 
 // Footer: top border/margin + up to 5 text lines (Telefon column) + bottom padding.
