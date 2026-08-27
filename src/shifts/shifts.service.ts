@@ -541,6 +541,20 @@ export class ShiftsService {
     if (existing) {
       existing.manualDurationMs = durationMs;
       await existing.save();
+      // Manual hours are a single value per worker/project/day, independent of
+      // how many (GPS) shift records that day has. The day history SUMS
+      // manualDurationMs across records, so clear it on the other records for
+      // the same day to keep the day total equal to exactly what was entered.
+      await this.shiftModel.updateMany(
+        {
+          _id: { $ne: existing._id },
+          workerId: dto.workerId,
+          projectId: dto.projectId,
+          shiftDate: dto.date,
+          manualDurationMs: { $gt: 0 },
+        },
+        { $set: { manualDurationMs: 0 } },
+      );
       return this.serializeShift(existing);
     }
 
