@@ -538,46 +538,48 @@ export class ShiftsService {
       .sort({ createdAt: -1 })
       .exec();
 
+    let target: ShiftDocument;
     if (existing) {
       existing.manualDurationMs = durationMs;
       await existing.save();
-      // Manual hours are a single value per worker/project/day, independent of
-      // how many (GPS) shift records that day has. The day history SUMS
-      // manualDurationMs across records, so clear it on the other records for
-      // the same day to keep the day total equal to exactly what was entered.
-      await this.shiftModel.updateMany(
-        {
-          _id: { $ne: existing._id },
-          workerId: dto.workerId,
-          projectId: dto.projectId,
-          shiftDate: dto.date,
-          manualDurationMs: { $gt: 0 },
-        },
-        { $set: { manualDurationMs: 0 } },
-      );
-      return this.serializeShift(existing);
+      target = existing;
+    } else {
+      const startedAt = new Date(`${dto.date}T08:00:00`);
+      const endedAt = new Date(startedAt.getTime() + durationMs);
+      target = await new this.shiftModel({
+        workerId: dto.workerId,
+        projectId: dto.projectId,
+        projectNameSnapshot: project.name,
+        locationSnapshot: project.location || "",
+        shiftDate: dto.date,
+        startedAt,
+        endedAt,
+        status: ShiftStatus.Completed,
+        durationMs: 0,
+        manualDurationMs: durationMs,
+        completionReason: "manual",
+        completionSource: user.role === UserRole.Worker ? "worker" : "admin",
+        segments: [],
+        photos: [],
+      }).save();
     }
 
-    const startedAt = new Date(`${dto.date}T08:00:00`);
-    const endedAt = new Date(startedAt.getTime() + durationMs);
-    const created = await new this.shiftModel({
-      workerId: dto.workerId,
-      projectId: dto.projectId,
-      projectNameSnapshot: project.name,
-      locationSnapshot: project.location || "",
-      shiftDate: dto.date,
-      startedAt,
-      endedAt,
-      status: ShiftStatus.Completed,
-      durationMs: 0,
-      manualDurationMs: durationMs,
-      completionReason: "manual",
-      completionSource: user.role === UserRole.Worker ? "worker" : "admin",
-      segments: [],
-      photos: [],
-    }).save();
+    // Manual hours are a single value per worker/day. The calendar day cell SUMS
+    // manualDurationMs across every record for that date (all projects), so clear
+    // it on every OTHER record for this worker+date — otherwise re-entering the
+    // hours (especially under a different project) stacks up instead of replacing
+    // the previous value. Runs for both the update and the create path.
+    await this.shiftModel.updateMany(
+      {
+        _id: { $ne: target._id },
+        workerId: dto.workerId,
+        shiftDate: dto.date,
+        manualDurationMs: { $gt: 0 },
+      },
+      { $set: { manualDurationMs: 0 } },
+    );
 
-    return this.serializeShift(created);
+    return this.serializeShift(target);
   }
 
   async uploadPhotos(
