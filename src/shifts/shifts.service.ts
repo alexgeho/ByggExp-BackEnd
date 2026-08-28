@@ -31,6 +31,8 @@ import { ExportShiftsDto, HoursSource } from "./dto/export-shifts.dto";
 import { ListShiftsDto } from "./dto/list-shifts.dto";
 import { SetManualHoursDto } from "./dto/set-manual-hours.dto";
 import { AddManualHoursDto } from "./dto/add-manual-hours.dto";
+import { PauseShiftDto } from "./dto/pause-shift.dto";
+import { ResumeShiftDto } from "./dto/resume-shift.dto";
 import { StartShiftDto } from "./dto/start-shift.dto";
 import {
   Shift,
@@ -307,7 +309,11 @@ export class ShiftsService {
     return this.serializeShift(createdShift);
   }
 
-  async pause(user: AuthenticatedUser, shiftId: string) {
+  async pause(
+    user: AuthenticatedUser,
+    shiftId: string,
+    dto: PauseShiftDto = {},
+  ) {
     await this.finalizeStaleShifts(user.userId);
 
     const shift = await this.findOwnedShift(user.userId, shiftId);
@@ -316,8 +322,13 @@ export class ShiftsService {
       throw new BadRequestException("Only an active shift can be paused.");
     }
 
+    // A geofence exit sends reason "outside_project_area"; anything else (or no
+    // body) is a deliberate manual pause and stays labeled as such.
+    const isGeofenceExit = dto.reason === "outside_project_area";
+    const autoPausedReason = isGeofenceExit ? "outside_project_area" : "";
+
     const now = new Date();
-    this.pauseShiftDocument(shift, now, "");
+    this.pauseShiftDocument(shift, now, autoPausedReason);
     await shift.save();
 
     await this.usersService.setOffDutyStatus(user.userId, {
@@ -325,15 +336,32 @@ export class ShiftsService {
       updatedAt: now,
     });
 
-    this.recordEvent(shift, ShiftEventType.Paused, ShiftEventSource.Manual, {
-      byUserId: user.userId,
-      occurredAt: now,
-    });
+    if (isGeofenceExit) {
+      this.recordEvent(
+        shift,
+        ShiftEventType.AutoPausedGeofenceExit,
+        ShiftEventSource.Gps,
+        {
+          reason: "outside_project_area",
+          byUserId: user.userId,
+          occurredAt: now,
+        },
+      );
+    } else {
+      this.recordEvent(shift, ShiftEventType.Paused, ShiftEventSource.Manual, {
+        byUserId: user.userId,
+        occurredAt: now,
+      });
+    }
 
     return this.serializeShift(shift);
   }
 
-  async resume(user: AuthenticatedUser, shiftId: string) {
+  async resume(
+    user: AuthenticatedUser,
+    shiftId: string,
+    dto: ResumeShiftDto = {},
+  ) {
     await this.finalizeStaleShifts(user.userId);
 
     const shift = await this.findOwnedShift(user.userId, shiftId);
@@ -379,10 +407,25 @@ export class ShiftsService {
     });
     await this.usersService.touchLastSeen(user.userId, now);
 
-    this.recordEvent(shift, ShiftEventType.Resumed, ShiftEventSource.Manual, {
-      byUserId: user.userId,
-      occurredAt: now,
-    });
+    // A geofence return sends source "gps"; anything else (or no body) is a
+    // deliberate manual resume and stays labeled as such.
+    if (dto.source === "gps") {
+      this.recordEvent(
+        shift,
+        ShiftEventType.AutoResumedGeofenceReturn,
+        ShiftEventSource.Gps,
+        {
+          reason: "returned_to_project_area",
+          byUserId: user.userId,
+          occurredAt: now,
+        },
+      );
+    } else {
+      this.recordEvent(shift, ShiftEventType.Resumed, ShiftEventSource.Manual, {
+        byUserId: user.userId,
+        occurredAt: now,
+      });
+    }
 
     return this.serializeShift(shift);
   }

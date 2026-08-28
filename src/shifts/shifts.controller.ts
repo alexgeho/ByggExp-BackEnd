@@ -25,6 +25,8 @@ import { ExportShiftsDto } from "./dto/export-shifts.dto";
 import { ListShiftsDto } from "./dto/list-shifts.dto";
 import { SetManualHoursDto } from "./dto/set-manual-hours.dto";
 import { AddManualHoursDto } from "./dto/add-manual-hours.dto";
+import { PauseShiftDto } from "./dto/pause-shift.dto";
+import { ResumeShiftDto } from "./dto/resume-shift.dto";
 import { StartShiftDto } from "./dto/start-shift.dto";
 import { ShiftsService } from "./shifts.service";
 
@@ -122,8 +124,12 @@ export class ShiftsController {
     UserRole.ProjectAdmin,
     UserRole.Worker,
   )
-  pause(@Request() req, @Param("id") id: string) {
-    return this.shiftsService.pause(req.user, id);
+  pause(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() dto: PauseShiftDto = {},
+  ) {
+    return this.shiftsService.pause(req.user, id, dto);
   }
 
   @Post(":id/resume")
@@ -133,8 +139,12 @@ export class ShiftsController {
     UserRole.ProjectAdmin,
     UserRole.Worker,
   )
-  resume(@Request() req, @Param("id") id: string) {
-    return this.shiftsService.resume(req.user, id);
+  resume(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() dto: ResumeShiftDto = {},
+  ) {
+    return this.shiftsService.resume(req.user, id, dto);
   }
 
   @Post(":id/complete")
