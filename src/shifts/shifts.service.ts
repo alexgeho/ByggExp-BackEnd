@@ -40,6 +40,12 @@ import {
   ShiftStatus,
 } from "./schemas/shift.schema";
 import {
+  ShiftEvent,
+  ShiftEventDocument,
+  ShiftEventSource,
+  ShiftEventType,
+} from "./schemas/shift-event.schema";
+import {
   getCompleteWindowErrorMessage,
   getScheduledShiftDeadline,
   getShiftScheduleWindow,
@@ -114,6 +120,8 @@ export class ShiftsService {
 
   constructor(
     @InjectModel(Shift.name) private readonly shiftModel: Model<ShiftDocument>,
+    @InjectModel(ShiftEvent.name)
+    private readonly shiftEventModel: Model<ShiftEventDocument>,
     @InjectModel(Project.name)
     private readonly projectModel: Model<ProjectDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
@@ -286,6 +294,16 @@ export class ShiftsService {
     });
     await this.usersService.touchLastSeen(user.userId, now);
 
+    this.recordEvent(
+      createdShift,
+      ShiftEventType.CheckedIn,
+      ShiftEventSource.Manual,
+      {
+        byUserId: user.userId,
+        occurredAt: now,
+      },
+    );
+
     return this.serializeShift(createdShift);
   }
 
@@ -305,6 +323,11 @@ export class ShiftsService {
     await this.usersService.setOffDutyStatus(user.userId, {
       reason: "shift_paused",
       updatedAt: now,
+    });
+
+    this.recordEvent(shift, ShiftEventType.Paused, ShiftEventSource.Manual, {
+      byUserId: user.userId,
+      occurredAt: now,
     });
 
     return this.serializeShift(shift);
@@ -356,6 +379,11 @@ export class ShiftsService {
     });
     await this.usersService.touchLastSeen(user.userId, now);
 
+    this.recordEvent(shift, ShiftEventType.Resumed, ShiftEventSource.Manual, {
+      byUserId: user.userId,
+      occurredAt: now,
+    });
+
     return this.serializeShift(shift);
   }
 
@@ -397,6 +425,17 @@ export class ShiftsService {
         shift.autoPausedReason = "outside_project_area";
       }
       await shift.save();
+
+      this.recordEvent(
+        shift,
+        ShiftEventType.AutoPausedGeofenceExit,
+        ShiftEventSource.Gps,
+        {
+          reason: "outside_project_area",
+          byUserId: user.userId,
+          occurredAt: now,
+        },
+      );
 
       let notificationResult: {
         attempted: number;
@@ -467,6 +506,17 @@ export class ShiftsService {
       updatedAt: now,
     });
 
+    this.recordEvent(
+      shift,
+      ShiftEventType.Completed,
+      this.completionEventSource(completionSource),
+      {
+        reason: completionReason,
+        byUserId: user.userId,
+        occurredAt: now,
+      },
+    );
+
     return this.serializeShift(shift);
   }
 
@@ -488,6 +538,19 @@ export class ShiftsService {
     shift.manualDurationMs =
       dto.durationMs == null ? null : Math.max(0, Math.round(dto.durationMs));
     await shift.save();
+
+    this.recordEvent(
+      shift,
+      ShiftEventType.ManualHoursSet,
+      ShiftEventSource.Manual,
+      {
+        reason:
+          shift.manualDurationMs == null
+            ? "cleared"
+            : String(shift.manualDurationMs),
+        byUserId: user.userId,
+      },
+    );
 
     return this.serializeShift(shift);
   }
@@ -579,6 +642,16 @@ export class ShiftsService {
       { $set: { manualDurationMs: 0 } },
     );
 
+    this.recordEvent(
+      target,
+      ShiftEventType.ManualHoursSet,
+      ShiftEventSource.Manual,
+      {
+        reason: String(durationMs),
+        byUserId: user.userId,
+      },
+    );
+
     return this.serializeShift(target);
   }
 
@@ -630,6 +703,13 @@ export class ShiftsService {
           reason: "shift_auto_resumed",
           updatedAt: now,
         });
+
+        this.recordEvent(
+          shift,
+          ShiftEventType.AutoResumedGeofenceReturn,
+          ShiftEventSource.Gps,
+          { reason: "offline", occurredAt: now },
+        );
       }
 
       if (shift.status === ShiftStatus.Active) {
@@ -815,6 +895,95 @@ export class ShiftsService {
     }
 
     return this.serializeShift(shift);
+  }
+
+  // Chronological audit log of a single shift's transitions. Authorizes with the
+  // same tenant filter as findOneAccessible, so a manager only sees shifts in
+  // their company (and a worker only their own).
+  async getShiftTimeline(user: AuthenticatedUser, shiftId: string) {
+    const filter = await this.buildAccessibleShiftFilter(
+      user,
+      {} as ListShiftsDto,
+    );
+    const shift = await this.shiftModel
+      .findOne({ _id: shiftId, ...filter })
+      .select("_id")
+      .lean()
+      .exec();
+
+    if (!shift) {
+      throw new NotFoundException(`Shift with ID "${shiftId}" not found`);
+    }
+
+    return this.shiftEventModel
+      .find({ shiftId })
+      .sort({ createdAt: 1 })
+      .lean()
+      .exec();
+  }
+
+  /**
+   * Append one row to the shift audit log. FIRE-AND-FORGET: the caller does not
+   * await this, and any failure (DB hiccup, missing project) is swallowed — a
+   * transition must never be broken or slowed because an event failed to log.
+   * companyId is resolved from the project (the Shift has none) so admin
+   * timeline queries can scope by tenant.
+   */
+  private recordEvent(
+    shift: ShiftDocument,
+    type: ShiftEventType,
+    source: ShiftEventSource,
+    opts: { reason?: string; byUserId?: string | null; occurredAt?: Date } = {},
+  ): void {
+    const shiftId = String(shift._id);
+    const projectId = String(shift.projectId);
+    const workerId = String(shift.workerId);
+
+    void (async () => {
+      try {
+        let companyId: string | null = null;
+        try {
+          const project = await this.projectModel
+            .findById(projectId)
+            .select("companyId")
+            .lean()
+            .exec();
+          companyId = project?.companyId ? String(project.companyId) : null;
+        } catch {
+          companyId = null;
+        }
+
+        await this.shiftEventModel.create({
+          shiftId,
+          projectId,
+          workerId,
+          companyId,
+          type,
+          source,
+          reason: opts.reason || "",
+          byUserId: opts.byUserId ?? null,
+          occurredAt: opts.occurredAt ?? new Date(),
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Failed to record shift event ${type} for shift ${shiftId}: ${
+            (error as Error)?.message || error
+          }`,
+        );
+      }
+    })();
+  }
+
+  // Map a completion dto.source string onto an event source bucket.
+  private completionEventSource(source?: string | null): ShiftEventSource {
+    const value = (source || "").trim().toLowerCase();
+    if (value === "system") {
+      return ShiftEventSource.System;
+    }
+    if (value === "gps" || value === "geofence") {
+      return ShiftEventSource.Gps;
+    }
+    return ShiftEventSource.Manual;
   }
 
   private async findOwnedShift(userId: string, shiftId: string) {
@@ -1187,6 +1356,16 @@ export class ShiftsService {
         reason: "schedule_deadline",
         updatedAt: closeAt,
       });
+
+      this.recordEvent(
+        shift,
+        ShiftEventType.Completed,
+        ShiftEventSource.System,
+        {
+          reason: shift.completionReason || "schedule_deadline",
+          occurredAt: closeAt,
+        },
+      );
     }
   }
 
@@ -1225,6 +1404,16 @@ export class ShiftsService {
         reason: "expired_day_end",
         updatedAt: shiftDayEnd,
       });
+
+      this.recordEvent(
+        shift,
+        ShiftEventType.Completed,
+        ShiftEventSource.System,
+        {
+          reason: shift.completionReason || "expired_day_end",
+          occurredAt: shiftDayEnd,
+        },
+      );
     }
   }
 

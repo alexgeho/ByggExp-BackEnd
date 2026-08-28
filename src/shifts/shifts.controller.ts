@@ -259,6 +259,17 @@ export class ShiftsController {
     return new StreamableFile(report.buffer);
   }
 
+  @Get(":id/timeline")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  getTimeline(@Request() req, @Param("id") id: string) {
+    return this.shiftsService.getShiftTimeline(req.user, id);
+  }
+
   @Get(":id")
   @Roles(
     UserRole.SuperAdmin,

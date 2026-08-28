@@ -10,6 +10,7 @@ import {
   HourAdjustmentSchema,
 } from "../hours/schemas/hour-adjustment.schema";
 import { Shift, ShiftSchema } from "./schemas/shift.schema";
+import { ShiftEvent, ShiftEventSchema } from "./schemas/shift-event.schema";
 import { ShiftsController } from "./shifts.controller";
 import { ShiftsService } from "./shifts.service";
 
@@ -17,6 +18,7 @@ import { ShiftsService } from "./shifts.service";
   imports: [
     MongooseModule.forFeature([
       { name: Shift.name, schema: ShiftSchema },
+      { name: ShiftEvent.name, schema: ShiftEventSchema },
       { name: Project.name, schema: ProjectSchema },
       { name: User.name, schema: UserSchema },
       { name: Company.name, schema: CompanySchema },
