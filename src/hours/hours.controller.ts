@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Post,
   Put,
   Query,
   Request,
@@ -14,6 +15,7 @@ import { UserRole } from "../users/schemas/user.schema";
 import { HoursService } from "./hours.service";
 import { HoursQueryDto } from "./dto/hours-query.dto";
 import { SaveAdjustmentDto } from "./dto/save-adjustment.dto";
+import { DemoAdjustDto } from "./dto/demo-adjust.dto";
 
 @Controller("hours")
 @UseGuards(AuthGuard("jwt"), RolesGuard)
@@ -40,5 +42,13 @@ export class HoursController {
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   saveAdjustment(@Request() req, @Body() dto: SaveAdjustmentDto) {
     return this.hoursService.saveAdjustment(req.user, dto);
+  }
+
+  // TEMPORARY — demo/video helper to tweak GPS/Manual hours on existing shifts.
+  // Remove after recording.
+  @Post("demo")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  demoAdjust(@Request() req, @Body() dto: DemoAdjustDto) {
+    return this.hoursService.demoAdjust(req.user, dto);
   }
 }

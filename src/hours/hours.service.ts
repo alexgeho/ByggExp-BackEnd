@@ -375,6 +375,51 @@ export class HoursService {
     return { byProject, total: round(total) };
   }
 
+  // TEMPORARY — demo/video helper. Tweaks measured GPS (durationMs) and worker
+  // Manual (manualDurationMs) hours on EXISTING shifts, scoped to the caller's
+  // accessible projects. Remove after recording.
+  async demoAdjust(
+    user: AuthenticatedUser,
+    dto: {
+      projectId?: string;
+      workerIds?: string[];
+      from?: string;
+      to?: string;
+      gpsFactor?: number;
+      gpsHours?: number;
+      manualHours?: number;
+    },
+  ) {
+    const projects = await this.accessibleProjects(user, dto.projectId);
+    const projectIds = projects.map((p) => this.getEntityId(p));
+    if (!projectIds.length) return { modified: 0 };
+
+    const filter: Record<string, unknown> = { projectId: { $in: projectIds } };
+    if (dto.workerIds?.length) filter.workerId = { $in: dto.workerIds };
+    if (dto.from || dto.to) {
+      const range: Record<string, string> = {};
+      if (dto.from) range.$gte = dto.from;
+      if (dto.to) range.$lte = dto.to;
+      filter.shiftDate = range;
+    }
+
+    const set: Record<string, unknown> = {};
+    if (dto.gpsHours != null) {
+      set.durationMs = Math.round(dto.gpsHours * MS_PER_HOUR);
+    } else if (dto.gpsFactor != null) {
+      set.durationMs = {
+        $round: [{ $multiply: ["$durationMs", dto.gpsFactor] }, 0],
+      };
+    }
+    if (dto.manualHours != null) {
+      set.manualDurationMs = Math.round(dto.manualHours * MS_PER_HOUR);
+    }
+    if (!Object.keys(set).length) return { modified: 0 };
+
+    const res = await this.shiftModel.updateMany(filter, [{ $set: set }]);
+    return { modified: res.modifiedCount ?? 0 };
+  }
+
   async saveAdjustment(user: AuthenticatedUser, dto: SaveAdjustmentDto) {
     const [project] = await this.accessibleProjects(user, dto.projectId);
     if (!project) {
