@@ -1,4 +1,11 @@
-import { IsArray, IsNumber, IsOptional, Matches, Min } from "class-validator";
+import {
+  IsArray,
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  Matches,
+  Min,
+} from "class-validator";
 
 // TEMPORARY — demo/video helper to tweak measured GPS and worker Manual hours on
 // existing shifts. Remove after recording. See HoursService.demoAdjust.
@@ -44,4 +51,16 @@ export class DemoAdjustDto {
   @IsNumber()
   @Min(0)
   manualFactor?: number;
+
+  // Round Manual (manualDurationMs) to whole hours (e.g. 7,32 h -> 7 h).
+  @IsOptional()
+  @IsBoolean()
+  roundManualHours?: boolean;
+
+  // Set GPS (durationMs) to this factor of the (rounded) Manual manualDurationMs
+  // (e.g. 1.15 = GPS is manual + 15%, so always a bit above manual).
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  gpsFromManualFactor?: number;
 }

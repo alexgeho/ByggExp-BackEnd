@@ -389,6 +389,8 @@ export class HoursService {
       gpsHours?: number;
       manualHours?: number;
       manualFactor?: number;
+      roundManualHours?: boolean;
+      gpsFromManualFactor?: number;
     },
   ) {
     const projects = await this.accessibleProjects(user, dto.projectId);
@@ -404,24 +406,56 @@ export class HoursService {
       filter.shiftDate = range;
     }
 
-    const set: Record<string, unknown> = {};
+    // Stages run in order — later stages see the values set by earlier ones,
+    // so GPS can be derived from the just-rounded Manual value.
+    const stages: Array<{ $set: Record<string, unknown> }> = [];
+
+    // 1) GPS absolute / factor of existing GPS.
+    const gpsSet: Record<string, unknown> = {};
     if (dto.gpsHours != null) {
-      set.durationMs = Math.round(dto.gpsHours * MS_PER_HOUR);
+      gpsSet.durationMs = Math.round(dto.gpsHours * MS_PER_HOUR);
     } else if (dto.gpsFactor != null) {
-      set.durationMs = {
+      gpsSet.durationMs = {
         $round: [{ $multiply: ["$durationMs", dto.gpsFactor] }, 0],
       };
     }
+    if (Object.keys(gpsSet).length) stages.push({ $set: gpsSet });
+
+    // 2) Manual absolute / factor-of-GPS / round-to-whole-hours.
+    const manualSet: Record<string, unknown> = {};
     if (dto.manualHours != null) {
-      set.manualDurationMs = Math.round(dto.manualHours * MS_PER_HOUR);
+      manualSet.manualDurationMs = Math.round(dto.manualHours * MS_PER_HOUR);
     } else if (dto.manualFactor != null) {
-      set.manualDurationMs = {
+      manualSet.manualDurationMs = {
         $round: [{ $multiply: ["$durationMs", dto.manualFactor] }, 0],
       };
+    } else if (dto.roundManualHours) {
+      manualSet.manualDurationMs = {
+        $multiply: [
+          { $round: [{ $divide: ["$manualDurationMs", MS_PER_HOUR] }, 0] },
+          MS_PER_HOUR,
+        ],
+      };
     }
-    if (!Object.keys(set).length) return { modified: 0 };
+    if (Object.keys(manualSet).length) stages.push({ $set: manualSet });
 
-    const res = await this.shiftModel.updateMany(filter, [{ $set: set }]);
+    // 3) GPS derived from the (possibly rounded) Manual value.
+    if (dto.gpsFromManualFactor != null) {
+      stages.push({
+        $set: {
+          durationMs: {
+            $round: [
+              { $multiply: ["$manualDurationMs", dto.gpsFromManualFactor] },
+              0,
+            ],
+          },
+        },
+      });
+    }
+
+    if (!stages.length) return { modified: 0 };
+
+    const res = await this.shiftModel.updateMany(filter, stages);
     return { modified: res.modifiedCount ?? 0 };
   }
 
