@@ -3,6 +3,7 @@ import {
   IsBoolean,
   IsNumber,
   IsOptional,
+  IsString,
   Matches,
   Min,
 } from "class-validator";
@@ -63,4 +64,15 @@ export class DemoAdjustDto {
   @IsNumber()
   @Min(0)
   gpsFromManualFactor?: number;
+
+  // Mark the matched shifts as a full absence (no planned/GPS/manual in the grid).
+  // true also zeroes GPS + Manual; false clears the flag.
+  @IsOptional()
+  @IsBoolean()
+  absent?: boolean;
+
+  // Rename the (single) matched worker's display name — demo/video helper only.
+  @IsOptional()
+  @IsString()
+  rename?: string;
 }

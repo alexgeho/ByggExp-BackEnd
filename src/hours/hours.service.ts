@@ -160,6 +160,7 @@ export class HoursService {
       actualMs: number;
       manualMs: number;
       hasManual: boolean;
+      absent: boolean;
       projects: Set<string>;
     };
     const now = Date.now();
@@ -189,6 +190,7 @@ export class HoursService {
           actualMs: 0,
           manualMs: 0,
           hasManual: false,
+          absent: false,
           projects: new Set(),
         });
       const day = days.get(date)!;
@@ -197,6 +199,7 @@ export class HoursService {
         day.manualMs += Number(shift.manualDurationMs) || 0;
         day.hasManual = true;
       }
+      if (shift.demoAbsent) day.absent = true; // TEMP demo — full-absence cell
       day.projects.add(String(shift.projectId));
     }
 
@@ -216,6 +219,7 @@ export class HoursService {
           actualMs: 0,
           manualMs: 0,
           hasManual: false,
+          absent: false,
           projects: new Set(),
         });
       days.get(date)!.projects.add(String(adj.projectId));
@@ -254,6 +258,7 @@ export class HoursService {
               actualMs: 0,
               manualMs: 0,
               hasManual: false,
+              absent: false,
               projects: new Set(),
             });
           days.get(date)!.projects.add(pid);
@@ -304,6 +309,21 @@ export class HoursService {
           }
         }
 
+        if (day.absent) {
+          // TEMP demo — worker was fully absent: no planned/GPS/manual, the grid
+          // renders this as an empty cell.
+          cells[date] = {
+            actual: null,
+            manual: null,
+            planned: null,
+            orig: null,
+            edited: false,
+            absent: true,
+            projectId: projectList.length === 1 ? projectList[0] : null,
+            multiProject: projectList.length > 1,
+          };
+          continue;
+        }
         cells[date] = {
           actual: round(day.actualMs / MS_PER_HOUR),
           manual: day.hasManual ? round(day.manualMs / MS_PER_HOUR) : null,
@@ -391,11 +411,20 @@ export class HoursService {
       manualFactor?: number;
       roundManualHours?: boolean;
       gpsFromManualFactor?: number;
+      absent?: boolean;
+      rename?: string;
     },
   ) {
+    // Rename a single worker's display name (demo/video helper).
+    if (dto.rename && dto.workerIds?.length === 1) {
+      await this.userModel
+        .updateOne({ _id: dto.workerIds[0] }, { $set: { name: dto.rename } })
+        .exec();
+    }
+
     const projects = await this.accessibleProjects(user, dto.projectId);
     const projectIds = projects.map((p) => this.getEntityId(p));
-    if (!projectIds.length) return { modified: 0 };
+    if (!projectIds.length) return { modified: dto.rename ? 1 : 0 };
 
     const filter: Record<string, unknown> = { projectId: { $in: projectIds } };
     if (dto.workerIds?.length) filter.workerId = { $in: dto.workerIds };
@@ -404,6 +433,18 @@ export class HoursService {
       if (dto.from) range.$gte = dto.from;
       if (dto.to) range.$lte = dto.to;
       filter.shiftDate = range;
+    }
+
+    // Full-absence flag (demo): zero GPS + Manual and mark the day absent so the
+    // grid renders an empty cell; absent:false just clears the flag.
+    if (dto.absent != null) {
+      const set: Record<string, unknown> = { demoAbsent: dto.absent };
+      if (dto.absent) {
+        set.durationMs = 0;
+        set.manualDurationMs = 0;
+      }
+      const r = await this.shiftModel.updateMany(filter, [{ $set: set }]);
+      return { modified: r.modifiedCount ?? 0 };
     }
 
     // Stages run in order — later stages see the values set by earlier ones,
