@@ -310,14 +310,15 @@ export class HoursService {
         }
 
         if (day.absent) {
-          // TEMP demo — worker was fully absent: no planned/GPS/manual, the grid
-          // renders this as an empty cell.
+          // TEMP demo — worker was a no-show: worked 0 against the plan. Keep the
+          // planned baseline so totals stay consistent; the grid flags the cell
+          // amber (same "attention" colour as under/over) and shows a dash.
           cells[date] = {
-            actual: null,
-            manual: null,
-            planned: null,
-            orig: null,
-            edited: false,
+            actual: 0,
+            manual: 0,
+            planned: hasPlan ? round(plannedSum) : null,
+            orig: hasPlan ? round(origSum) : null,
+            edited,
             absent: true,
             projectId: projectList.length === 1 ? projectList[0] : null,
             multiProject: projectList.length > 1,
