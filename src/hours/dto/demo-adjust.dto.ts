@@ -1,10 +1,4 @@
-import {
-  IsArray,
-  IsNumber,
-  IsOptional,
-  Matches,
-  Min,
-} from "class-validator";
+import { IsArray, IsNumber, IsOptional, Matches, Min } from "class-validator";
 
 // TEMPORARY — demo/video helper to tweak measured GPS and worker Manual hours on
 // existing shifts. Remove after recording. See HoursService.demoAdjust.
