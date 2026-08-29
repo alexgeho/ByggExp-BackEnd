@@ -75,4 +75,10 @@ export class DemoAdjustDto {
   @IsOptional()
   @IsString()
   rename?: string;
+
+  // Clear all hours on weekend days (Sat/Sun) in the range: deletes weekend hour
+  // adjustments and weekend shifts so those cells go empty. Demo/video helper.
+  @IsOptional()
+  @IsBoolean()
+  clearWeekends?: boolean;
 }

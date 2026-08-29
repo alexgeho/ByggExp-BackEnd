@@ -414,6 +414,7 @@ export class HoursService {
       gpsFromManualFactor?: number;
       absent?: boolean;
       rename?: string;
+      clearWeekends?: boolean;
     },
   ) {
     // Rename a single worker's display name (demo/video helper).
@@ -434,6 +435,42 @@ export class HoursService {
       if (dto.from) range.$gte = dto.from;
       if (dto.to) range.$lte = dto.to;
       filter.shiftDate = range;
+    }
+
+    // Clear weekend hours (demo): delete Sat/Sun hour-adjustments and shifts in
+    // range so those cells go empty (weekends shouldn't carry planned hours).
+    if (dto.clearWeekends) {
+      const weekend: string[] = [];
+      if (dto.from && dto.to) {
+        const cur = new Date(`${dto.from}T00:00:00Z`);
+        const last = new Date(`${dto.to}T00:00:00Z`);
+        let guard = 0;
+        while (cur.getTime() <= last.getTime() && guard < 1000) {
+          const dow = cur.getUTCDay();
+          if (dow === 0 || dow === 6) weekend.push(cur.toISOString().slice(0, 10));
+          cur.setUTCDate(cur.getUTCDate() + 1);
+          guard += 1;
+        }
+      }
+      if (!weekend.length) return { modified: 0 };
+      const adjFilter: Record<string, unknown> = {
+        projectId: { $in: projectIds.map((id) => String(id)) },
+        date: { $in: weekend },
+      };
+      if (dto.workerIds?.length) adjFilter.workerId = { $in: dto.workerIds };
+      const [adjRes, shiftRes] = await Promise.all([
+        this.adjustmentModel.deleteMany(adjFilter),
+        this.shiftModel.deleteMany({
+          projectId: { $in: projectIds },
+          shiftDate: { $in: weekend },
+          ...(dto.workerIds?.length
+            ? { workerId: { $in: dto.workerIds } }
+            : {}),
+        }),
+      ]);
+      return {
+        modified: (adjRes.deletedCount ?? 0) + (shiftRes.deletedCount ?? 0),
+      };
     }
 
     // Full-absence flag (demo): zero GPS + Manual and mark the day absent so the
