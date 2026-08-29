@@ -18,6 +18,11 @@ import {
   HourAdjustment,
   HourAdjustmentDocument,
 } from "./schemas/hour-adjustment.schema";
+import {
+  LeaveRequest,
+  LeaveRequestDocument,
+  LeaveStatus,
+} from "../leave/schemas/leave-request.schema";
 import { HoursQueryDto } from "./dto/hours-query.dto";
 import { SaveAdjustmentDto } from "./dto/save-adjustment.dto";
 
@@ -38,6 +43,8 @@ export class HoursService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(HourAdjustment.name)
     private adjustmentModel: Model<HourAdjustmentDocument>,
+    @InjectModel(LeaveRequest.name)
+    private leaveModel: Model<LeaveRequestDocument>,
   ) {}
 
   private getEntityId(value: unknown): string {
@@ -139,13 +146,48 @@ export class HoursService {
       shiftFilter.shiftDate = range;
     }
 
-    const [shifts, adjustments] = await Promise.all([
+    // Approved Frånvaro (leave) overlapping the period — those days render as an
+    // absence in the grid (amber dash, not counted). Company-scoped and keyed by
+    // worker below; dates stored as "YYYY-MM-DD" strings so range compares work.
+    const companyIds = [
+      ...new Set(
+        projects
+          .map((p) => this.getEntityId(p.companyId) || String(p.companyId))
+          .filter(Boolean),
+      ),
+    ];
+    const leaveFilter: Record<string, unknown> = {
+      status: LeaveStatus.Approved,
+    };
+    if (companyIds.length) leaveFilter.companyId = { $in: companyIds };
+    if (query.to) leaveFilter.startDate = { $lte: query.to };
+    if (query.from) leaveFilter.endDate = { $gte: query.from };
+
+    const [shifts, adjustments, leaves] = await Promise.all([
       this.shiftModel.find(shiftFilter).lean().exec(),
       this.adjustmentModel
         .find({ projectId: { $in: projectIds } })
         .lean()
         .exec(),
+      this.leaveModel.find(leaveFilter).lean().exec(),
     ]);
+
+    // worker → set of absent date keys (Mon–Fri only, clamped to the query range).
+    const leaveDatesByWorker = new Map<string, Set<string>>();
+    for (const leave of leaves) {
+      const start = this.toDateKey(leave.startDate);
+      const end = this.toDateKey(leave.endDate) || start;
+      if (!start) continue;
+      const rangeStart = query.from && query.from > start ? query.from : start;
+      const rangeEnd = query.to && query.to < (end || start) ? query.to : end;
+      if (!rangeEnd || rangeStart > rangeEnd) continue;
+      const workerId = String(leave.userId);
+      if (!leaveDatesByWorker.has(workerId))
+        leaveDatesByWorker.set(workerId, new Set());
+      const set = leaveDatesByWorker.get(workerId)!;
+      for (const date of this.eachWorkingDate(rangeStart, rangeEnd))
+        set.add(date);
+    }
 
     // adjustments keyed by project|worker|date
     const adjMap = new Map<string, HourAdjustment>();
@@ -199,7 +241,6 @@ export class HoursService {
         day.manualMs += Number(shift.manualDurationMs) || 0;
         day.hasManual = true;
       }
-      if (shift.demoAbsent) day.absent = true; // TEMP demo — full-absence cell
       day.projects.add(String(shift.projectId));
     }
 
@@ -266,6 +307,26 @@ export class HoursService {
       }
     }
 
+    // Mark approved-leave days absent — only for workers already on the grid
+    // (i.e. on a project team or with shifts), so leave never pulls in unrelated
+    // people. An absent day wins over any planned prefill: the cell renders as an
+    // amber dash and its hours are not counted.
+    for (const [workerId, dates] of leaveDatesByWorker) {
+      if (!byWorker.has(workerId)) continue;
+      const days = byWorker.get(workerId)!;
+      for (const date of dates) {
+        if (!days.has(date))
+          days.set(date, {
+            actualMs: 0,
+            manualMs: 0,
+            hasManual: false,
+            absent: false,
+            projects: new Set(),
+          });
+        days.get(date)!.absent = true;
+      }
+    }
+
     const workerIds = [...byWorker.keys()];
     const users = await this.userModel
       .find({ _id: { $in: workerIds } })
@@ -310,9 +371,9 @@ export class HoursService {
         }
 
         if (day.absent) {
-          // TEMP demo — worker was a no-show: no planned/GPS/manual, so the day is
-          // deducted from the Total Planned straight away. The grid flags the cell
-          // amber (same "attention" colour as under/over) and shows a dash.
+          // Approved Frånvaro — the worker is away: no planned/GPS/manual, so the
+          // day is deducted from Total Planned straight away. The grid flags the
+          // cell amber (same "attention" colour as under/over) and shows a dash.
           cells[date] = {
             actual: null,
             manual: null,
@@ -394,165 +455,6 @@ export class HoursService {
       byProject[key] = round(byProject[key]);
     }
     return { byProject, total: round(total) };
-  }
-
-  // TEMPORARY — demo/video helper. Tweaks measured GPS (durationMs) and worker
-  // Manual (manualDurationMs) hours on EXISTING shifts, scoped to the caller's
-  // accessible projects. Remove after recording.
-  async demoAdjust(
-    user: AuthenticatedUser,
-    dto: {
-      projectId?: string;
-      workerIds?: string[];
-      from?: string;
-      to?: string;
-      gpsFactor?: number;
-      gpsHours?: number;
-      manualHours?: number;
-      manualFactor?: number;
-      roundManualHours?: boolean;
-      gpsFromManualFactor?: number;
-      absent?: boolean;
-      rename?: string;
-      clearWeekends?: boolean;
-    },
-  ) {
-    // Rename a single worker's display name (demo/video helper). Upsert so it
-    // also works for shift-only workers that have no user doc (shown as
-    // "Unknown"): a matching doc gets its name set; a missing one is created with
-    // placeholder credentials (login stays disabled — password is not a hash).
-    let renamed = 0;
-    if (dto.rename && dto.workerIds?.length === 1) {
-      const wid = dto.workerIds[0];
-      const res = await this.userModel
-        .updateOne(
-          { _id: wid },
-          {
-            $set: { name: dto.rename },
-            $setOnInsert: {
-              email: `demo+${wid}@byggexp.se`,
-              password: "demo-disabled",
-              role: UserRole.Worker,
-            },
-          },
-          { upsert: true },
-        )
-        .exec();
-      renamed = (res.matchedCount ?? 0) + (res.upsertedCount ?? 0);
-    }
-
-    const projects = await this.accessibleProjects(user, dto.projectId);
-    const projectIds = projects.map((p) => this.getEntityId(p));
-    if (!projectIds.length) return { modified: renamed };
-
-    const filter: Record<string, unknown> = { projectId: { $in: projectIds } };
-    if (dto.workerIds?.length) filter.workerId = { $in: dto.workerIds };
-    if (dto.from || dto.to) {
-      const range: Record<string, string> = {};
-      if (dto.from) range.$gte = dto.from;
-      if (dto.to) range.$lte = dto.to;
-      filter.shiftDate = range;
-    }
-
-    // Clear weekend hours (demo): delete Sat/Sun hour-adjustments and shifts in
-    // range so those cells go empty (weekends shouldn't carry planned hours).
-    if (dto.clearWeekends) {
-      const weekend: string[] = [];
-      if (dto.from && dto.to) {
-        const cur = new Date(`${dto.from}T00:00:00Z`);
-        const last = new Date(`${dto.to}T00:00:00Z`);
-        let guard = 0;
-        while (cur.getTime() <= last.getTime() && guard < 1000) {
-          const dow = cur.getUTCDay();
-          if (dow === 0 || dow === 6) weekend.push(cur.toISOString().slice(0, 10));
-          cur.setUTCDate(cur.getUTCDate() + 1);
-          guard += 1;
-        }
-      }
-      if (!weekend.length) return { modified: 0 };
-      const adjFilter: Record<string, unknown> = {
-        projectId: { $in: projectIds.map((id) => String(id)) },
-        date: { $in: weekend },
-      };
-      if (dto.workerIds?.length) adjFilter.workerId = { $in: dto.workerIds };
-      const [adjRes, shiftRes] = await Promise.all([
-        this.adjustmentModel.deleteMany(adjFilter),
-        this.shiftModel.deleteMany({
-          projectId: { $in: projectIds },
-          shiftDate: { $in: weekend },
-          ...(dto.workerIds?.length
-            ? { workerId: { $in: dto.workerIds } }
-            : {}),
-        }),
-      ]);
-      return {
-        modified: (adjRes.deletedCount ?? 0) + (shiftRes.deletedCount ?? 0),
-      };
-    }
-
-    // Full-absence flag (demo): zero GPS + Manual and mark the day absent so the
-    // grid renders an empty cell; absent:false just clears the flag.
-    if (dto.absent != null) {
-      const set: Record<string, unknown> = { demoAbsent: dto.absent };
-      if (dto.absent) {
-        set.durationMs = 0;
-        set.manualDurationMs = 0;
-      }
-      const r = await this.shiftModel.updateMany(filter, [{ $set: set }]);
-      return { modified: r.modifiedCount ?? 0 };
-    }
-
-    // Stages run in order — later stages see the values set by earlier ones,
-    // so GPS can be derived from the just-rounded Manual value.
-    const stages: Array<{ $set: Record<string, unknown> }> = [];
-
-    // 1) GPS absolute / factor of existing GPS.
-    const gpsSet: Record<string, unknown> = {};
-    if (dto.gpsHours != null) {
-      gpsSet.durationMs = Math.round(dto.gpsHours * MS_PER_HOUR);
-    } else if (dto.gpsFactor != null) {
-      gpsSet.durationMs = {
-        $round: [{ $multiply: ["$durationMs", dto.gpsFactor] }, 0],
-      };
-    }
-    if (Object.keys(gpsSet).length) stages.push({ $set: gpsSet });
-
-    // 2) Manual absolute / factor-of-GPS / round-to-whole-hours.
-    const manualSet: Record<string, unknown> = {};
-    if (dto.manualHours != null) {
-      manualSet.manualDurationMs = Math.round(dto.manualHours * MS_PER_HOUR);
-    } else if (dto.manualFactor != null) {
-      manualSet.manualDurationMs = {
-        $round: [{ $multiply: ["$durationMs", dto.manualFactor] }, 0],
-      };
-    } else if (dto.roundManualHours) {
-      manualSet.manualDurationMs = {
-        $multiply: [
-          { $round: [{ $divide: ["$manualDurationMs", MS_PER_HOUR] }, 0] },
-          MS_PER_HOUR,
-        ],
-      };
-    }
-    if (Object.keys(manualSet).length) stages.push({ $set: manualSet });
-
-    // 3) GPS derived from the (possibly rounded) Manual value.
-    if (dto.gpsFromManualFactor != null) {
-      stages.push({
-        $set: {
-          durationMs: {
-            $round: [
-              { $multiply: ["$manualDurationMs", dto.gpsFromManualFactor] },
-              0,
-            ],
-          },
-        },
-      });
-    }
-
-    if (!stages.length) return { modified: 0 };
-
-    const res = await this.shiftModel.updateMany(filter, stages);
-    return { modified: res.modifiedCount ?? 0 };
   }
 
   async saveAdjustment(user: AuthenticatedUser, dto: SaveAdjustmentDto) {

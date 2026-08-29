@@ -87,12 +87,6 @@ export class Shift {
   @Prop({ type: Number, default: null })
   manualDurationMs?: number | null;
 
-  // TEMPORARY (demo/video helper) — marks a day the worker was fully absent so
-  // the Hours grid renders it as an empty cell (no planned/GPS/manual). Remove
-  // together with the /hours/demo endpoint after recording.
-  @Prop({ type: Boolean, default: false })
-  demoAbsent?: boolean;
-
   @Prop({ default: "" })
   completionReason?: string;
 

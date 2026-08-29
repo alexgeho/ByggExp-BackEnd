@@ -7,6 +7,10 @@ import {
   HourAdjustment,
   HourAdjustmentSchema,
 } from "./schemas/hour-adjustment.schema";
+import {
+  LeaveRequest,
+  LeaveRequestSchema,
+} from "../leave/schemas/leave-request.schema";
 import { HoursController } from "./hours.controller";
 import { HoursService } from "./hours.service";
 
@@ -17,6 +21,7 @@ import { HoursService } from "./hours.service";
       { name: Project.name, schema: ProjectSchema },
       { name: User.name, schema: UserSchema },
       { name: HourAdjustment.name, schema: HourAdjustmentSchema },
+      { name: LeaveRequest.name, schema: LeaveRequestSchema },
     ]),
   ],
   controllers: [HoursController],
