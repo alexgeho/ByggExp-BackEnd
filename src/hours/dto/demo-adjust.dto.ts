@@ -37,4 +37,11 @@ export class DemoAdjustDto {
   @IsNumber()
   @Min(0)
   manualHours?: number;
+
+  // Set Manual (manualDurationMs) to this factor of the shift's GPS durationMs
+  // (e.g. 0.85 = manual is 85% of GPS, so always a bit less than GPS).
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  manualFactor?: number;
 }

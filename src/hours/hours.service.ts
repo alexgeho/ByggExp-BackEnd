@@ -388,6 +388,7 @@ export class HoursService {
       gpsFactor?: number;
       gpsHours?: number;
       manualHours?: number;
+      manualFactor?: number;
     },
   ) {
     const projects = await this.accessibleProjects(user, dto.projectId);
@@ -413,6 +414,10 @@ export class HoursService {
     }
     if (dto.manualHours != null) {
       set.manualDurationMs = Math.round(dto.manualHours * MS_PER_HOUR);
+    } else if (dto.manualFactor != null) {
+      set.manualDurationMs = {
+        $round: [{ $multiply: ["$durationMs", dto.manualFactor] }, 0],
+      };
     }
     if (!Object.keys(set).length) return { modified: 0 };
 
