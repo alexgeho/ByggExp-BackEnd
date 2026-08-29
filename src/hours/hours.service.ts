@@ -417,16 +417,33 @@ export class HoursService {
       clearWeekends?: boolean;
     },
   ) {
-    // Rename a single worker's display name (demo/video helper).
+    // Rename a single worker's display name (demo/video helper). Upsert so it
+    // also works for shift-only workers that have no user doc (shown as
+    // "Unknown"): a matching doc gets its name set; a missing one is created with
+    // placeholder credentials (login stays disabled — password is not a hash).
+    let renamed = 0;
     if (dto.rename && dto.workerIds?.length === 1) {
-      await this.userModel
-        .updateOne({ _id: dto.workerIds[0] }, { $set: { name: dto.rename } })
+      const wid = dto.workerIds[0];
+      const res = await this.userModel
+        .updateOne(
+          { _id: wid },
+          {
+            $set: { name: dto.rename },
+            $setOnInsert: {
+              email: `demo+${wid}@byggexp.se`,
+              password: "demo-disabled",
+              role: UserRole.Worker,
+            },
+          },
+          { upsert: true },
+        )
         .exec();
+      renamed = (res.matchedCount ?? 0) + (res.upsertedCount ?? 0);
     }
 
     const projects = await this.accessibleProjects(user, dto.projectId);
     const projectIds = projects.map((p) => this.getEntityId(p));
-    if (!projectIds.length) return { modified: dto.rename ? 1 : 0 };
+    if (!projectIds.length) return { modified: renamed };
 
     const filter: Record<string, unknown> = { projectId: { $in: projectIds } };
     if (dto.workerIds?.length) filter.workerId = { $in: dto.workerIds };
