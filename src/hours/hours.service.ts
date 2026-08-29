@@ -61,6 +61,30 @@ export class HoursService {
     return round(minutes / 60);
   }
 
+  // Normalise a Date/date-string to a "YYYY-MM-DD" key (UTC), matching how
+  // shiftDate is stored and how query.from/to are compared.
+  private toDateKey(value: unknown): string | null {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value as string);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toISOString().slice(0, 10);
+  }
+
+  // Working days (Mon–Fri) between two YYYY-MM-DD keys, inclusive.
+  private eachWorkingDate(start: string, end: string): string[] {
+    const out: string[] = [];
+    const cur = new Date(`${start}T00:00:00Z`);
+    const last = new Date(`${end}T00:00:00Z`);
+    let guard = 0;
+    while (cur.getTime() <= last.getTime() && guard < 1000) {
+      const dow = cur.getUTCDay();
+      if (dow !== 0 && dow !== 6) out.push(cur.toISOString().slice(0, 10));
+      cur.setUTCDate(cur.getUTCDate() + 1);
+      guard += 1;
+    }
+    return out;
+  }
+
   // Projects the caller may read hours for, optionally narrowed to one project.
   private async accessibleProjects(
     user: AuthenticatedUser,
@@ -196,10 +220,44 @@ export class HoursService {
         });
       days.get(date)!.projects.add(String(adj.projectId));
     }
+    // Seed each accessible project's whole team — workers AND project admins —
+    // so everyone added to the project shows on the grid even before any shifts
+    // exist. When the project has an enabled shift schedule and a date range,
+    // also seed the planned baseline onto every working day (Mon–Fri) in range,
+    // so `planned` is pre-filled from the project's work-day window.
     for (const project of projects) {
-      for (const teamWorkerId of project.workers || []) {
-        const workerId = String(teamWorkerId);
+      const pid = this.getEntityId(project);
+      const team = new Set(
+        [...(project.workers || []), ...(project.projectAdmins || [])].map(
+          (id) => String(id),
+        ),
+      );
+      for (const workerId of team) {
         if (!byWorker.has(workerId)) byWorker.set(workerId, new Map());
+      }
+
+      // Planned prefill needs an enabled schedule and a bounded date range.
+      if (this.schedulePlanned(project) == null) continue;
+      const projStart = this.toDateKey(project.beginningDate);
+      const projEnd = this.toDateKey(project.endDate);
+      if (!projStart || !projEnd) continue;
+      const rangeStart =
+        query.from && query.from > projStart ? query.from : projStart;
+      const rangeEnd = query.to && query.to < projEnd ? query.to : projEnd;
+      if (rangeStart > rangeEnd) continue;
+
+      for (const date of this.eachWorkingDate(rangeStart, rangeEnd)) {
+        for (const workerId of team) {
+          const days = byWorker.get(workerId)!;
+          if (!days.has(date))
+            days.set(date, {
+              actualMs: 0,
+              manualMs: 0,
+              hasManual: false,
+              projects: new Set(),
+            });
+          days.get(date)!.projects.add(pid);
+        }
       }
     }
 
