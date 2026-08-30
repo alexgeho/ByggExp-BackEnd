@@ -15,6 +15,18 @@ export class GoalStage {
 
   @Prop({ type: Number, default: 0 })
   order: number;
+
+  // Timeline (Gantt) fields. Stored as "YYYY-MM-DD" strings; empty = unscheduled.
+  @Prop({ default: "" })
+  startDate: string;
+
+  @Prop({ default: "" })
+  endDate: string;
+
+  // Indices (into the stages array) of stages this one depends on — used to draw
+  // the dependency chain and compute the critical path on the timeline.
+  @Prop({ type: [Number], default: [] })
+  dependsOn: number[];
 }
 
 export const GoalStageSchema = SchemaFactory.createForClass(GoalStage);

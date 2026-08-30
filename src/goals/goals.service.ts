@@ -73,6 +73,11 @@ export class GoalsService {
         ? stage.taskIds.map((id) => String(id))
         : [],
       order: typeof stage.order === "number" ? stage.order : index,
+      startDate: stage.startDate ?? "",
+      endDate: stage.endDate ?? "",
+      dependsOn: Array.isArray(stage.dependsOn)
+        ? stage.dependsOn.filter((n) => Number.isInteger(n))
+        : [],
     }));
 
     if (!goal) {

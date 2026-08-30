@@ -20,6 +20,19 @@ export class GoalStageDto {
   @IsOptional()
   @IsInt()
   order?: number;
+
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  dependsOn?: number[];
 }
 
 export class UpdateGoalDto {
