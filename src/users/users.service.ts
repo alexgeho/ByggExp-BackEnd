@@ -237,15 +237,17 @@ export class UsersService {
     return randomBytes(12).toString("base64url");
   }
 
+  // Swedish role labels — used in the invitation email, which defaults to the
+  // product's home-market language (Swedish).
   private getRoleLabel(role: UserRole): string {
     const labels: Record<UserRole, string> = {
-      [UserRole.SuperAdmin]: "Super Admin",
-      [UserRole.CompanyAdmin]: "Company Admin",
-      [UserRole.ProjectAdmin]: "Project Admin",
-      [UserRole.Worker]: "Worker",
+      [UserRole.SuperAdmin]: "Superadministratör",
+      [UserRole.CompanyAdmin]: "Företagsadministratör",
+      [UserRole.ProjectAdmin]: "Projektadministratör",
+      [UserRole.Worker]: "Medarbetare",
     };
 
-    return labels[role] || "User";
+    return labels[role] || "Användare";
   }
 
   private normalizeCreateUserInput(

@@ -96,6 +96,7 @@ export class CompanyService {
         email,
         createCompanyDto.name?.trim() || "",
         token,
+        company.country,
       );
     } catch (error) {
       this.logger.error(

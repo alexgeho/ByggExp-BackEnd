@@ -94,7 +94,11 @@ export class MailService {
   // The BYGGEXP logo, embedded as a CID attachment so it renders inline in every
   // email client (base64/data: URIs get stripped by Gmail/Outlook). Returns null
   // if the asset is missing so sends still work.
-  private logoAttachment(): { filename: string; path: string; cid: string } | null {
+  private logoAttachment(): {
+    filename: string;
+    path: string;
+    cid: string;
+  } | null {
     const logoPath = join(process.cwd(), "assets", "email-logo.png");
     if (!existsSync(logoPath)) {
       return null;
@@ -142,23 +146,52 @@ export class MailService {
     email: string,
     companyName: string,
     token: string,
+    lang: string = "sv",
   ): Promise<void> {
     const acceptUrl = `${this.getWebAppUrl()}/invite?token=${encodeURIComponent(token)}`;
-    const name = this.escapeHtml(companyName || "your company");
-    const subject = "You are invited to ByggExp";
-    const text = [
-      `You have been invited to set up ${companyName || "your company"} on ByggExp.`,
-      "",
-      "Open the link below to create your admin account (name + password):",
-      acceptUrl,
-      "",
-      "This invitation expires in 7 days.",
-    ].join("\n");
+    const fallback = {
+      sv: "ditt företag",
+      nb: "bedriften din",
+      en: "your company",
+    };
+    const l = this.resolveMailLang(lang);
+    const name = this.escapeHtml(companyName || fallback[l]);
+    const plainName = companyName || fallback[l];
+    const copy = {
+      sv: {
+        subject: "Du är inbjuden till ByggExp",
+        intro: `Du har blivit inbjuden att sätta upp ${plainName} på ByggExp.`,
+        introHtml: `Du har blivit inbjuden att sätta upp <strong>${name}</strong> på <strong>ByggExp</strong>.`,
+        open: "Öppna länken nedan för att skapa ditt administratörskonto (namn + lösenord):",
+        link: "Acceptera inbjudan och skapa konto",
+        expires: "Denna inbjudan går ut om 7 dagar.",
+      },
+      nb: {
+        subject: "Du er invitert til ByggExp",
+        intro: `Du har blitt invitert til å sette opp ${plainName} på ByggExp.`,
+        introHtml: `Du har blitt invitert til å sette opp <strong>${name}</strong> på <strong>ByggExp</strong>.`,
+        open: "Åpne lenken nedenfor for å opprette administratorkontoen din (navn + passord):",
+        link: "Godta invitasjon og opprett konto",
+        expires: "Denne invitasjonen utløper om 7 dager.",
+      },
+      en: {
+        subject: "You are invited to ByggExp",
+        intro: `You have been invited to set up ${plainName} on ByggExp.`,
+        introHtml: `You have been invited to set up <strong>${name}</strong> on <strong>ByggExp</strong>.`,
+        open: "Open the link below to create your admin account (name + password):",
+        link: "Accept invitation and create account",
+        expires: "This invitation expires in 7 days.",
+      },
+    }[l];
+    const subject = copy.subject;
+    const text = [copy.intro, "", copy.open, acceptUrl, "", copy.expires].join(
+      "\n",
+    );
     const html = `
-      <p>You have been invited to set up <strong>${name}</strong> on <strong>ByggExp</strong>.</p>
-      <p>Open the link below to create your admin account:</p>
-      <p><a href="${acceptUrl}">Accept invitation and create account</a></p>
-      <p>This invitation expires in 7 days.</p>
+      <p>${copy.introHtml}</p>
+      <p>${copy.open}</p>
+      <p><a href="${acceptUrl}">${copy.link}</a></p>
+      <p>${copy.expires}</p>
     `;
 
     if (!this.transporter) {
@@ -188,6 +221,16 @@ export class MailService {
       .filter(Boolean);
   }
 
+  // Normalise a language/country hint to a supported mail language. Accepts a
+  // language code ("sv"/"nb"/"en") or an ISO country code ("SE"/"NO"); anything
+  // unknown falls back to Swedish, the product's home market.
+  private resolveMailLang(hint?: string): "sv" | "nb" | "en" {
+    const h = (hint || "").toLowerCase();
+    if (h === "nb" || h === "no" || h === "nn") return "nb";
+    if (h === "en" || h === "gb" || h === "us") return "en";
+    return "sv";
+  }
+
   private escapeHtml(value: string): string {
     return value
       .replace(/&/g, "&amp;")
@@ -203,31 +246,71 @@ export class MailService {
     token: string,
     password: string,
     roleLabel: string,
+    lang: string = "sv",
   ): Promise<void> {
     const verificationUrl = `${this.getApiPublicUrl()}/auth/verify-email?token=${encodeURIComponent(token)}`;
-    const subject = "Your ByggExp account invitation";
+    const l = this.resolveMailLang(lang);
+    const copy = {
+      sv: {
+        subject: "Din inbjudan till ByggExp",
+        hi: `Hej ${name},`,
+        invited: `Du har blivit inbjuden till ByggExp som ${roleLabel}.`,
+        password: `Ditt tillfälliga lösenord: ${password}`,
+        passwordHtml: `<strong>Ditt tillfälliga lösenord:</strong> ${password}`,
+        open: "Öppna länken nedan för att bekräfta din e-post och logga in automatiskt:",
+        link: "Bekräfta e-post och logga in",
+        later:
+          "Du kan också logga in senare med din e-post och lösenordet ovan.",
+        expires: "Denna länk går ut om 7 dagar.",
+      },
+      nb: {
+        subject: "Din invitasjon til ByggExp",
+        hi: `Hei ${name},`,
+        invited: `Du har blitt invitert til ByggExp som ${roleLabel}.`,
+        password: `Ditt midlertidige passord: ${password}`,
+        passwordHtml: `<strong>Ditt midlertidige passord:</strong> ${password}`,
+        open: "Åpne lenken nedenfor for å bekrefte e-posten din og logge inn automatisk:",
+        link: "Bekreft e-post og logg inn",
+        later:
+          "Du kan også logge inn senere med e-posten din og passordet ovenfor.",
+        expires: "Denne lenken utløper om 7 dager.",
+      },
+      en: {
+        subject: "Your ByggExp account invitation",
+        hi: `Hi ${name},`,
+        invited: `You have been invited to ByggExp as ${roleLabel}.`,
+        password: `Your temporary password: ${password}`,
+        passwordHtml: `<strong>Your temporary password:</strong> ${password}`,
+        open: "Open the link below to confirm your email and sign in automatically:",
+        link: "Confirm email and sign in",
+        later:
+          "You can also sign in later with your email and the password above.",
+        expires: "This link expires in 7 days.",
+      },
+    }[l];
+    const subject = copy.subject;
     const text = [
-      `Hi ${name},`,
+      copy.hi,
       "",
-      `You have been invited to ByggExp as ${roleLabel}.`,
+      copy.invited,
       "",
-      `Your temporary password: ${password}`,
+      copy.password,
       "",
-      "Open the link below to confirm your email and sign in automatically:",
+      copy.open,
       verificationUrl,
       "",
-      "You can also sign in later with your email and the password above.",
-      "This link expires in 7 days.",
+      copy.later,
+      copy.expires,
     ].join("\n");
 
     const html = `
-      <p>Hi ${name},</p>
-      <p>You have been invited to <strong>ByggExp</strong> as <strong>${roleLabel}</strong>.</p>
-      <p><strong>Your temporary password:</strong> ${password}</p>
-      <p>Open the link below to confirm your email and sign in automatically:</p>
-      <p><a href="${verificationUrl}">Confirm email and sign in</a></p>
-      <p>You can also sign in later with your email and the password above.</p>
-      <p>This link expires in 7 days.</p>
+      <p>${copy.hi}</p>
+      <p>${copy.invited}</p>
+      <p>${copy.passwordHtml}</p>
+      <p>${copy.open}</p>
+      <p><a href="${verificationUrl}">${copy.link}</a></p>
+      <p>${copy.later}</p>
+      <p>${copy.expires}</p>
     `;
 
     if (!this.transporter) {
@@ -304,7 +387,8 @@ export class MailService {
   ): Promise<void> {
     const confirmUrl = `${this.getApiPublicUrl()}/auth/register-company/confirm?token=${encodeURIComponent(token)}`;
     const safeName = this.escapeHtml(name || "there");
-    const subject = "Confirm your email to finish creating your ByggExp account";
+    const subject =
+      "Confirm your email to finish creating your ByggExp account";
     const text = [
       `Hi ${name || "there"},`,
       "",
@@ -506,7 +590,9 @@ export class MailService {
     const html = `<p>${this.escapeHtml(holder)} — certifikatet <strong>${this.escapeHtml(certName)}</strong> ${this.escapeHtml(when)}${dateStr ? ` (${this.escapeHtml(dateStr)})` : ""}.</p>`;
 
     if (!this.transporter) {
-      this.logger.log(`Certificate reminder (SMTP off) → ${recipients.join(", ")}: ${line}`);
+      this.logger.log(
+        `Certificate reminder (SMTP off) → ${recipients.join(", ")}: ${line}`,
+      );
       return;
     }
 

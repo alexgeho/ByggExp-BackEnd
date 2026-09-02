@@ -32,6 +32,7 @@ import { ArticlesModule } from "./articles/articles.module";
 import { OffersModule } from "./offers/offers.module";
 import { OfferDraftModule } from "./offer-draft/offer-draft.module";
 import { BugReportsModule } from "./bug-reports/bug-reports.module";
+import { AnalyticsModule } from "./analytics/analytics.module";
 import { MailModule } from "./mail/mail.module";
 import { BlogPostsModule } from "./blog-posts/blog-posts.module";
 import { SiteSeoModule } from "./site-seo/site-seo.module";
@@ -99,6 +100,7 @@ import { SystemModule } from "./system/system.module";
     BlogPostsModule,
     SiteSeoModule,
     BugReportsModule,
+    AnalyticsModule,
     MailModule,
   ],
   controllers: [AppController],
