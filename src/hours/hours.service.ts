@@ -514,4 +514,40 @@ export class HoursService {
 
     return saved;
   }
+
+  // Delete every planned correction for a project (optionally within a date
+  // range). The affected worker-days then read their schedule-derived baseline
+  // again — used to undo test/bulk edits that got stuck overriding the schedule.
+  async resetAdjustments(
+    user: AuthenticatedUser,
+    { projectId, from, to }: { projectId: string; from?: string; to?: string },
+  ): Promise<{ deleted: number }> {
+    if (!projectId) {
+      throw new BadRequestException("projectId is required");
+    }
+    const [project] = await this.accessibleProjects(user, projectId);
+    if (!project) {
+      throw new NotFoundException("Project not found or not accessible");
+    }
+    const companyId =
+      this.getEntityId(project.companyId) || String(project.companyId);
+    if (
+      (user.role === UserRole.CompanyAdmin ||
+        user.role === UserRole.SuperAdmin) &&
+      String(user.companyId) !== String(companyId)
+    ) {
+      throw new ForbiddenException("Project belongs to another company");
+    }
+
+    const filter: Record<string, unknown> = { companyId, projectId };
+    if (from || to) {
+      filter.date = {
+        ...(from ? { $gte: from } : {}),
+        ...(to ? { $lte: to } : {}),
+      };
+    }
+
+    const res = await this.adjustmentModel.deleteMany(filter).exec();
+    return { deleted: res.deletedCount || 0 };
+  }
 }

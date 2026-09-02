@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Put,
   Query,
@@ -40,5 +41,18 @@ export class HoursController {
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   saveAdjustment(@Request() req, @Body() dto: SaveAdjustmentDto) {
     return this.hoursService.saveAdjustment(req.user, dto);
+  }
+
+  // Clear all planned corrections for a project in a date range, so those cells
+  // fall back to the schedule-derived baseline again.
+  @Delete("adjustments")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  resetAdjustments(
+    @Request() req,
+    @Query("projectId") projectId: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+  ) {
+    return this.hoursService.resetAdjustments(req.user, { projectId, from, to });
   }
 }
