@@ -20,28 +20,27 @@ function magicRedirectHtml(magicLoginCode: string, message: string): string {
   const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
   const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end`;
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="sv">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="refresh" content="0;url=${magicUrl}" />
-    <title>Email confirmed</title>
+    <title>E-post bekräftad</title>
     <style>
       body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
       .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
       h1 { font-size: 24px; margin: 0 0 12px; }
-      p { margin: 0 0 16px; line-height: 1.5; color: #5a6b7d; }
-      a.button { display: inline-block; background: #0785f4; color: #fff; text-decoration: none; padding: 14px 20px; border-radius: 999px; font-weight: 600; margin: 4px; }
-      .hint { font-size: 14px; margin-top: 8px; }
+      p { margin: 0 0 20px; line-height: 1.5; color: #5a6b7d; }
+      a.button { display: block; background: #0785f4; color: #fff; text-decoration: none; padding: 18px 20px; border-radius: 999px; font-weight: 700; font-size: 18px; margin: 0 0 12px; }
+      .hint { font-size: 14px; margin-top: 4px; }
     </style>
   </head>
   <body>
     <div class="card">
-      <h1>Email confirmed</h1>
+      <h1>E-post bekräftad ✅</h1>
       <p>${message}</p>
-      <a class="button" id="openIos" href="${magicUrl}">Open ByggExp</a>
-      <a class="button" id="openAndroid" href="${androidIntentUrl}" style="display:none;">Open ByggExp</a>
-      <p class="hint">If the app doesn't open automatically, tap the button above. New here? Install ByggExp, then open it and sign in with your email and password.</p>
+      <a class="button" id="openIos" href="${magicUrl}">Öppna ByggExp</a>
+      <a class="button" id="openAndroid" href="${androidIntentUrl}" style="display:none;">Öppna ByggExp</a>
+      <p class="hint">Tryck på knappen för att öppna appen och logga in automatiskt. Har du inte appen? Installera ByggExp, öppna den och logga in med din e-post och ditt lösenord.</p>
     </div>
     <script>
       (function () {
@@ -52,12 +51,14 @@ function magicRedirectHtml(magicLoginCode: string, message: string): string {
           document.getElementById('openIos').style.display = 'none';
           document.getElementById('openAndroid').style.display = 'inline-block';
         }
-        // Try to open the app immediately; the button is the fallback (iOS
-        // Safari blocks tap-free custom-scheme opens).
-        window.location.href = isAndroid ? androidIntentUrl : magicUrl;
+        // Best-effort auto-open after the page has rendered, so the big button
+        // is already visible as a fallback (iOS/Android browsers often block
+        // tap-free custom-scheme opens, so the button is the reliable path).
         window.setTimeout(function () {
-          window.location.href = magicUrl;
-        }, 500);
+          try {
+            window.location.href = isAndroid ? androidIntentUrl : magicUrl;
+          } catch (e) {}
+        }, 400);
       })();
     </script>
   </body>
