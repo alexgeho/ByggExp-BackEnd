@@ -13,12 +13,21 @@ import { CreateUserDto } from "../users/dto/create-user.dto";
 import { RegisterCompanyPublicDto } from "./dto/register-company-public.dto";
 import { Public } from "../common/decorators/public.decorator";
 
+const apiBase = () =>
+  (process.env.API_PUBLIC_URL || "https://api.byggexp.se").replace(/\/+$/, "");
+
 // A page that deep-links into the app to finish sign-in with a magic code.
 // Shared by verify-email (worker invites) and register-company/confirm.
+// The button is a Universal Link (iOS) / App Link (Android): tapping
+// https://<api>/app/magic?code=… opens the app natively when installed; when
+// it's not, the browser loads that URL and GET /app/magic serves the install
+// fallback. The JS below is a best-effort custom-scheme open for the case where
+// the user is already sitting on this page right after confirming.
 function magicRedirectHtml(magicLoginCode: string, message: string): string {
   const encodedCode = encodeURIComponent(magicLoginCode);
   const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
   const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end`;
+  const universalUrl = `${apiBase()}/app/magic?code=${encodedCode}`;
   return `<!DOCTYPE html>
 <html lang="sv">
   <head>
@@ -38,8 +47,7 @@ function magicRedirectHtml(magicLoginCode: string, message: string): string {
     <div class="card">
       <h1>E-post bekräftad ✅</h1>
       <p>${message}</p>
-      <a class="button" id="openIos" href="${magicUrl}">Öppna ByggExp</a>
-      <a class="button" id="openAndroid" href="${androidIntentUrl}" style="display:none;">Öppna ByggExp</a>
+      <a class="button" href="${universalUrl}">Öppna ByggExp</a>
       <p class="hint">Tryck på knappen för att öppna appen och logga in automatiskt. Har du inte appen? Installera ByggExp, öppna den och logga in med din e-post och ditt lösenord.</p>
     </div>
     <script>
@@ -47,18 +55,59 @@ function magicRedirectHtml(magicLoginCode: string, message: string): string {
         var magicUrl = ${JSON.stringify(magicUrl)};
         var androidIntentUrl = ${JSON.stringify(androidIntentUrl)};
         var isAndroid = /Android/i.test(navigator.userAgent || '');
-        if (isAndroid) {
-          document.getElementById('openIos').style.display = 'none';
-          document.getElementById('openAndroid').style.display = 'inline-block';
-        }
-        // Best-effort auto-open after the page has rendered, so the big button
-        // is already visible as a fallback (iOS/Android browsers often block
-        // tap-free custom-scheme opens, so the button is the reliable path).
+        // Best-effort auto-open via the custom scheme after the page renders,
+        // for the case where the user is already on this page and the app is
+        // installed. The button (Universal/App Link) is the reliable path.
         window.setTimeout(function () {
           try {
             window.location.href = isAndroid ? androidIntentUrl : magicUrl;
           } catch (e) {}
         }, 400);
+      })();
+    </script>
+  </body>
+</html>`;
+}
+
+// Fallback served at GET /app/magic when the browser actually loads the URL —
+// i.e. the app is NOT installed (an installed app would have intercepted the
+// Universal/App Link tap). Offers the store links plus a custom-scheme retry.
+function appMagicFallbackHtml(magicLoginCode: string): string {
+  const encodedCode = encodeURIComponent(magicLoginCode);
+  const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
+  const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end`;
+  const appStore = "https://apps.apple.com/app/id6748280779";
+  const playStore =
+    "https://play.google.com/store/apps/details?id=se.byggexp.app";
+  return `<!DOCTYPE html>
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Öppna ByggExp</title>
+    <style>
+      body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
+      .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
+      h1 { font-size: 24px; margin: 0 0 12px; }
+      p { margin: 0 0 20px; line-height: 1.5; color: #5a6b7d; }
+      a.button { display: block; background: #0785f4; color: #fff; text-decoration: none; padding: 16px 20px; border-radius: 999px; font-weight: 700; font-size: 17px; margin: 0 0 10px; }
+      a.store { background: #eef4fb; color: #0785f4; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Öppna ByggExp</h1>
+      <p>Tryck för att öppna appen. Har du inte appen ännu? Ladda ner den och logga sedan in med din e-post och ditt lösenord.</p>
+      <a class="button" id="openApp" href="${magicUrl}">Öppna appen</a>
+      <a class="button store" href="${appStore}">Ladda ner för iPhone</a>
+      <a class="button store" href="${playStore}">Ladda ner för Android</a>
+    </div>
+    <script>
+      (function () {
+        var isAndroid = /Android/i.test(navigator.userAgent || '');
+        if (isAndroid) {
+          document.getElementById('openApp').setAttribute('href', ${JSON.stringify(androidIntentUrl)});
+        }
       })();
     </script>
   </body>
@@ -417,6 +466,21 @@ export class AuthController {
 
   // One-click admin-panel sign-in from the welcome email: consume the magic
   // code, mint tokens, and redirect into the web admin's /auth/callback.
+  // Universal/App Link target. Reached in the browser only when the app is NOT
+  // installed (an installed app intercepts the tap). Serves the install/open
+  // fallback.
+  @Get("app/magic")
+  appMagic(@Query("code") code: string, @Res() res: Response) {
+    if (!code?.trim()) {
+      res
+        .status(400)
+        .type("html")
+        .send(errorHtml("Ogiltig länk", "Inloggningskoden saknas."));
+      return;
+    }
+    res.status(200).type("html").send(appMagicFallbackHtml(code.trim()));
+  }
+
   @Get("web-magic")
   async webMagic(@Query("code") code: string, @Res() res: Response) {
     if (!code?.trim()) {

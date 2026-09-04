@@ -41,4 +41,48 @@ export class AppController {
   getBimiLogo(): string {
     return BIMI_LOGO_SVG;
   }
+
+  // Universal Links (iOS) — associates api.byggexp.se with the app so the
+  // magic sign-in link opens the app directly. APPLE_TEAM_ID is set per env.
+  // Only the /app/magic path is claimed, so other pages stay in the browser.
+  @Get(".well-known/apple-app-site-association")
+  @Header("Content-Type", "application/json")
+  @Header("Cache-Control", "public, max-age=3600")
+  getAppleAppSiteAssociation(): string {
+    const teamId = process.env.APPLE_TEAM_ID || "TEAMID";
+    const appId = `${teamId}.com.anonymous.totbygghubmobileapp`;
+    return JSON.stringify({
+      applinks: {
+        details: [
+          {
+            appIDs: [appId],
+            components: [{ "/": "/app/magic*", comment: "magic sign-in" }],
+          },
+        ],
+      },
+    });
+  }
+
+  // App Links (Android) — verifies se.byggexp.app for api.byggexp.se. Set
+  // ANDROID_SHA256 to the Play App Signing SHA-256 (comma-separate to add the
+  // upload/debug fingerprint too).
+  @Get(".well-known/assetlinks.json")
+  @Header("Content-Type", "application/json")
+  @Header("Cache-Control", "public, max-age=3600")
+  getAssetLinks(): string {
+    const fingerprints = (process.env.ANDROID_SHA256 || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return JSON.stringify([
+      {
+        relation: ["delegate_permission/common.handle_all_urls"],
+        target: {
+          namespace: "android_app",
+          package_name: "se.byggexp.app",
+          sha256_cert_fingerprints: fingerprints,
+        },
+      },
+    ]);
+  }
 }
