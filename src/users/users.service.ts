@@ -611,7 +611,6 @@ export class UsersService {
         savedUser.email,
         savedUser.name,
         plainToken,
-        plainPassword,
         this.getRoleLabel(savedUser.role),
       );
     } catch (error) {
@@ -650,7 +649,6 @@ export class UsersService {
       user.email,
       user.name,
       plainToken,
-      plainPassword,
       this.getRoleLabel(user.role),
     );
 

@@ -244,7 +244,6 @@ export class MailService {
     email: string,
     name: string,
     token: string,
-    password: string,
     roleLabel: string,
     lang: string = "sv",
   ): Promise<void> {
@@ -255,36 +254,30 @@ export class MailService {
         subject: "Din inbjudan till ByggExp",
         hi: `Hej ${name},`,
         invited: `Du har blivit inbjuden till ByggExp som ${roleLabel}.`,
-        password: `Ditt tillfälliga lösenord: ${password}`,
-        passwordHtml: `<strong>Ditt tillfälliga lösenord:</strong> ${password}`,
         open: "Öppna länken nedan för att bekräfta din e-post och logga in automatiskt:",
         link: "Bekräfta e-post och logga in",
         later:
-          "Du kan också logga in senare med din e-post och lösenordet ovan.",
+          "Du kan också logga in senare med din e-post — begär en engångskod i appen.",
         expires: "Denna länk går ut om 7 dagar.",
       },
       nb: {
         subject: "Din invitasjon til ByggExp",
         hi: `Hei ${name},`,
         invited: `Du har blitt invitert til ByggExp som ${roleLabel}.`,
-        password: `Ditt midlertidige passord: ${password}`,
-        passwordHtml: `<strong>Ditt midlertidige passord:</strong> ${password}`,
         open: "Åpne lenken nedenfor for å bekrefte e-posten din og logge inn automatisk:",
         link: "Bekreft e-post og logg inn",
         later:
-          "Du kan også logge inn senere med e-posten din og passordet ovenfor.",
+          "Du kan også logge inn senere med e-posten din — be om en engangskode i appen.",
         expires: "Denne lenken utløper om 7 dager.",
       },
       en: {
         subject: "Your ByggExp account invitation",
         hi: `Hi ${name},`,
         invited: `You have been invited to ByggExp as ${roleLabel}.`,
-        password: `Your temporary password: ${password}`,
-        passwordHtml: `<strong>Your temporary password:</strong> ${password}`,
         open: "Open the link below to confirm your email and sign in automatically:",
         link: "Confirm email and sign in",
         later:
-          "You can also sign in later with your email and the password above.",
+          "You can also sign in later with your email — request a one-time code in the app.",
         expires: "This link expires in 7 days.",
       },
     }[l];
@@ -293,8 +286,6 @@ export class MailService {
       copy.hi,
       "",
       copy.invited,
-      "",
-      copy.password,
       "",
       copy.open,
       verificationUrl,
@@ -306,7 +297,6 @@ export class MailService {
     const html = `
       <p>${copy.hi}</p>
       <p>${copy.invited}</p>
-      <p>${copy.passwordHtml}</p>
       <p>${copy.open}</p>
       <p><a href="${verificationUrl}">${copy.link}</a></p>
       <p>${copy.later}</p>
@@ -315,7 +305,7 @@ export class MailService {
 
     if (!this.transporter) {
       this.logger.log(
-        `User invite email for ${email} (${roleLabel}): ${verificationUrl} | password: ${password}`,
+        `User invite email for ${email} (${roleLabel}): ${verificationUrl}`,
       );
       return;
     }
