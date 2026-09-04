@@ -354,6 +354,19 @@ export class ProjectsService {
       }
     }
 
+    // Workers on the create payload need the same reverse link (user.projectIds)
+    // as admins — otherwise they're stored in project.workers but never show on
+    // the team (findAllByProject queries by user.projectIds) and can't see the
+    // project in the app. Mirrors what addWorkers/update do.
+    if (resolvedProjectDto.workers) {
+      for (const workerId of resolvedProjectDto.workers) {
+        await this.usersService.addUserToProject(
+          workerId,
+          project._id.toString(),
+        );
+      }
+    }
+
     return project;
   }
 
