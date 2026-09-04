@@ -18,6 +18,7 @@ export const CORE_MODULES = [
 // Everything a superadmin can switch on/off. Keys match the sidebar item keys.
 export const TOGGLEABLE_MODULES = [
   "projects",
+  "map",
   "tasks",
   "dagbok",
   "kma",
@@ -41,6 +42,7 @@ export const TOGGLEABLE_MODULES = [
 // What each plan tier includes by default. Tiers match billing/plans.ts.
 const START = [
   "projects",
+  "map",
   "tasks",
   "shifts",
   "schedule",
