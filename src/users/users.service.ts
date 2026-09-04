@@ -843,21 +843,25 @@ export class UsersService {
   async applyPasswordReset(
     token: string,
     hashedPassword: string,
-  ): Promise<number> {
+  ): Promise<{ count: number; role: UserRole | null }> {
     const hashedToken = this.hashVerificationToken(String(token || "").trim());
-    const result = await this.userModel.updateMany(
-      {
-        passwordResetToken: hashedToken,
-        passwordResetExpiresAt: { $gt: new Date() },
-        accountStatus: UserAccountStatus.Active,
-      },
-      {
-        password: hashedPassword,
-        passwordResetToken: null,
-        passwordResetExpiresAt: null,
-      },
-    );
-    return result.modifiedCount ?? 0;
+    const filter = {
+      passwordResetToken: hashedToken,
+      passwordResetExpiresAt: { $gt: new Date() },
+      accountStatus: UserAccountStatus.Active,
+    };
+    // Capture the role before clearing the token, so the success page can show
+    // admin-only affordances (e.g. the web-admin link) to admins only.
+    const target = await this.userModel.findOne(filter).select("role").lean();
+    const result = await this.userModel.updateMany(filter, {
+      password: hashedPassword,
+      passwordResetToken: null,
+      passwordResetExpiresAt: null,
+    });
+    return {
+      count: result.modifiedCount ?? 0,
+      role: (target?.role as UserRole) ?? null,
+    };
   }
 
   // Enforce the company's seat limit (plan/trial). No-op when the company has

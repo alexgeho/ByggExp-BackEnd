@@ -425,22 +425,26 @@ export class AuthService {
 
   // "Forgot password" step 2: the user submitted a new password on the reset
   // page. Hash it and apply it to every account the token unlocks.
-  async resetPassword(token: string, password: string): Promise<void> {
+  async resetPassword(
+    token: string,
+    password: string,
+  ): Promise<string | null> {
     if (!password || password.length < 6) {
       throw new BadRequestException(
         "Password must be at least 6 characters long.",
       );
     }
     const hashedPassword = await this.hashPassword(password);
-    const updated = await this.usersService.applyPasswordReset(
+    const { count, role } = await this.usersService.applyPasswordReset(
       token,
       hashedPassword,
     );
-    if (updated < 1) {
+    if (count < 1) {
       throw new BadRequestException(
         "This password reset link is invalid or has expired. Please request a new one.",
       );
     }
+    return role;
   }
 
   // Register the SuperAdmin (first-time only)

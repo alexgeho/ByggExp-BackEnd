@@ -230,11 +230,19 @@ function resetPasswordFormHtml(token: string, error?: string): string {
 </html>`;
 }
 
-// Shown after a successful password reset.
-function resetSuccessHtml(): string {
+// Shown after a successful password reset. The web-admin link is admin-only —
+// workers have no admin-panel access, so they never see it (they use the app).
+function resetSuccessHtml(role?: string | null): string {
   const appUrl = "byggexp://";
   const androidIntentUrl =
     "intent://#Intent;scheme=byggexp;package=se.byggexp.app;end";
+  const isAdmin =
+    role === "superadmin" ||
+    role === "companyAdmin" ||
+    role === "projectAdmin";
+  const webAdminLink = isAdmin
+    ? `<p><a class="secondary" href="https://admin.byggexp.se/login">or sign in on the web admin</a></p>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -256,7 +264,7 @@ function resetSuccessHtml(): string {
       <p>Your password has been changed. Open the app and sign in with your new password.</p>
       <a class="button" id="openIos" href="${appUrl}">Open the app</a>
       <a class="button" id="openAndroid" href="${androidIntentUrl}" style="display:none;">Open the app</a>
-      <p><a class="secondary" href="https://admin.byggexp.se/login">or sign in on the web admin</a></p>
+      ${webAdminLink}
     </div>
     <script>
       (function () {
@@ -408,8 +416,8 @@ export class AuthController {
       return;
     }
     try {
-      await this.authService.resetPassword(token, password);
-      res.status(200).type("html").send(resetSuccessHtml());
+      const role = await this.authService.resetPassword(token, password);
+      res.status(200).type("html").send(resetSuccessHtml(role));
     } catch (error) {
       const message =
         error instanceof BadRequestException
