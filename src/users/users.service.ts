@@ -578,6 +578,25 @@ export class UsersService {
     // Seat limit applies to every creation path — bulk import and invite go
     // through here, so enforcing it once closes the single-create bypass.
     await this.assertCompanySeatAvailable(createUserDto.companyId ?? null);
+
+    // If the e-mail already belongs to someone, tell the admin WHO it is (their
+    // role) instead of a generic "already exists" — the common mistake is
+    // inviting the company admin's own address as a worker.
+    const normalizedEmail = createUserDto.email?.trim().toLowerCase();
+    if (normalizedEmail) {
+      const existing = await this.userModel
+        .findOne({ email: normalizedEmail, erasedAt: null })
+        .select("role")
+        .lean();
+      if (existing) {
+        throw new ConflictException(
+          `Den här e-postadressen är redan registrerad som ${this.getRoleLabel(
+            existing.role as UserRole,
+          )}.`,
+        );
+      }
+    }
+
     const plainPassword = this.generateInvitePassword();
     const hashedPassword = await this.hashPassword(plainPassword);
     const { plainToken, hashedToken } = this.buildVerificationToken();
