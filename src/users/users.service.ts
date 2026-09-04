@@ -490,6 +490,11 @@ export class UsersService {
     actor: AuthUser,
     targetUserId: string,
   ): Promise<UserDocument> {
+    // You can never delete your own account — it would lock you out.
+    if (actor?.userId && String(actor.userId) === String(targetUserId)) {
+      throw new ForbiddenException("You can't delete your own account");
+    }
+
     const targetUser = await this.findOne(targetUserId);
 
     if (!(await this.canDeleteUser(actor, targetUser))) {
