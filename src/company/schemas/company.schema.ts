@@ -36,6 +36,25 @@ export class HoursReminderRule {
 export const HoursReminderRuleSchema =
   SchemaFactory.createForClass(HoursReminderRule);
 
+// Server-persisted onboarding checklist state, shared across the company's
+// admins so setup progress follows the account (not one browser). The step
+// completion itself is derived live from real data (has a project, an invoice,
+// …); this only stores the two UI choices that were previously localStorage:
+// which focus track was picked and whether the checklist is open/collapsed/hidden.
+@Schema({ _id: false })
+export class OnboardingState {
+  // 'fieldwork' | 'billing' | 'skip' | null (routing question not answered yet).
+  @Prop({ type: String, default: null })
+  focus?: string | null;
+
+  // 'open' | 'collapsed' | 'hidden'.
+  @Prop({ type: String, default: "open" })
+  view: string;
+}
+
+export const OnboardingStateSchema =
+  SchemaFactory.createForClass(OnboardingState);
+
 @Schema({ timestamps: true })
 export class Company {
   @Prop({ default: "" })
@@ -136,6 +155,10 @@ export class Company {
   // ---- Hours reminder (daily "log your hours" nudge to workers) ----
   @Prop({ type: HoursReminderRuleSchema, default: () => ({}) })
   hoursReminderRule?: HoursReminderRule;
+
+  // ---- Onboarding checklist state (server-persisted, per-company) ----
+  @Prop({ type: OnboardingStateSchema, default: () => ({}) })
+  onboarding?: OnboardingState;
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);

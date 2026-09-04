@@ -11,7 +11,11 @@ import { InjectModel, InjectConnection } from "@nestjs/mongoose";
 import { Model, Connection } from "mongoose";
 import { randomBytes } from "crypto";
 import * as bcrypt from "bcrypt";
-import { Company, CompanyDocument } from "./schemas/company.schema";
+import {
+  Company,
+  CompanyDocument,
+  OnboardingState,
+} from "./schemas/company.schema";
 import {
   CompanyInvite,
   CompanyInviteDocument,
@@ -282,6 +286,32 @@ export class CompanyService {
       throw new NotFoundException(`Company with ID "${id}" not found`);
     }
     return resolveModules(company);
+  }
+
+  // Merge-update the company's onboarding checklist state (focus / view). Only
+  // whitelisted values are written; unknown fields are ignored.
+  async setOnboarding(
+    id: string,
+    patch: { focus?: string | null; view?: string },
+  ): Promise<OnboardingState> {
+    const set: Record<string, unknown> = {};
+    if ("focus" in patch) {
+      const allowedFocus = ["fieldwork", "billing", "skip"];
+      set["onboarding.focus"] =
+        patch.focus && allowedFocus.includes(patch.focus) ? patch.focus : null;
+    }
+    if (typeof patch.view === "string") {
+      const allowedView = ["open", "collapsed", "hidden"];
+      if (allowedView.includes(patch.view)) set["onboarding.view"] = patch.view;
+    }
+    const company = await this.companyModel
+      .findByIdAndUpdate(id, { $set: set }, { new: true })
+      .select("onboarding")
+      .exec();
+    if (!company) {
+      throw new NotFoundException(`Company with ID "${id}" not found`);
+    }
+    return (company.onboarding ?? { focus: null, view: "open" }) as OnboardingState;
   }
 
   // Resolve the effective module set (plan preset + overrides) for a company.

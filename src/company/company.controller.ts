@@ -227,6 +227,24 @@ export class CompanyController {
     });
   }
 
+  // Persist the company's onboarding checklist state (focus track + open/
+  // collapsed/hidden). Company staff may update their own; superadmin any.
+  @Patch(":id/onboarding")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  async setOnboarding(
+    @Param("id") id: string,
+    @Body() body: { focus?: string | null; view?: string },
+    @Request() req,
+  ) {
+    this.assertOwnCompany(id, req);
+    return this.companyService.setOnboarding(id, body || {});
+  }
+
   @Delete(":id")
   @Roles(UserRole.SuperAdmin)
   remove(@Param("id") id: string): Promise<Company> {
