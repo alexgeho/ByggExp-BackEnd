@@ -26,7 +26,7 @@ const apiBase = () =>
 function magicRedirectHtml(magicLoginCode: string, message: string): string {
   const encodedCode = encodeURIComponent(magicLoginCode);
   const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
-  const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end`;
+  const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=se.byggexp.app;end`;
   const universalUrl = `${apiBase()}/app/magic?code=${encodedCode}`;
   return `<!DOCTYPE html>
 <html lang="sv">
@@ -75,7 +75,7 @@ function magicRedirectHtml(magicLoginCode: string, message: string): string {
 function appMagicFallbackHtml(magicLoginCode: string): string {
   const encodedCode = encodeURIComponent(magicLoginCode);
   const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
-  const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end`;
+  const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=se.byggexp.app;end`;
   const appStore = "https://apps.apple.com/app/id6748280779";
   const playStore =
     "https://play.google.com/store/apps/details?id=se.byggexp.app";
@@ -234,7 +234,7 @@ function resetPasswordFormHtml(token: string, error?: string): string {
 function resetSuccessHtml(): string {
   const appUrl = "byggexp://";
   const androidIntentUrl =
-    "intent://#Intent;scheme=byggexp;package=com.anonymous.totbygghubmobileapp;end";
+    "intent://#Intent;scheme=byggexp;package=se.byggexp.app;end";
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
