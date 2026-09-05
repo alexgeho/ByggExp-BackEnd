@@ -238,17 +238,75 @@ export class UsersService {
     return randomBytes(12).toString("base64url");
   }
 
-  // Swedish role labels — used in the invitation email, which defaults to the
-  // product's home-market language (Swedish).
-  private getRoleLabel(role: UserRole): string {
-    const labels: Record<UserRole, string> = {
-      [UserRole.SuperAdmin]: "Superadministratör",
-      [UserRole.CompanyAdmin]: "Företagsadministratör",
-      [UserRole.ProjectAdmin]: "Projektadministratör",
-      [UserRole.Worker]: "Medarbetare",
+  // Localized role labels — used in the invitation email (in the invited user's
+  // language) and in the admin-facing "already registered" message (Swedish).
+  // Falls back to Swedish for any language without a translation.
+  private getRoleLabel(role: UserRole, lang = "sv"): string {
+    const byLang: Record<string, Record<UserRole, string>> = {
+      sv: {
+        [UserRole.SuperAdmin]: "Superadministratör",
+        [UserRole.CompanyAdmin]: "Företagsadministratör",
+        [UserRole.ProjectAdmin]: "Projektadministratör",
+        [UserRole.Worker]: "Medarbetare",
+      },
+      nb: {
+        [UserRole.SuperAdmin]: "Superadministrator",
+        [UserRole.CompanyAdmin]: "Bedriftsadministrator",
+        [UserRole.ProjectAdmin]: "Prosjektadministrator",
+        [UserRole.Worker]: "Medarbeider",
+      },
+      en: {
+        [UserRole.SuperAdmin]: "Super administrator",
+        [UserRole.CompanyAdmin]: "Company administrator",
+        [UserRole.ProjectAdmin]: "Project administrator",
+        [UserRole.Worker]: "Employee",
+      },
+      pl: {
+        [UserRole.SuperAdmin]: "Superadministrator",
+        [UserRole.CompanyAdmin]: "Administrator firmy",
+        [UserRole.ProjectAdmin]: "Administrator projektu",
+        [UserRole.Worker]: "Pracownik",
+      },
+      et: {
+        [UserRole.SuperAdmin]: "Superadministraator",
+        [UserRole.CompanyAdmin]: "Ettevõtte administraator",
+        [UserRole.ProjectAdmin]: "Projekti administraator",
+        [UserRole.Worker]: "Töötaja",
+      },
+      uk: {
+        [UserRole.SuperAdmin]: "Суперадміністратор",
+        [UserRole.CompanyAdmin]: "Адміністратор компанії",
+        [UserRole.ProjectAdmin]: "Адміністратор проєкту",
+        [UserRole.Worker]: "Працівник",
+      },
+      ru: {
+        [UserRole.SuperAdmin]: "Суперадминистратор",
+        [UserRole.CompanyAdmin]: "Администратор компании",
+        [UserRole.ProjectAdmin]: "Администратор проекта",
+        [UserRole.Worker]: "Сотрудник",
+      },
+      fi: {
+        [UserRole.SuperAdmin]: "Pääkäyttäjä",
+        [UserRole.CompanyAdmin]: "Yrityksen järjestelmänvalvoja",
+        [UserRole.ProjectAdmin]: "Projektin järjestelmänvalvoja",
+        [UserRole.Worker]: "Työntekijä",
+      },
+      lt: {
+        [UserRole.SuperAdmin]: "Superadministratorius",
+        [UserRole.CompanyAdmin]: "Įmonės administratorius",
+        [UserRole.ProjectAdmin]: "Projekto administratorius",
+        [UserRole.Worker]: "Darbuotojas",
+      },
+      lv: {
+        [UserRole.SuperAdmin]: "Superadministrators",
+        [UserRole.CompanyAdmin]: "Uzņēmuma administrators",
+        [UserRole.ProjectAdmin]: "Projekta administrators",
+        [UserRole.Worker]: "Darbinieks",
+      },
     };
-
-    return labels[role] || "Användare";
+    const normalized = lang === "no" || lang === "nn" ? "nb" : lang;
+    const labels = byLang[normalized] || byLang.sv;
+    return labels[role] || byLang.sv[role] || "Användare";
   }
 
   private normalizeCreateUserInput(
@@ -636,7 +694,7 @@ export class UsersService {
         savedUser.email,
         savedUser.name,
         plainToken,
-        this.getRoleLabel(savedUser.role),
+        this.getRoleLabel(savedUser.role, languageCode(savedUser.language)),
         languageCode(savedUser.language),
       );
     } catch (error) {
@@ -675,7 +733,7 @@ export class UsersService {
       user.email,
       user.name,
       plainToken,
-      this.getRoleLabel(user.role),
+      this.getRoleLabel(user.role, languageCode(user.language)),
       languageCode(user.language),
     );
 

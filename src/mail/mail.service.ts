@@ -3,6 +3,14 @@ import { ConfigService } from "@nestjs/config";
 import nodemailer, { Transporter } from "nodemailer";
 import { existsSync } from "fs";
 import { join } from "path";
+import {
+  MailLang,
+  MAIL_LANGS,
+  GREETING_FALLBACK,
+  inviteCopy,
+  resetCopy,
+  loginCodeCopy,
+} from "./email-copy";
 
 type DemoRequestPayload = {
   name: string;
@@ -224,11 +232,11 @@ export class MailService {
   // Normalise a language/country hint to a supported mail language. Accepts a
   // language code ("sv"/"nb"/"en") or an ISO country code ("SE"/"NO"); anything
   // unknown falls back to Swedish, the product's home market.
-  private resolveMailLang(hint?: string): "sv" | "nb" | "en" {
+  private resolveMailLang(hint?: string): MailLang {
     const h = (hint || "").toLowerCase();
-    if (h === "nb" || h === "no" || h === "nn") return "nb";
-    if (h === "en" || h === "gb" || h === "us") return "en";
-    return "sv";
+    if (h === "no" || h === "nn") return "nb"; // mobile uses "no", mail uses "nb"
+    if (h === "gb" || h === "us") return "en";
+    return (MAIL_LANGS as string[]).includes(h) ? (h as MailLang) : "sv";
   }
 
   private escapeHtml(value: string): string {
@@ -249,38 +257,7 @@ export class MailService {
   ): Promise<void> {
     const verificationUrl = `${this.getApiPublicUrl()}/auth/verify-email?token=${encodeURIComponent(token)}`;
     const l = this.resolveMailLang(lang);
-    const copy = {
-      sv: {
-        subject: "Din inbjudan till ByggExp",
-        hi: `Hej ${name},`,
-        invited: `Du har blivit inbjuden till ByggExp som ${roleLabel}.`,
-        open: "Öppna länken nedan för att bekräfta din e-post och logga in automatiskt:",
-        link: "Bekräfta e-post och logga in",
-        later:
-          "Du kan också logga in senare med din e-post — begär en engångskod i appen.",
-        expires: "Denna länk går ut om 7 dagar.",
-      },
-      nb: {
-        subject: "Din invitasjon til ByggExp",
-        hi: `Hei ${name},`,
-        invited: `Du har blitt invitert til ByggExp som ${roleLabel}.`,
-        open: "Åpne lenken nedenfor for å bekrefte e-posten din og logge inn automatisk:",
-        link: "Bekreft e-post og logg inn",
-        later:
-          "Du kan også logge inn senere med e-posten din — be om en engangskode i appen.",
-        expires: "Denne lenken utløper om 7 dager.",
-      },
-      en: {
-        subject: "Your ByggExp account invitation",
-        hi: `Hi ${name},`,
-        invited: `You have been invited to ByggExp as ${roleLabel}.`,
-        open: "Open the link below to confirm your email and sign in automatically:",
-        link: "Confirm email and sign in",
-        later:
-          "You can also sign in later with your email — request a one-time code in the app.",
-        expires: "This link expires in 7 days.",
-      },
-    }[l];
+    const copy = inviteCopy[l]({ name, roleLabel });
     const subject = copy.subject;
     const text = [
       copy.hi,
@@ -420,36 +397,8 @@ export class MailService {
   ): Promise<void> {
     const resetUrl = `${this.getApiPublicUrl()}/auth/reset-password?token=${encodeURIComponent(token)}`;
     const l = this.resolveMailLang(lang);
-    const greetName = name || { sv: "där", nb: "der", en: "there" }[l];
-    const copy = {
-      sv: {
-        subject: "Återställ ditt ByggExp-lösenord",
-        hi: `Hej ${greetName},`,
-        intro:
-          "Vi fick en begäran om att återställa ditt ByggExp-lösenord. Öppna länken nedan för att välja ett nytt:",
-        button: "Återställ mitt lösenord",
-        expires:
-          "Länken går ut om 1 timme. Om du inte begärde detta kan du ignorera mejlet — ditt lösenord förblir oförändrat.",
-      },
-      nb: {
-        subject: "Tilbakestill ByggExp-passordet ditt",
-        hi: `Hei ${greetName},`,
-        intro:
-          "Vi mottok en forespørsel om å tilbakestille ByggExp-passordet ditt. Åpne lenken nedenfor for å velge et nytt:",
-        button: "Tilbakestill passordet mitt",
-        expires:
-          "Lenken utløper om 1 time. Hvis du ikke ba om dette, kan du ignorere e-posten — passordet ditt forblir uendret.",
-      },
-      en: {
-        subject: "Reset your ByggExp password",
-        hi: `Hi ${greetName},`,
-        intro:
-          "We received a request to reset your ByggExp password. Open the link below to choose a new one:",
-        button: "Reset my password",
-        expires:
-          "This link expires in 1 hour. If you didn't request this, you can ignore this email — your password stays the same.",
-      },
-    }[l];
+    const greetName = name || GREETING_FALLBACK[l];
+    const copy = resetCopy[l]({ name: greetName });
     const subject = copy.subject;
     const text = [copy.hi, "", copy.intro, resetUrl, "", copy.expires].join(
       "\n",
@@ -484,30 +433,8 @@ export class MailService {
     lang: string = "sv",
   ): Promise<void> {
     const l = this.resolveMailLang(lang);
-    const greetName = name || { sv: "där", nb: "der", en: "there" }[l];
-    const copy = {
-      sv: {
-        subject: "Din inloggningskod för ByggExp",
-        hi: `Hej ${greetName},`,
-        intro: "Din inloggningskod för ByggExp:",
-        expires:
-          "Den går ut om 15 minuter. Om du inte begärde detta kan du ignorera mejlet.",
-      },
-      nb: {
-        subject: "Din innloggingskode for ByggExp",
-        hi: `Hei ${greetName},`,
-        intro: "Din innloggingskode for ByggExp:",
-        expires:
-          "Den utløper om 15 minutter. Hvis du ikke ba om dette, kan du ignorere e-posten.",
-      },
-      en: {
-        subject: "Your ByggExp sign-in code",
-        hi: `Hi ${greetName},`,
-        intro: "Your ByggExp sign-in code:",
-        expires:
-          "It expires in 15 minutes. If you didn't request this, you can ignore this email.",
-      },
-    }[l];
+    const greetName = name || GREETING_FALLBACK[l];
+    const copy = loginCodeCopy[l]({ name: greetName });
     const subject = copy.subject;
     const text = [
       copy.hi,
