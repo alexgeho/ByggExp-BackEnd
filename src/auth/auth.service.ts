@@ -27,6 +27,7 @@ import { getEffectivePermissions } from "../common/permissions/permissions.const
 import { UserActivityLogLevel } from "../users/schemas/user-activity-log.schema";
 import { ConfigService } from "@nestjs/config";
 import { MailService } from "../mail/mail.service";
+import { languageCode } from "../common/language";
 
 @Injectable()
 export class AuthService {
@@ -358,6 +359,7 @@ export class AuthService {
           result.user.email,
           result.user.name,
           result.code,
+          languageCode(result.user.language),
         );
       } catch (error) {
         this.logger.error(`Failed to send login code: ${String(error)}`);
@@ -405,6 +407,7 @@ export class AuthService {
           result.user.email,
           result.user.name,
           result.token,
+          languageCode(result.user.language),
         );
       } catch (error) {
         this.logger.error(`Failed to send password reset: ${String(error)}`);

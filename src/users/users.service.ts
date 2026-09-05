@@ -40,6 +40,7 @@ import {
 } from "./schemas/user-activity-log.schema";
 import { WorkerNote, WorkerNoteDocument } from "./schemas/worker-note.schema";
 import { Tool, ToolDocument } from "../tools/schemas/tool.schema";
+import { languageCode } from "../common/language";
 
 type UserDetailProjectRole =
   | "owner"
@@ -636,6 +637,7 @@ export class UsersService {
         savedUser.name,
         plainToken,
         this.getRoleLabel(savedUser.role),
+        languageCode(savedUser.language),
       );
     } catch (error) {
       this.logger.error(
@@ -674,6 +676,7 @@ export class UsersService {
       user.name,
       plainToken,
       this.getRoleLabel(user.role),
+      languageCode(user.language),
     );
 
     return { ok: true };
