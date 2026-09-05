@@ -278,27 +278,28 @@ export class MailService {
     trialDays: number;
     maxUsers: number;
   }): Promise<void> {
+    // First emails to OUR customer (the company admin) are Swedish-first.
     const adminLink = this.getWebAppUrl();
-    const name = this.escapeHtml(opts.name || "there");
-    const companyName = this.escapeHtml(opts.companyName || "your company");
-    const subject = "Welcome to ByggExp — your trial is ready";
+    const name = this.escapeHtml(opts.name || "där");
+    const companyName = this.escapeHtml(opts.companyName || "ditt företag");
+    const subject = "Välkommen till ByggExp — din provperiod har börjat";
     const text = [
-      `Hi ${opts.name || "there"},`,
+      `Hej ${opts.name || "där"},`,
       "",
-      `Your company ${opts.companyName || ""} is set up on ByggExp and your ${opts.trialDays}-day free trial has started (up to ${opts.maxUsers} users).`,
+      `Ditt företag ${opts.companyName || ""} är uppsatt på ByggExp och din ${opts.trialDays} dagar långa gratis provperiod har börjat (upp till ${opts.maxUsers} användare).`,
       "",
-      "Sign in on the mobile app and the web admin panel with your email and the password you chose.",
+      "Logga in i mobilappen och i webbadmin med din e-post och lösenordet du valde.",
       "",
-      `Open the web admin panel here: ${adminLink}`,
+      `Öppna webbadmin här: ${adminLink}`,
       "",
-      "Welcome aboard!",
+      "Välkommen ombord!",
     ].join("\n");
     const html = this.brandedHtml(`
-      <p style="margin:0 0 12px;">Hi ${name},</p>
-      <p style="margin:0 0 12px;">Your company <strong>${companyName}</strong> is set up on <strong>ByggExp</strong> and your <strong>${opts.trialDays}-day free trial</strong> has started (up to <strong>${opts.maxUsers} users</strong>).</p>
-      <p style="margin:0 0 20px;">Sign in on the mobile app and the web admin panel with your email and the password you chose at sign-up.</p>
-      <p style="margin:0 0 20px;"><a href="${adminLink}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Sign in to the admin panel</a></p>
-      <p style="margin:0;">Welcome aboard!</p>
+      <p style="margin:0 0 12px;">Hej ${name},</p>
+      <p style="margin:0 0 12px;">Ditt företag <strong>${companyName}</strong> är uppsatt på <strong>ByggExp</strong> och din <strong>${opts.trialDays} dagar långa gratis provperiod</strong> har börjat (upp till <strong>${opts.maxUsers} användare</strong>).</p>
+      <p style="margin:0 0 20px;">Logga in i mobilappen och i webbadmin med din e-post och lösenordet du valde vid registreringen.</p>
+      <p style="margin:0 0 20px;"><a href="${adminLink}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Logga in i webbadmin</a></p>
+      <p style="margin:0;">Välkommen ombord!</p>
     `);
 
     if (!this.transporter) {
@@ -324,23 +325,23 @@ export class MailService {
     name: string,
     token: string,
   ): Promise<void> {
+    // First email to OUR customer at sign-up — Swedish-first.
     const confirmUrl = `${this.getApiPublicUrl()}/auth/register-company/confirm?token=${encodeURIComponent(token)}`;
-    const safeName = this.escapeHtml(name || "there");
-    const subject =
-      "Confirm your email to finish creating your ByggExp account";
+    const safeName = this.escapeHtml(name || "där");
+    const subject = "Bekräfta din e-post för att slutföra ditt ByggExp-konto";
     const text = [
-      `Hi ${name || "there"},`,
+      `Hej ${name || "där"},`,
       "",
-      "Open the link below to confirm your email and finish creating your ByggExp account — you'll be signed in automatically:",
+      "Öppna länken nedan för att bekräfta din e-post och slutföra skapandet av ditt ByggExp-konto — du loggas in automatiskt:",
       confirmUrl,
       "",
-      "This link expires in 24 hours. If you didn't request this, you can ignore this email.",
+      "Denna länk går ut om 24 timmar. Om du inte begärde detta kan du ignorera mejlet.",
     ].join("\n");
     const html = this.brandedHtml(`
-      <p style="margin:0 0 12px;">Hi ${safeName},</p>
-      <p style="margin:0 0 20px;">Open the link below to confirm your email and finish creating your ByggExp account — you'll be signed in automatically:</p>
-      <p style="margin:0 0 20px;"><a href="${confirmUrl}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Confirm email and create account</a></p>
-      <p style="color:#5a6b7d;font-size:13px;margin:0;">This link expires in 24 hours. If you didn't request this, you can ignore this email.</p>
+      <p style="margin:0 0 12px;">Hej ${safeName},</p>
+      <p style="margin:0 0 20px;">Öppna länken nedan för att bekräfta din e-post och slutföra skapandet av ditt ByggExp-konto — du loggas in automatiskt:</p>
+      <p style="margin:0 0 20px;"><a href="${confirmUrl}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Bekräfta e-post och skapa konto</a></p>
+      <p style="color:#5a6b7d;font-size:13px;margin:0;">Denna länk går ut om 24 timmar. Om du inte begärde detta kan du ignorera mejlet.</p>
     `);
 
     if (!this.transporter) {
