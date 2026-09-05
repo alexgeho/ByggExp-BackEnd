@@ -768,11 +768,14 @@ export class UsersService {
     magicLoginCode: string;
   }> {
     const hashedToken = this.hashVerificationToken(token);
+    // Match on the (single-use) token + expiry only — NOT on accountStatus.
+    // A re-invited user may already be Active (resendInvite issues a fresh token
+    // without downgrading status), and clicking the link should still succeed
+    // idempotently rather than fail with "invalid or expired".
     const user = await this.userModel
       .findOne({
         emailVerificationToken: hashedToken,
         emailVerificationExpiresAt: { $gt: new Date() },
-        accountStatus: UserAccountStatus.WaitingForApproval,
       })
       .select("+emailVerificationToken +emailVerificationExpiresAt")
       .exec();
