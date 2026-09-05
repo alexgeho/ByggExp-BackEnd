@@ -14,7 +14,8 @@ export type MailLang =
   | "ru"
   | "fi"
   | "lt"
-  | "lv";
+  | "lv"
+  | "bs";
 
 export const MAIL_LANGS: MailLang[] = [
   "sv",
@@ -27,6 +28,7 @@ export const MAIL_LANGS: MailLang[] = [
   "fi",
   "lt",
   "lv",
+  "bs",
 ];
 
 // Word used in the greeting when we don't have the user's name ("Hi there").
@@ -41,6 +43,7 @@ export const GREETING_FALLBACK: Record<MailLang, string> = {
   fi: "käyttäjä",
   lt: "naudotojau",
   lv: "lietotāj",
+  bs: "korisniče",
 };
 
 export type InviteCopy = {
@@ -157,6 +160,16 @@ export const inviteCopy: Record<
       "Varat arī pieteikties vēlāk ar savu e-pastu — pieprasiet vienreizēju kodu lietotnē.",
     expires: "Šī saite ir derīga 7 dienas.",
   }),
+  bs: ({ name, roleLabel }) => ({
+    subject: "Vaš poziv za ByggExp",
+    hi: `Zdravo ${name},`,
+    invited: `Pozvani ste u ByggExp kao ${roleLabel}.`,
+    open: "Otvorite link ispod da potvrdite svoj e-mail i prijavite se automatski:",
+    link: "Potvrdi e-mail i prijavi se",
+    later:
+      "Možete se prijaviti i kasnije svojim e-mailom — zatražite jednokratni kod u aplikaciji.",
+    expires: "Ovaj link ističe za 7 dana.",
+  }),
 };
 
 export type ResetCopy = {
@@ -261,6 +274,15 @@ export const resetCopy: Record<
     expires:
       "Saite ir derīga 1 stundu. Ja tas nebijāt jūs, ignorējiet šo e-pastu — parole paliks nemainīga.",
   }),
+  bs: ({ name }) => ({
+    subject: "Resetujte svoju ByggExp lozinku",
+    hi: `Zdravo ${name},`,
+    intro:
+      "Primili smo zahtjev za resetovanje vaše ByggExp lozinke. Otvorite link ispod da izaberete novu:",
+    button: "Resetuj lozinku",
+    expires:
+      "Ovaj link ističe za 1 sat. Ako niste vi to zatražili, ignorišite ovaj e-mail — lozinka ostaje ista.",
+  }),
 };
 
 // Fallback for a missing company name ("your company").
@@ -275,6 +297,7 @@ export const COMPANY_FALLBACK: Record<MailLang, string> = {
   fi: "yrityksesi",
   lt: "jūsų įmonė",
   lv: "jūsu uzņēmums",
+  bs: "vaša firma",
 };
 
 export type CompanyInviteCopy = {
@@ -371,6 +394,14 @@ export const companyInviteCopy: Record<
     link: "Pieņemt ielūgumu un izveidot kontu",
     expires: "Šis ielūgums ir derīgs 7 dienas.",
   }),
+  bs: ({ name, plainName }) => ({
+    subject: "Poziv za ByggExp",
+    intro: `Pozvani ste da postavite ${plainName} na ByggExp.`,
+    introHtml: `Pozvani ste da postavite <strong>${name}</strong> na <strong>ByggExp</strong>.`,
+    open: "Otvorite link ispod da kreirate svoj administratorski nalog (ime + lozinka):",
+    link: "Prihvati poziv i kreiraj nalog",
+    expires: "Ovaj poziv ističe za 7 dana.",
+  }),
 };
 
 export type LoginCodeCopy = {
@@ -453,5 +484,12 @@ export const loginCodeCopy: Record<
     intro: "Jūsu ByggExp pieteikšanās kods:",
     expires:
       "Tas ir derīgs 15 minūtes. Ja tas nebijāt jūs, ignorējiet šo e-pastu.",
+  }),
+  bs: ({ name }) => ({
+    subject: "Vaš ByggExp kod za prijavu",
+    hi: `Zdravo ${name},`,
+    intro: "Vaš ByggExp kod za prijavu:",
+    expires:
+      "Ističe za 15 minuta. Ako niste vi to zatražili, ignorišite ovaj e-mail.",
   }),
 };

@@ -303,6 +303,12 @@ export class UsersService {
         [UserRole.ProjectAdmin]: "Projekta administrators",
         [UserRole.Worker]: "Darbinieks",
       },
+      bs: {
+        [UserRole.SuperAdmin]: "Superadministrator",
+        [UserRole.CompanyAdmin]: "Administrator kompanije",
+        [UserRole.ProjectAdmin]: "Administrator projekta",
+        [UserRole.Worker]: "Radnik",
+      },
     };
     const normalized = lang === "no" || lang === "nn" ? "nb" : lang;
     const labels = byLang[normalized] || byLang.sv;

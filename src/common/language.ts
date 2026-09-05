@@ -15,6 +15,7 @@ export const SUPPORTED_LANGS = [
   "fi",
   "lt",
   "lv",
+  "bs",
 ] as const;
 
 export type LangCode = (typeof SUPPORTED_LANGS)[number];
