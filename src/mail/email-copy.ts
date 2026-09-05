@@ -263,6 +263,116 @@ export const resetCopy: Record<
   }),
 };
 
+// Fallback for a missing company name ("your company").
+export const COMPANY_FALLBACK: Record<MailLang, string> = {
+  sv: "ditt företag",
+  nb: "bedriften din",
+  en: "your company",
+  pl: "Twoja firma",
+  et: "sinu ettevõte",
+  uk: "ваша компанія",
+  ru: "ваша компания",
+  fi: "yrityksesi",
+  lt: "jūsų įmonė",
+  lv: "jūsu uzņēmums",
+};
+
+export type CompanyInviteCopy = {
+  subject: string;
+  intro: string;
+  introHtml: string;
+  open: string;
+  link: string;
+  expires: string;
+};
+
+// `name` is HTML-escaped (goes inside <strong>), `plainName` is for the text part.
+export const companyInviteCopy: Record<
+  MailLang,
+  (vars: { name: string; plainName: string }) => CompanyInviteCopy
+> = {
+  sv: ({ name, plainName }) => ({
+    subject: "Du är inbjuden till ByggExp",
+    intro: `Du har blivit inbjuden att sätta upp ${plainName} på ByggExp.`,
+    introHtml: `Du har blivit inbjuden att sätta upp <strong>${name}</strong> på <strong>ByggExp</strong>.`,
+    open: "Öppna länken nedan för att skapa ditt administratörskonto (namn + lösenord):",
+    link: "Acceptera inbjudan och skapa konto",
+    expires: "Denna inbjudan går ut om 7 dagar.",
+  }),
+  nb: ({ name, plainName }) => ({
+    subject: "Du er invitert til ByggExp",
+    intro: `Du har blitt invitert til å sette opp ${plainName} på ByggExp.`,
+    introHtml: `Du har blitt invitert til å sette opp <strong>${name}</strong> på <strong>ByggExp</strong>.`,
+    open: "Åpne lenken nedenfor for å opprette administratorkontoen din (navn + passord):",
+    link: "Godta invitasjon og opprett konto",
+    expires: "Denne invitasjonen utløper om 7 dager.",
+  }),
+  en: ({ name, plainName }) => ({
+    subject: "You are invited to ByggExp",
+    intro: `You have been invited to set up ${plainName} on ByggExp.`,
+    introHtml: `You have been invited to set up <strong>${name}</strong> on <strong>ByggExp</strong>.`,
+    open: "Open the link below to create your admin account (name + password):",
+    link: "Accept invitation and create account",
+    expires: "This invitation expires in 7 days.",
+  }),
+  pl: ({ name, plainName }) => ({
+    subject: "Zaproszenie do ByggExp",
+    intro: `Otrzymałeś zaproszenie do skonfigurowania ${plainName} w ByggExp.`,
+    introHtml: `Otrzymałeś zaproszenie do skonfigurowania <strong>${name}</strong> w <strong>ByggExp</strong>.`,
+    open: "Otwórz poniższy link, aby utworzyć konto administratora (imię + hasło):",
+    link: "Przyjmij zaproszenie i utwórz konto",
+    expires: "To zaproszenie wygasa za 7 dni.",
+  }),
+  et: ({ name, plainName }) => ({
+    subject: "Kutse ByggExpi",
+    intro: `Sind on kutsutud seadistama ${plainName} ByggExpis.`,
+    introHtml: `Sind on kutsutud seadistama <strong>${name}</strong> keskkonnas <strong>ByggExp</strong>.`,
+    open: "Ava allolev link, et luua oma administraatori konto (nimi + parool):",
+    link: "Võta kutse vastu ja loo konto",
+    expires: "See kutse aegub 7 päeva pärast.",
+  }),
+  uk: ({ name, plainName }) => ({
+    subject: "Запрошення до ByggExp",
+    intro: `Вас запросили налаштувати ${plainName} у ByggExp.`,
+    introHtml: `Вас запросили налаштувати <strong>${name}</strong> у <strong>ByggExp</strong>.`,
+    open: "Відкрийте посилання нижче, щоб створити обліковий запис адміністратора (ім'я + пароль):",
+    link: "Прийняти запрошення та створити акаунт",
+    expires: "Це запрошення діє 7 днів.",
+  }),
+  ru: ({ name, plainName }) => ({
+    subject: "Приглашение в ByggExp",
+    intro: `Вас пригласили настроить ${plainName} в ByggExp.`,
+    introHtml: `Вас пригласили настроить <strong>${name}</strong> в <strong>ByggExp</strong>.`,
+    open: "Откройте ссылку ниже, чтобы создать учётную запись администратора (имя + пароль):",
+    link: "Принять приглашение и создать аккаунт",
+    expires: "Это приглашение действует 7 дней.",
+  }),
+  fi: ({ name, plainName }) => ({
+    subject: "Kutsu ByggExpiin",
+    intro: `Sinut on kutsuttu ottamaan käyttöön ${plainName} ByggExpissä.`,
+    introHtml: `Sinut on kutsuttu ottamaan käyttöön <strong>${name}</strong> palvelussa <strong>ByggExp</strong>.`,
+    open: "Avaa alla oleva linkki luodaksesi järjestelmänvalvojan tilin (nimi + salasana):",
+    link: "Hyväksy kutsu ja luo tili",
+    expires: "Tämä kutsu vanhenee 7 päivän kuluttua.",
+  }),
+  lt: ({ name, plainName }) => ({
+    subject: "Kvietimas į ByggExp",
+    intro: `Esate pakviestas sukonfigūruoti ${plainName} sistemoje ByggExp.`,
+    introHtml: `Esate pakviestas sukonfigūruoti <strong>${name}</strong> sistemoje <strong>ByggExp</strong>.`,
+    open: "Atidarykite žemiau esančią nuorodą, kad sukurtumėte administratoriaus paskyrą (vardas + slaptažodis):",
+    link: "Priimti kvietimą ir sukurti paskyrą",
+    expires: "Šis kvietimas galioja 7 dienas.",
+  }),
+  lv: ({ name, plainName }) => ({
+    subject: "Ielūgums uz ByggExp",
+    intro: `Jūs esat uzaicināts iestatīt ${plainName} sistēmā ByggExp.`,
+    introHtml: `Jūs esat uzaicināts iestatīt <strong>${name}</strong> sistēmā <strong>ByggExp</strong>.`,
+    open: "Atveriet zemāk esošo saiti, lai izveidotu administratora kontu (vārds + parole):",
+    link: "Pieņemt ielūgumu un izveidot kontu",
+    expires: "Šis ielūgums ir derīgs 7 dienas.",
+  }),
+};
+
 export type LoginCodeCopy = {
   subject: string;
   hi: string;

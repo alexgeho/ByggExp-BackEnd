@@ -7,6 +7,8 @@ import {
   MailLang,
   MAIL_LANGS,
   GREETING_FALLBACK,
+  COMPANY_FALLBACK,
+  companyInviteCopy,
   inviteCopy,
   resetCopy,
   loginCodeCopy,
@@ -157,40 +159,10 @@ export class MailService {
     lang: string = "sv",
   ): Promise<void> {
     const acceptUrl = `${this.getWebAppUrl()}/invite?token=${encodeURIComponent(token)}`;
-    const fallback = {
-      sv: "ditt företag",
-      nb: "bedriften din",
-      en: "your company",
-    };
     const l = this.resolveMailLang(lang);
-    const name = this.escapeHtml(companyName || fallback[l]);
-    const plainName = companyName || fallback[l];
-    const copy = {
-      sv: {
-        subject: "Du är inbjuden till ByggExp",
-        intro: `Du har blivit inbjuden att sätta upp ${plainName} på ByggExp.`,
-        introHtml: `Du har blivit inbjuden att sätta upp <strong>${name}</strong> på <strong>ByggExp</strong>.`,
-        open: "Öppna länken nedan för att skapa ditt administratörskonto (namn + lösenord):",
-        link: "Acceptera inbjudan och skapa konto",
-        expires: "Denna inbjudan går ut om 7 dagar.",
-      },
-      nb: {
-        subject: "Du er invitert til ByggExp",
-        intro: `Du har blitt invitert til å sette opp ${plainName} på ByggExp.`,
-        introHtml: `Du har blitt invitert til å sette opp <strong>${name}</strong> på <strong>ByggExp</strong>.`,
-        open: "Åpne lenken nedenfor for å opprette administratorkontoen din (navn + passord):",
-        link: "Godta invitasjon og opprett konto",
-        expires: "Denne invitasjonen utløper om 7 dager.",
-      },
-      en: {
-        subject: "You are invited to ByggExp",
-        intro: `You have been invited to set up ${plainName} on ByggExp.`,
-        introHtml: `You have been invited to set up <strong>${name}</strong> on <strong>ByggExp</strong>.`,
-        open: "Open the link below to create your admin account (name + password):",
-        link: "Accept invitation and create account",
-        expires: "This invitation expires in 7 days.",
-      },
-    }[l];
+    const plainName = companyName || COMPANY_FALLBACK[l];
+    const name = this.escapeHtml(plainName);
+    const copy = companyInviteCopy[l]({ name, plainName });
     const subject = copy.subject;
     const text = [copy.intro, "", copy.open, acceptUrl, "", copy.expires].join(
       "\n",
