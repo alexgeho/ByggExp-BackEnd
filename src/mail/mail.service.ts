@@ -416,23 +416,49 @@ export class MailService {
     email: string,
     name: string,
     token: string,
+    lang: string = "sv",
   ): Promise<void> {
     const resetUrl = `${this.getApiPublicUrl()}/auth/reset-password?token=${encodeURIComponent(token)}`;
-    const safeName = this.escapeHtml(name || "there");
-    const subject = "Reset your ByggExp password";
-    const text = [
-      `Hi ${name || "there"},`,
-      "",
-      "We received a request to reset your ByggExp password. Open the link below to choose a new one:",
-      resetUrl,
-      "",
-      "This link expires in 1 hour. If you didn't request this, you can ignore this email — your password stays the same.",
-    ].join("\n");
+    const l = this.resolveMailLang(lang);
+    const greetName = name || { sv: "där", nb: "der", en: "there" }[l];
+    const copy = {
+      sv: {
+        subject: "Återställ ditt ByggExp-lösenord",
+        hi: `Hej ${greetName},`,
+        intro:
+          "Vi fick en begäran om att återställa ditt ByggExp-lösenord. Öppna länken nedan för att välja ett nytt:",
+        button: "Återställ mitt lösenord",
+        expires:
+          "Länken går ut om 1 timme. Om du inte begärde detta kan du ignorera mejlet — ditt lösenord förblir oförändrat.",
+      },
+      nb: {
+        subject: "Tilbakestill ByggExp-passordet ditt",
+        hi: `Hei ${greetName},`,
+        intro:
+          "Vi mottok en forespørsel om å tilbakestille ByggExp-passordet ditt. Åpne lenken nedenfor for å velge et nytt:",
+        button: "Tilbakestill passordet mitt",
+        expires:
+          "Lenken utløper om 1 time. Hvis du ikke ba om dette, kan du ignorere e-posten — passordet ditt forblir uendret.",
+      },
+      en: {
+        subject: "Reset your ByggExp password",
+        hi: `Hi ${greetName},`,
+        intro:
+          "We received a request to reset your ByggExp password. Open the link below to choose a new one:",
+        button: "Reset my password",
+        expires:
+          "This link expires in 1 hour. If you didn't request this, you can ignore this email — your password stays the same.",
+      },
+    }[l];
+    const subject = copy.subject;
+    const text = [copy.hi, "", copy.intro, resetUrl, "", copy.expires].join(
+      "\n",
+    );
     const html = this.brandedHtml(`
-      <p style="margin:0 0 12px;">Hi ${safeName},</p>
-      <p style="margin:0 0 20px;">We received a request to reset your ByggExp password. Click below to choose a new one:</p>
-      <p style="margin:0 0 20px;"><a href="${resetUrl}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Reset my password</a></p>
-      <p style="color:#5a6b7d;font-size:13px;margin:0;">This link expires in 1 hour. If you didn't request this, you can ignore this email — your password stays the same.</p>
+      <p style="margin:0 0 12px;">${this.escapeHtml(copy.hi)}</p>
+      <p style="margin:0 0 20px;">${copy.intro}</p>
+      <p style="margin:0 0 20px;"><a href="${resetUrl}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">${copy.button}</a></p>
+      <p style="color:#5a6b7d;font-size:13px;margin:0;">${copy.expires}</p>
     `);
 
     if (!this.transporter) {
@@ -455,22 +481,45 @@ export class MailService {
     email: string,
     name: string,
     code: string,
+    lang: string = "sv",
   ): Promise<void> {
-    const safeName = this.escapeHtml(name || "there");
-    const subject = "Your ByggExp sign-in code";
+    const l = this.resolveMailLang(lang);
+    const greetName = name || { sv: "där", nb: "der", en: "there" }[l];
+    const copy = {
+      sv: {
+        subject: "Din inloggningskod för ByggExp",
+        hi: `Hej ${greetName},`,
+        intro: "Din inloggningskod för ByggExp:",
+        expires:
+          "Den går ut om 15 minuter. Om du inte begärde detta kan du ignorera mejlet.",
+      },
+      nb: {
+        subject: "Din innloggingskode for ByggExp",
+        hi: `Hei ${greetName},`,
+        intro: "Din innloggingskode for ByggExp:",
+        expires:
+          "Den utløper om 15 minutter. Hvis du ikke ba om dette, kan du ignorere e-posten.",
+      },
+      en: {
+        subject: "Your ByggExp sign-in code",
+        hi: `Hi ${greetName},`,
+        intro: "Your ByggExp sign-in code:",
+        expires:
+          "It expires in 15 minutes. If you didn't request this, you can ignore this email.",
+      },
+    }[l];
+    const subject = copy.subject;
     const text = [
-      `Hi ${name || "there"},`,
+      copy.hi,
       "",
-      `Your ByggExp sign-in code: ${code}`,
-      "It expires in 15 minutes.",
-      "",
-      "If you didn't request this, you can ignore this email.",
+      `${copy.intro} ${code}`,
+      copy.expires,
     ].join("\n");
     const html = this.brandedHtml(`
-      <p style="margin:0 0 8px;">Hi ${safeName},</p>
-      <p style="margin:0 0 8px;">Your ByggExp sign-in code:</p>
+      <p style="margin:0 0 8px;">${this.escapeHtml(copy.hi)}</p>
+      <p style="margin:0 0 8px;">${copy.intro}</p>
       <p style="font-size:30px;font-weight:700;letter-spacing:6px;margin:8px 0 16px;color:#052d50;">${this.escapeHtml(code)}</p>
-      <p style="color:#5a6b7d;font-size:13px;margin:0;">It expires in 15 minutes. If you didn't request this, you can ignore this email.</p>
+      <p style="color:#5a6b7d;font-size:13px;margin:0;">${copy.expires}</p>
     `);
 
     if (!this.transporter) {
