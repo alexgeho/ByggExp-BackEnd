@@ -71,7 +71,7 @@ export class Project {
       workDayEndTime: { type: String, default: "16:00" },
       startGraceMinutes: { type: Number, default: 20 },
       endGraceMinutes: { type: Number, default: 20 },
-      lunchMinutes: { type: Number, default: 60 },
+      lunchMinutes: { type: Number, default: 30 },
       timezone: { type: String, default: "Europe/Oslo" },
     },
     default: undefined,
