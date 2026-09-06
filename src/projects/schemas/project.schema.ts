@@ -19,6 +19,7 @@ export class ProjectShiftSchedule {
   workDayEndTime: string;
   startGraceMinutes: number;
   endGraceMinutes: number;
+  lunchMinutes: number;
   timezone: string;
 }
 
@@ -70,6 +71,7 @@ export class Project {
       workDayEndTime: { type: String, default: "16:00" },
       startGraceMinutes: { type: Number, default: 20 },
       endGraceMinutes: { type: Number, default: 20 },
+      lunchMinutes: { type: Number, default: 60 },
       timezone: { type: String, default: "Europe/Oslo" },
     },
     default: undefined,

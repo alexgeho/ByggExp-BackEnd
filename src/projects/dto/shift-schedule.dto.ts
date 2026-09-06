@@ -54,6 +54,20 @@ export class ShiftScheduleDto {
   @Max(180)
   endGraceMinutes?: number;
 
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === "") {
+      return undefined;
+    }
+
+    const parsedValue = Number(value);
+    return Number.isNaN(parsedValue) ? value : parsedValue;
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(180)
+  lunchMinutes?: number;
+
   @IsOptional()
   @IsString()
   timezone?: string;
