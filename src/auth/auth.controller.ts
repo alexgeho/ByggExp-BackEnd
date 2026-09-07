@@ -121,7 +121,7 @@ export function appMagicFallbackHtml(): string {
       .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
       h1 { font-size: 24px; margin: 0 0 12px; }
       p { margin: 0 0 20px; line-height: 1.5; color: #5a6b7d; }
-      a.button { display: block; background: #eef4fb; color: #0785f4; text-decoration: none; padding: 16px 20px; border-radius: 16px; font-weight: 700; font-size: 17px; margin: 0 0 10px; }
+      a.button { display: block; background: #eef4fb; color: #0785f4; text-decoration: none; padding: 16px 20px; border-radius: 16px; font-weight: 500; font-size: 17px; margin: 0 0 10px; }
     </style>
   </head>
   <body>
