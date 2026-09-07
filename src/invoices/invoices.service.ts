@@ -336,13 +336,25 @@ export class InvoicesService {
     const invoice = await this.findOne(id, user);
     const data = this.toPdfData(invoice);
 
-    // Logo + giro are snapshotted at invoice creation, so invoices made before a
-    // logo/giro was configured have none. Fall back to the live company for both
-    // — branding and payment account are cosmetic/stable, not frozen legal fields
-    // like line items or amounts. Load the company once for both fallbacks.
+    // Logo, giro AND the footer identity (address/phone/org/VAT/email/website)
+    // are snapshotted at invoice creation, so an invoice made BEFORE the company
+    // details were filled in has an empty footer. Fall back to the live company
+    // for any MISSING field — company identity + branding are stable, not frozen
+    // legal amounts like line items. Load the company once and fill only blanks.
     const footer = { ...(data.companyFooter || {}) };
     let logoUrl = data.logoUrl;
-    if (!logoUrl || !footer.bankgiro && !footer.plusgiro) {
+    const footerBlank =
+      !footer.name ||
+      !footer.address ||
+      !footer.city ||
+      !footer.phone ||
+      !footer.email ||
+      !footer.website ||
+      !footer.orgNumber ||
+      !footer.vatNumber ||
+      !footer.vatStatus ||
+      (!footer.bankgiro && !footer.plusgiro);
+    if (!logoUrl || footerBlank) {
       const company = await this.companyModel
         .findById(invoice.companyId)
         .lean()
@@ -350,9 +362,26 @@ export class InvoicesService {
       if (!logoUrl) {
         logoUrl = company?.logoUrl ?? null;
       }
-      if (!footer.bankgiro && !footer.plusgiro) {
-        footer.bankgiro = company?.bankgiro || '';
-        footer.plusgiro = company?.plusgiro || '';
+      if (company) {
+        footer.name = footer.name || company.name || '';
+        footer.address = footer.address || company.address || '';
+        footer.city = footer.city || company.city || '';
+        footer.phone = footer.phone || company.phone || '';
+        footer.email = footer.email || company.email || '';
+        footer.website = footer.website || company.website || '';
+        footer.orgNumber = footer.orgNumber || company.orgNumber || '';
+        footer.vatNumber = footer.vatNumber || company.vatNumber || '';
+        footer.bankgiro = footer.bankgiro || company.bankgiro || '';
+        footer.plusgiro = footer.plusgiro || company.plusgiro || '';
+        if (!footer.vatStatus) {
+          const fskatt = company.vatStatus;
+          footer.vatStatus =
+            fskatt === 'true'
+              ? 'Godkänd för F-skatt'
+              : !fskatt || fskatt === 'false'
+                ? ''
+                : fskatt;
+        }
       }
     }
     data.companyFooter = footer;

@@ -277,7 +277,7 @@ function buildHeader(
         <div>
           <div class="invoice-header__sida">Sida ${pageIndex + 1}(${pageCount})</div>
           <dl>
-            <dt>Fakturadatum</dt><dd>${text(data.date) || '&nbsp;'}</dd>
+            <dt>Fakturadatum</dt><dd class="nowrap">${text(data.date) || '&nbsp;'}</dd>
             <dt>Fakturanr</dt><dd>${text(data.invoiceNumber) || '&nbsp;'}</dd>
             ${data.creditOfNumber ? `<dt>Avser faktura</dt><dd>${text(data.creditOfNumber)}</dd>` : ''}
             <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || '&nbsp;'}</dd>
@@ -293,8 +293,8 @@ function buildHeader(
         </dl>
         <dl>
           <dt>Vår referens</dt><dd>${text(data.ourReference) || '&nbsp;'}</dd>
-          <dt>Leveransdatum</dt><dd>${text(data.deliveryDate) || '&nbsp;'}</dd>
-          <dt>Förfallodatum</dt><dd>${text(data.dueDate) || '&nbsp;'}</dd>
+          <dt>Leveransdatum</dt><dd class="nowrap">${text(data.deliveryDate) || '&nbsp;'}</dd>
+          <dt>Förfallodatum</dt><dd class="nowrap">${text(data.dueDate) || '&nbsp;'}</dd>
           ${data.lateInterest ? `<dt>Dröjsmålsränta</dt><dd>${text(data.lateInterest)}</dd>` : ''}
         </dl>
         <div></div>

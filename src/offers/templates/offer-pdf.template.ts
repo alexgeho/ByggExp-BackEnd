@@ -279,8 +279,8 @@ export function buildOfferPdfHtml(data: OfferPdfData, logoDataUrl = ''): string 
       </div>
       <dl class="offer-header__meta">
         <dt>Offertnr</dt><dd>${text(data.offerNumber) || '&nbsp;'}</dd>
-        <dt>Datum</dt><dd>${text(data.date) || '&nbsp;'}</dd>
-        <dt>Giltig till</dt><dd>${text(data.validUntil) || '&nbsp;'}</dd>
+        <dt>Datum</dt><dd style="white-space:nowrap">${text(data.date) || '&nbsp;'}</dd>
+        <dt>Giltig till</dt><dd style="white-space:nowrap">${text(data.validUntil) || '&nbsp;'}</dd>
       </dl>
     </header>
 
