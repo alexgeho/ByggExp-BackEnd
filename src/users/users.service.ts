@@ -785,9 +785,13 @@ export class UsersService {
     }
 
     user.accountStatus = UserAccountStatus.Active;
-    user.emailVerificationToken = null;
-    user.emailVerificationExpiresAt = null;
-
+    // IMPORTANT: do NOT clear the token here. Email clients (Apple Mail, Outlook
+    // Safe Links, scanners) pre-fetch links to render a preview, which fires this
+    // GET before the user taps. If we nulled the token on that first hit, the
+    // user's real click would then fail with "Invalid or expired". Leaving the
+    // token in place until its natural expiry (7 days) makes verification
+    // idempotent — preview + click both succeed. Security still rests on the
+    // short-lived, single-use magic login code issued below.
     const savedUser = await user.save();
     const magicLoginCode = await this.createMagicLoginCode(
       savedUser._id.toString(),
