@@ -69,6 +69,40 @@ function magicRedirectHtml(magicLoginCode: string, message: string): string {
 </html>`;
 }
 
+// After a company sign-up is confirmed, let the new owner pick where to go:
+// the mobile app (Universal Link → app, or install fallback) or the web admin
+// (auto sign-in via /auth/web-magic). The magic code is single-use, so whichever
+// button is tapped signs them in there.
+function chooseDestinationHtml(magicLoginCode: string): string {
+  const encodedCode = encodeURIComponent(magicLoginCode);
+  const appUrl = `${apiBase()}/app/magic?code=${encodedCode}`;
+  const adminUrl = `${apiBase()}/auth/web-magic?code=${encodedCode}`;
+  return `<!DOCTYPE html>
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Konto klart</title>
+    <style>
+      body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
+      .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
+      h1 { font-size: 24px; margin: 0 0 12px; }
+      p { margin: 0 0 20px; line-height: 1.5; color: #5a6b7d; }
+      a.button { display: block; background: #0785f4; color: #fff; text-decoration: none; padding: 18px 20px; border-radius: 999px; font-weight: 700; font-size: 18px; margin: 0 0 12px; }
+      a.secondary { background: #eef4fb; color: #0785f4; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Konto klart ✅</h1>
+      <p>Var vill du fortsätta?</p>
+      <a class="button" href="${appUrl}">Öppna appen</a>
+      <a class="button secondary" href="${adminUrl}">Öppna webbadmin</a>
+    </div>
+  </body>
+</html>`;
+}
+
 // Fallback served at GET /app/magic when the browser actually loads the URL —
 // i.e. the app is NOT installed (an installed app would have intercepted the
 // Universal/App Link tap). Offers the store links plus a custom-scheme retry.
@@ -335,15 +369,7 @@ export class AuthController {
         token,
         password,
       );
-      res
-        .status(200)
-        .type("html")
-        .send(
-          magicRedirectHtml(
-            magicLoginCode,
-            "Your account is ready. Opening ByggExp to sign you in…",
-          ),
-        );
+      res.status(200).type("html").send(chooseDestinationHtml(magicLoginCode));
     } catch (error) {
       const message =
         error instanceof BadRequestException
