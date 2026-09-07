@@ -93,14 +93,19 @@ body {
 
 /* ---- Header: a top band (logo | title+recipient | meta) and a detail row
    whose two columns are top-aligned (Kundnr and Vår referens on one line). ---- */
-.invoice-header__top,
-.invoice-header__details {
+.invoice-header__top {
   display: grid;
   grid-template-columns: 1.15fr 1fr 0.95fr;
   gap: 20px;
   align-items: start;
 }
+/* Only two ref blocks live here, so use two columns (a 3rd left the right
+   third empty while cramping the first, wrapping short values like a name). */
 .invoice-header__details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 48px;
+  align-items: start;
   margin: 24px 0 18px;
 }
 .invoice-header__logo img { max-height: 150px; max-width: 100%; object-fit: contain; display: block; }
@@ -117,7 +122,9 @@ body {
   align-content: start;
 }
 .invoice-header dt { margin: 0; }
-.invoice-header dd { margin: 0; }
+/* Meta values (refs, numbers, dates) are short — keep each on one line so a
+   name like "Alexander Gerhard" never breaks when there is room beside it. */
+.invoice-header dd { margin: 0; white-space: nowrap; }
 
 /* ---- Line items: light table, no outer box ---- */
 .invoice-lines {
