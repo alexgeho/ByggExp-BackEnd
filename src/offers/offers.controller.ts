@@ -75,6 +75,21 @@ export class OffersController {
     res.end(pdfBuffer);
   }
 
+  @Post(":id/send")
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
+  sendByEmail(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() body: { email?: string; message?: string },
+  ) {
+    return this.offersService.sendByEmail(
+      id,
+      req.user,
+      body?.email,
+      body?.message,
+    );
+  }
+
   @Get(":id")
   @Permissions(PERMISSIONS.FINANCE_MANAGE)
   findOne(@Request() req, @Param("id") id: string) {

@@ -17,6 +17,7 @@ import { computeOfferTotals as computeOfferTotalsMath } from './offer-math';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
 import { Offer, OfferDocument, OfferStatus } from './schemas/offer.schema';
+import { MailService } from '../mail/mail.service';
 
 type AuthUser = {
   role: UserRole;
@@ -31,6 +32,7 @@ export class OffersService {
   constructor(
     @InjectModel(Offer.name) private offerModel: Model<OfferDocument>,
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
+    private readonly mailService: MailService,
   ) {}
 
   // Totals are computed from the line items server-side so the offer PDF and a
@@ -139,6 +141,38 @@ export class OffersService {
     } finally {
       await browser.close();
     }
+  }
+
+  async sendByEmail(
+    id: string,
+    user: AuthUser,
+    email?: string,
+    message?: string,
+  ): Promise<{ sent: boolean; to: string }> {
+    const offer = await this.findOne(id, user);
+    const to = (email || offer.email || '').trim();
+    if (!to) {
+      throw new BadRequestException(
+        'No recipient email — set the customer email or provide one',
+      );
+    }
+    const footer = await this.resolveCompanyFooter(offer.companyId);
+    const pdf = await this.buildOfferPdf(id, user);
+    const result = await this.mailService.sendOfferEmail(to, {
+      offerNumber: offer.offerNumber,
+      senderName: footer.name,
+      validUntil: offer.validUntil,
+      message,
+      pdf,
+    });
+
+    // Emailing a draft moves it to "sent".
+    if (result.sent && offer.status === OfferStatus.Draft) {
+      offer.status = OfferStatus.Sent;
+      await offer.save();
+    }
+
+    return result;
   }
 
   private async resolveCompanyFooter(companyId: string) {

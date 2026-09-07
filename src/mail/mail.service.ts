@@ -493,6 +493,62 @@ export class MailService {
     return { sent: true, to };
   }
 
+  async sendOfferEmail(
+    to: string,
+    opts: {
+      offerNumber: string | number;
+      senderName?: string;
+      validUntil?: string;
+      message?: string;
+      pdf: Buffer;
+    },
+  ): Promise<{ sent: boolean; to: string }> {
+    const nr = String(opts.offerNumber);
+    const subject = `Offert ${nr}${opts.senderName ? ` — ${opts.senderName}` : ""}`;
+    const text = [
+      "Hej,",
+      "",
+      `Bifogat finner du offert ${nr}${opts.senderName ? ` från ${opts.senderName}` : ""}.`,
+      opts.validUntil ? `Giltig till: ${opts.validUntil}.` : "",
+      opts.message || "",
+      "",
+      "Med vänliga hälsningar",
+      opts.senderName || "",
+    ]
+      .filter((line, i, arr) => line !== "" || (arr[i - 1] !== "" && i !== 0))
+      .join("\n");
+    const html = `
+      <p>Hej,</p>
+      <p>Bifogat finner du <strong>offert ${this.escapeHtml(nr)}</strong>${opts.senderName ? ` från <strong>${this.escapeHtml(opts.senderName)}</strong>` : ""}.</p>
+      ${opts.validUntil ? `<p>Giltig till: ${this.escapeHtml(opts.validUntil)}.</p>` : ""}
+      ${opts.message ? `<p>${this.escapeHtml(opts.message)}</p>` : ""}
+      <p>Med vänliga hälsningar<br>${this.escapeHtml(opts.senderName || "")}</p>
+    `;
+
+    if (!this.transporter) {
+      this.logger.log(
+        `Offer email for ${to} (offert ${nr}) — SMTP not configured, skipped`,
+      );
+      return { sent: false, to };
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to,
+      subject,
+      text,
+      html,
+      attachments: [
+        {
+          filename: `offert-${nr}.pdf`,
+          content: opts.pdf,
+          contentType: "application/pdf",
+        },
+      ],
+    });
+    return { sent: true, to };
+  }
+
   // Expiry reminder for an employee certificate. Mirrors the push copy sent by
   // CertificateRemindersService so the two channels read the same. Recipients are
   // the company admin(s) and (optionally) the certificate holder. Log-only when
