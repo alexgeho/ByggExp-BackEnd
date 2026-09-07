@@ -50,7 +50,10 @@ export class AppController {
         .send(errorHtml("Ogiltig länk", "Inloggningskoden saknas."));
       return;
     }
-    res.status(200).type("html").send(appMagicFallbackHtml(code.trim()));
+    // Reaching this page means the app did NOT intercept the Universal Link —
+    // i.e. we're on desktop or the app isn't installed. The byggexp:// deep link
+    // is useless here, so only offer the store downloads.
+    res.status(200).type("html").send(appMagicFallbackHtml());
   }
 
   @Get("bimi-logo.svg")

@@ -106,10 +106,7 @@ function chooseDestinationHtml(magicLoginCode: string): string {
 // Fallback served at GET /app/magic when the browser actually loads the URL —
 // i.e. the app is NOT installed (an installed app would have intercepted the
 // Universal/App Link tap). Offers the store links plus a custom-scheme retry.
-export function appMagicFallbackHtml(magicLoginCode: string): string {
-  const encodedCode = encodeURIComponent(magicLoginCode);
-  const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
-  const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=se.byggexp.app;end`;
+export function appMagicFallbackHtml(): string {
   const appStore = "https://apps.apple.com/app/id6748280779";
   const playStore =
     "https://play.google.com/store/apps/details?id=se.byggexp.app";
@@ -124,26 +121,16 @@ export function appMagicFallbackHtml(magicLoginCode: string): string {
       .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
       h1 { font-size: 24px; margin: 0 0 12px; }
       p { margin: 0 0 20px; line-height: 1.5; color: #5a6b7d; }
-      a.button { display: block; background: #0785f4; color: #fff; text-decoration: none; padding: 16px 20px; border-radius: 999px; font-weight: 700; font-size: 17px; margin: 0 0 10px; }
-      a.store { background: #eef4fb; color: #0785f4; }
+      a.button { display: block; background: #eef4fb; color: #0785f4; text-decoration: none; padding: 16px 20px; border-radius: 999px; font-weight: 700; font-size: 17px; margin: 0 0 10px; }
     </style>
   </head>
   <body>
     <div class="card">
       <h1>Öppna ByggExp</h1>
-      <p>Tryck för att öppna appen. Har du inte appen ännu? Ladda ner den och logga sedan in med din e-post och ditt lösenord.</p>
-      <a class="button" id="openApp" href="${magicUrl}">Öppna appen</a>
-      <a class="button store" href="${appStore}">Ladda ner för iPhone</a>
-      <a class="button store" href="${playStore}">Ladda ner för Android</a>
+      <p>Ladda ner appen och logga sedan in med din e-post och ditt lösenord.</p>
+      <a class="button" href="${appStore}">Ladda ner för iPhone</a>
+      <a class="button" href="${playStore}">Ladda ner för Android</a>
     </div>
-    <script>
-      (function () {
-        var isAndroid = /Android/i.test(navigator.userAgent || '');
-        if (isAndroid) {
-          document.getElementById('openApp').setAttribute('href', ${JSON.stringify(androidIntentUrl)});
-        }
-      })();
-    </script>
   </body>
 </html>`;
 }
