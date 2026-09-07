@@ -246,9 +246,7 @@ export class AuthService {
     password: string,
   ): Promise<{ magicLoginCode: string }> {
     if (!password || password.length < 6) {
-      throw new BadRequestException(
-        "Password must be at least 6 characters.",
-      );
+      throw new BadRequestException("Password must be at least 6 characters.");
     }
     const pending = await this.pendingRegistrationModel
       .findOne({ codeHash: this.hashToken(token) })
@@ -345,7 +343,9 @@ export class AuthService {
         plainToken,
       );
     } catch (error) {
-      this.logger.error(`Failed to resend verification email: ${String(error)}`);
+      this.logger.error(
+        `Failed to resend verification email: ${String(error)}`,
+      );
     }
   }
 
@@ -428,10 +428,7 @@ export class AuthService {
 
   // "Forgot password" step 2: the user submitted a new password on the reset
   // page. Hash it and apply it to every account the token unlocks.
-  async resetPassword(
-    token: string,
-    password: string,
-  ): Promise<string | null> {
+  async resetPassword(token: string, password: string): Promise<string | null> {
     if (!password || password.length < 6) {
       throw new BadRequestException(
         "Password must be at least 6 characters long.",
@@ -501,7 +498,9 @@ export class AuthService {
     let user: (typeof candidates)[number] | null = null;
     if (normalizedPassword) {
       for (const candidate of candidates) {
-        if (await this.comparePasswords(normalizedPassword, candidate.password)) {
+        if (
+          await this.comparePasswords(normalizedPassword, candidate.password)
+        ) {
           user = candidate;
           break;
         }
@@ -597,6 +596,7 @@ export class AuthService {
         id: user._id.toString(),
         email: user.email,
         name: user.name,
+        role: user.role,
       },
     };
   }

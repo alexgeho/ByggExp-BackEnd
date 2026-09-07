@@ -1,6 +1,8 @@
-import { Controller, Get, Header } from "@nestjs/common";
+import { Controller, Get, Header, Query, Res } from "@nestjs/common";
+import type { Response } from "express";
 import { AppService } from "./app.service";
 import { Public } from "./common/decorators/public.decorator";
+import { appMagicFallbackHtml, errorHtml } from "./auth/auth.controller";
 
 // BIMI-compliant logo (SVG Tiny 1.2 Portable/Secure): square viewBox, text
 // outlined to paths, a <title>, no scripts/filters/raster. Served so mail
@@ -33,6 +35,22 @@ export class AppController {
   @Get()
   getHello(): string {
     return this.appService.getHello();
+  }
+
+  // Universal/App Link target for magic sign-in. MUST be top-level "/app/magic"
+  // (not under /auth) to match the emails and the apple-app-site-association /
+  // assetlinks components. An installed app intercepts the tap; otherwise the
+  // browser loads this install-fallback page.
+  @Get("app/magic")
+  appMagic(@Query("code") code: string, @Res() res: Response) {
+    if (!code?.trim()) {
+      res
+        .status(400)
+        .type("html")
+        .send(errorHtml("Ogiltig länk", "Inloggningskoden saknas."));
+      return;
+    }
+    res.status(200).type("html").send(appMagicFallbackHtml(code.trim()));
   }
 
   @Get("bimi-logo.svg")

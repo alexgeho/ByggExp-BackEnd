@@ -106,7 +106,7 @@ function chooseDestinationHtml(magicLoginCode: string): string {
 // Fallback served at GET /app/magic when the browser actually loads the URL —
 // i.e. the app is NOT installed (an installed app would have intercepted the
 // Universal/App Link tap). Offers the store links plus a custom-scheme retry.
-function appMagicFallbackHtml(magicLoginCode: string): string {
+export function appMagicFallbackHtml(magicLoginCode: string): string {
   const encodedCode = encodeURIComponent(magicLoginCode);
   const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
   const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=se.byggexp.app;end`;
@@ -148,7 +148,7 @@ function appMagicFallbackHtml(magicLoginCode: string): string {
 </html>`;
 }
 
-function errorHtml(title: string, message: string): string {
+export function errorHtml(title: string, message: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -271,9 +271,7 @@ function resetSuccessHtml(role?: string | null): string {
   const androidIntentUrl =
     "intent://#Intent;scheme=byggexp;package=se.byggexp.app;end";
   const isAdmin =
-    role === "superadmin" ||
-    role === "companyAdmin" ||
-    role === "projectAdmin";
+    role === "superadmin" || role === "companyAdmin" || role === "projectAdmin";
   const webAdminLink = isAdmin
     ? `<p><a class="secondary" href="https://admin.byggexp.se/login">or sign in on the web admin</a></p>`
     : "";
@@ -332,7 +330,10 @@ export class AuthController {
   // Step 2a: the user clicks the emailed link. Show the "choose a password"
   // page (the account is created when they submit it).
   @Get("register-company/confirm")
-  async confirmRegistration(@Query("token") token: string, @Res() res: Response) {
+  async confirmRegistration(
+    @Query("token") token: string,
+    @Res() res: Response,
+  ) {
     if (!token?.trim()) {
       throw new BadRequestException("Confirmation token is required");
     }
@@ -344,7 +345,10 @@ export class AuthController {
         error instanceof BadRequestException
           ? error.message
           : "This confirmation link is invalid or has expired. Please sign up again.";
-      res.status(400).type("html").send(errorHtml("Confirmation failed", message));
+      res
+        .status(400)
+        .type("html")
+        .send(errorHtml("Confirmation failed", message));
     }
   }
 
@@ -404,10 +408,7 @@ export class AuthController {
   // Step 2a: the user clicks the reset link. Show the "choose a new password"
   // page (or an error if the link is invalid/expired).
   @Get("reset-password")
-  async resetPasswordPage(
-    @Query("token") token: string,
-    @Res() res: Response,
-  ) {
+  async resetPasswordPage(@Query("token") token: string, @Res() res: Response) {
     if (!token?.trim()) {
       throw new BadRequestException("Reset token is required");
     }
@@ -419,10 +420,7 @@ export class AuthController {
         error instanceof BadRequestException
           ? error.message
           : "This password reset link is invalid or has expired. Please request a new one.";
-      res
-        .status(400)
-        .type("html")
-        .send(errorHtml("Reset failed", message));
+      res.status(400).type("html").send(errorHtml("Reset failed", message));
     }
   }
 
@@ -503,17 +501,10 @@ export class AuthController {
   // Universal/App Link target. Reached in the browser only when the app is NOT
   // installed (an installed app intercepts the tap). Serves the install/open
   // fallback.
-  @Get("app/magic")
-  appMagic(@Query("code") code: string, @Res() res: Response) {
-    if (!code?.trim()) {
-      res
-        .status(400)
-        .type("html")
-        .send(errorHtml("Ogiltig länk", "Inloggningskoden saknas."));
-      return;
-    }
-    res.status(200).type("html").send(appMagicFallbackHtml(code.trim()));
-  }
+  // NOTE: GET /app/magic lives in AppController (top-level, no "/auth" prefix)
+  // so the URL matches the emails + the Apple/Android universal-link config
+  // ("/app/magic*"). Do not re-add it here — under @Controller("auth") it would
+  // resolve to /auth/app/magic and 404 the real links.
 
   @Get("web-magic")
   async webMagic(@Query("code") code: string, @Res() res: Response) {
@@ -543,10 +534,21 @@ export class AuthController {
 
     try {
       const result = await this.authService.verifyEmail(token.trim());
+      // Admins (company/project) can also use the web admin, so let them pick
+      // where to continue. Workers only have the app → straight to it.
+      const canUseAdmin = [
+        "companyAdmin",
+        "projectAdmin",
+        "superadmin",
+      ].includes(result.user?.role);
       res
         .status(200)
         .type("html")
-        .send(magicRedirectHtml(result.magicLoginCode, result.message));
+        .send(
+          canUseAdmin
+            ? chooseDestinationHtml(result.magicLoginCode)
+            : magicRedirectHtml(result.magicLoginCode, result.message),
+        );
     } catch (error) {
       const message =
         error instanceof BadRequestException
