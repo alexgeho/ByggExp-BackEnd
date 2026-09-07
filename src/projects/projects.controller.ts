@@ -99,7 +99,7 @@ export class ProjectsController {
   }
 
   @Post()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   @UseInterceptors(
     FilesInterceptor("documents", 10, { storage: documentsStorage }),
   )
