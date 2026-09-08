@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
 import { ProjektkalkylController } from "./projektkalkyl.controller";
+import { ProjektkalkylPublicController } from "./projektkalkyl-public.controller";
 import { ProjektkalkylService } from "./projektkalkyl.service";
 import {
   Projektkalkyl,
@@ -13,7 +14,7 @@ import {
       { name: Projektkalkyl.name, schema: ProjektkalkylSchema },
     ]),
   ],
-  controllers: [ProjektkalkylController],
+  controllers: [ProjektkalkylController, ProjektkalkylPublicController],
   providers: [ProjektkalkylService],
   exports: [ProjektkalkylService],
 })

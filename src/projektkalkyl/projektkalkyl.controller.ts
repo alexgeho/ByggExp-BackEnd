@@ -52,6 +52,18 @@ export class ProjektkalkylController {
     return this.service.update(id, dto, req.user);
   }
 
+  @Post(":id/share")
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
+  share(@Request() req, @Param("id") id: string) {
+    return this.service.createShareLink(id, req.user);
+  }
+
+  @Delete(":id/share")
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
+  revokeShare(@Request() req, @Param("id") id: string) {
+    return this.service.revokeShareLink(id, req.user);
+  }
+
   @Delete(":id")
   @Permissions(PERMISSIONS.FINANCE_MANAGE)
   remove(@Request() req, @Param("id") id: string) {

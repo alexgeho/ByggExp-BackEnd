@@ -5,6 +5,7 @@ import {
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
+import { randomBytes } from "crypto";
 import { UserRole } from "../users/schemas/user.schema";
 import {
   Projektkalkyl,
@@ -83,6 +84,50 @@ export class ProjektkalkylService {
     // so flag it dirty explicitly or the board layout won't persist.
     if (dto.tables !== undefined) doc.markModified("tables");
     return doc.save();
+  }
+
+  private static readonly SHARE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+  async createShareLink(
+    id: string,
+    user: AuthUser,
+  ): Promise<{ token: string; expiresAt: Date }> {
+    const doc = await this.findOne(id, user);
+    doc.shareToken = randomBytes(24).toString("hex");
+    doc.shareExpiresAt = new Date(
+      Date.now() + ProjektkalkylService.SHARE_TTL_MS,
+    );
+    await doc.save();
+    return { token: doc.shareToken, expiresAt: doc.shareExpiresAt };
+  }
+
+  async revokeShareLink(id: string, user: AuthUser): Promise<void> {
+    const doc = await this.findOne(id, user);
+    doc.shareToken = "";
+    doc.shareExpiresAt = null;
+    await doc.save();
+  }
+
+  // Public (no auth): resolve a share token to a read-only snapshot. Returns
+  // only presentational fields — never companyId / owner / internal ids.
+  async findByShareToken(token: string): Promise<{
+    name: string;
+    note?: string;
+    tables: Record<string, unknown>[];
+    expiresAt: Date;
+  }> {
+    const clean = (token || "").trim();
+    if (!clean) throw new NotFoundException("Link not found");
+    const doc = await this.model.findOne({ shareToken: clean }).lean().exec();
+    if (!doc || !doc.shareExpiresAt || new Date(doc.shareExpiresAt) < new Date()) {
+      throw new NotFoundException("This link has expired or is invalid");
+    }
+    return {
+      name: doc.name,
+      note: doc.note,
+      tables: doc.tables || [],
+      expiresAt: doc.shareExpiresAt,
+    };
   }
 
   async remove(id: string, user: AuthUser): Promise<Projektkalkyl> {

@@ -27,6 +27,13 @@ export class Projektkalkyl {
   //   rows: [{ id, cells: { [columnId]: string|number } }] }
   @Prop({ type: [Object], default: [] })
   tables: Record<string, unknown>[];
+
+  // Public read-only share: a random token + expiry (self-destructs after 1h).
+  @Prop({ default: "", index: true })
+  shareToken: string;
+
+  @Prop({ type: Date, default: null })
+  shareExpiresAt: Date | null;
 }
 
 export const ProjektkalkylSchema = SchemaFactory.createForClass(Projektkalkyl);
