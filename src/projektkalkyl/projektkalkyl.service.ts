@@ -6,6 +6,8 @@ import {
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { randomBytes } from "crypto";
+import { launchForInvoicePdf } from "../invoices/puppeteer-launch";
+import { buildProjektkalkylHtml } from "./projektkalkyl-pdf.template";
 import { UserRole } from "../users/schemas/user.schema";
 import {
   Projektkalkyl,
@@ -172,6 +174,24 @@ export class ProjektkalkylService {
     doc.markModified("comments");
     await doc.save();
     return doc.comments;
+  }
+
+  async buildPdf(id: string, user: AuthUser): Promise<Buffer> {
+    const doc = await this.findOne(id, user);
+    const html = buildProjektkalkylHtml(doc);
+    const browser = await launchForInvoicePdf();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "load" });
+      const buf = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: { top: "12mm", bottom: "12mm", left: "10mm", right: "10mm" },
+      });
+      return Buffer.from(buf);
+    } finally {
+      await browser.close();
+    }
   }
 
   async remove(id: string, user: AuthUser): Promise<Projektkalkyl> {
