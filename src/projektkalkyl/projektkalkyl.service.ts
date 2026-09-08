@@ -114,6 +114,7 @@ export class ProjektkalkylService {
     name: string;
     note?: string;
     tables: Record<string, unknown>[];
+    comments: Record<string, unknown>[];
     expiresAt: Date;
   }> {
     const clean = (token || "").trim();
@@ -126,8 +127,51 @@ export class ProjektkalkylService {
       name: doc.name,
       note: doc.note,
       tables: doc.tables || [],
+      comments: doc.comments || [],
       expiresAt: doc.shareExpiresAt,
     };
+  }
+
+  private buildComment(authorName: string | undefined, text: string | undefined, guest: boolean) {
+    return {
+      id: randomBytes(8).toString("hex"),
+      authorName: (authorName || (guest ? "Gäst" : "")).slice(0, 80),
+      text: (text || "").slice(0, 2000),
+      guest,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  async addComment(
+    id: string,
+    user: AuthUser,
+    authorName?: string,
+    text?: string,
+  ): Promise<Record<string, unknown>[]> {
+    if (!text?.trim()) throw new ForbiddenException("Empty comment");
+    const doc = await this.findOne(id, user);
+    doc.comments = [...(doc.comments || []), this.buildComment(authorName, text, false)];
+    doc.markModified("comments");
+    await doc.save();
+    return doc.comments;
+  }
+
+  // Public guest comment via an unexpired share token.
+  async addGuestComment(
+    token: string,
+    authorName?: string,
+    text?: string,
+  ): Promise<Record<string, unknown>[]> {
+    if (!text?.trim()) throw new ForbiddenException("Empty comment");
+    const clean = (token || "").trim();
+    const doc = await this.model.findOne({ shareToken: clean }).exec();
+    if (!doc || !doc.shareExpiresAt || new Date(doc.shareExpiresAt) < new Date()) {
+      throw new NotFoundException("This link has expired or is invalid");
+    }
+    doc.comments = [...(doc.comments || []), this.buildComment(authorName, text, true)];
+    doc.markModified("comments");
+    await doc.save();
+    return doc.comments;
   }
 
   async remove(id: string, user: AuthUser): Promise<Projektkalkyl> {

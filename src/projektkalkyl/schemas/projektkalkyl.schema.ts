@@ -34,6 +34,10 @@ export class Projektkalkyl {
 
   @Prop({ type: Date, default: null })
   shareExpiresAt: Date | null;
+
+  // Discussion: [{ id, authorName, text, guest, createdAt }]
+  @Prop({ type: [Object], default: [] })
+  comments: Record<string, unknown>[];
 }
 
 export const ProjektkalkylSchema = SchemaFactory.createForClass(Projektkalkyl);

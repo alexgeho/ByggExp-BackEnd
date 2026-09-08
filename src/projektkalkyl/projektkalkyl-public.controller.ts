@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post } from "@nestjs/common";
 import { Public } from "../common/decorators/public.decorator";
 import { ProjektkalkylService } from "./projektkalkyl.service";
 
@@ -13,5 +13,13 @@ export class ProjektkalkylPublicController {
   @Get(":token")
   findByToken(@Param("token") token: string) {
     return this.service.findByShareToken(token);
+  }
+
+  @Post(":token/comments")
+  addGuestComment(
+    @Param("token") token: string,
+    @Body() body: { text?: string; authorName?: string },
+  ) {
+    return this.service.addGuestComment(token, body?.authorName, body?.text);
   }
 }

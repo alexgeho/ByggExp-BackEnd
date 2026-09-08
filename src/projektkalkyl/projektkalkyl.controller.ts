@@ -64,6 +64,16 @@ export class ProjektkalkylController {
     return this.service.revokeShareLink(id, req.user);
   }
 
+  @Post(":id/comments")
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
+  addComment(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() body: { text?: string; authorName?: string },
+  ) {
+    return this.service.addComment(id, req.user, body?.authorName, body?.text);
+  }
+
   @Delete(":id")
   @Permissions(PERMISSIONS.FINANCE_MANAGE)
   remove(@Request() req, @Param("id") id: string) {
