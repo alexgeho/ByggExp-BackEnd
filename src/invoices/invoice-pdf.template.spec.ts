@@ -108,6 +108,7 @@ describe("invoice PDF template", () => {
     });
     expect(html).toContain("invoice-lines__text");
     expect(html).toContain('colspan="5"');
+    expect(html).toContain("Art.nr");
     expect(html).toContain("Tillkommande arbeten");
   });
 

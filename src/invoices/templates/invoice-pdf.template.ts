@@ -326,7 +326,7 @@ function buildHeader(
 
 function buildItemRows(items: InvoicePdfItem[]): string {
   if (!items.length) {
-    return '<tr><td colspan="5">&nbsp;</td></tr>';
+    return '<tr><td colspan="6">&nbsp;</td></tr>';
   }
 
   return items
@@ -335,6 +335,7 @@ function buildItemRows(items: InvoicePdfItem[]): string {
       if (item.isText) {
         return `
         <tr class="invoice-lines__item invoice-lines__text">
+          <td></td>
           <td class="description" colspan="5">${multilineText(item.description)}</td>
         </tr>
       `;
@@ -347,6 +348,7 @@ function buildItemRows(items: InvoicePdfItem[]): string {
 
       return `
         <tr class="invoice-lines__item">
+          <td class="nowrap">${text(item.articleNumber)}</td>
           <td class="description">${multilineText(item.description)}</td>
           <td class="r nowrap quantity">${formatInvoiceAmount(quantity)}</td>
           <td class="nowrap unit">${text(item.unit || "st")}</td>
@@ -553,7 +555,7 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
   return `
     <tfoot class="invoice-lines__footer">
       <tr>
-        <td colspan="5" class="invoice-summary-cell">
+        <td colspan="6" class="invoice-summary-cell">
           <div class="invoice-summary">
             ${noteHtml}
             <div class="invoice-summary__totals">
@@ -599,21 +601,23 @@ function buildLinesTable(
   );
   const fillerRow =
     fillerHeightPx > 0
-      ? `<tr class="invoice-lines__filler" style="height:${fillerHeightPx}px;"><td colspan="5"></td></tr>`
+      ? `<tr class="invoice-lines__filler" style="height:${fillerHeightPx}px;"><td colspan="6"></td></tr>`
       : "";
   const summaryFooter = showSummary ? buildSummary(data, isReverseVAT) : "";
 
   return `
     <table class="invoice-lines" style="height:${INVOICE_TABLE_HEIGHT_PX}px;">
       <colgroup>
-        <col style="width: 46%;" />
+        <col style="width: 9%;" />
+        <col style="width: 39%;" />
         <col style="width: 14%;" />
         <col style="width: 10%;" />
-        <col style="width: 14%;" />
-        <col style="width: 16%;" />
+        <col style="width: 13%;" />
+        <col style="width: 15%;" />
       </colgroup>
       <thead>
         <tr>
+          <th class="nowrap">Art.nr</th>
           <th class="description">Benämning</th>
           <th class="r nowrap quantity">Lev ant</th>
           <th class="nowrap unit">Enhet</th>
