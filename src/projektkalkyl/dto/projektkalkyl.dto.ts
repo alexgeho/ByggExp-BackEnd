@@ -1,30 +1,4 @@
-import {
-  IsArray,
-  IsIn,
-  IsNumber,
-  IsOptional,
-  IsString,
-  ValidateNested,
-} from "class-validator";
-import { Type } from "class-transformer";
-
-export class KalkylRowDto {
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsOptional()
-  @IsIn(["income", "cost"])
-  type?: string;
-
-  @IsOptional()
-  @IsString()
-  category?: string;
-
-  @IsOptional()
-  @IsNumber()
-  amount?: number;
-}
+import { IsArray, IsOptional, IsString } from "class-validator";
 
 export class CreateProjektkalkylDto {
   @IsOptional()
@@ -35,15 +9,11 @@ export class CreateProjektkalkylDto {
   @IsString()
   note?: string;
 
-  @IsOptional()
-  @IsIn(["ex", "inkl"])
-  momsMode?: string;
-
+  // Flexible board layout (tables → columns/rows). Validated shallowly; the
+  // admin app owns the shape. Stored as-is.
   @IsOptional()
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => KalkylRowDto)
-  rows?: KalkylRowDto[];
+  tables?: Record<string, unknown>[];
 }
 
 export class UpdateProjektkalkylDto extends CreateProjektkalkylDto {}

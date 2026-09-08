@@ -61,7 +61,7 @@ export class ProjektkalkylService {
     const doc = new this.model({
       ...dto,
       name: dto.name || "Ny kalkyl",
-      rows: dto.rows || [],
+      tables: dto.tables || [],
       companyId: this.companyOf(user),
       createdByUserId: user.userId,
     });
@@ -79,6 +79,9 @@ export class ProjektkalkylService {
       companyId: doc.companyId,
       createdByUserId: doc.createdByUserId,
     });
+    // tables is a Mixed ([Object]) field — Mongoose can't detect deep mutations,
+    // so flag it dirty explicitly or the board layout won't persist.
+    if (dto.tables !== undefined) doc.markModified("tables");
     return doc.save();
   }
 
