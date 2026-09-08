@@ -644,13 +644,21 @@ export class UsersService {
     // through here, so enforcing it once closes the single-create bypass.
     await this.assertCompanySeatAvailable(createUserDto.companyId ?? null);
 
-    // If the e-mail already belongs to someone, tell the admin WHO it is (their
-    // role) instead of a generic "already exists" — the common mistake is
-    // inviting the company admin's own address as a worker.
+    // If the e-mail already belongs to someone IN THE SAME COMPANY, tell the
+    // admin WHO it is (their role) instead of a generic "already exists" — the
+    // common mistake is inviting the company admin's own address as a worker.
+    // The check is scoped to the target company to match the per-company email
+    // uniqueness model (see the { companyId, email } partial-unique index in
+    // user.schema.ts): the same address may legitimately exist in another
+    // company, and a company-less orphan must never block a real invite.
     const normalizedEmail = createUserDto.email?.trim().toLowerCase();
     if (normalizedEmail) {
       const existing = await this.userModel
-        .findOne({ email: normalizedEmail, erasedAt: null })
+        .findOne({
+          email: normalizedEmail,
+          companyId: createUserDto.companyId ?? null,
+          erasedAt: null,
+        })
         .select("role")
         .lean();
       if (existing) {
