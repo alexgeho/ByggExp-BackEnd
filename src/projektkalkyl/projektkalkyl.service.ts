@@ -59,9 +59,47 @@ export class ProjektkalkylService {
   async findAccessible(user: AuthUser): Promise<Projektkalkyl[]> {
     if (!user.companyId) return [];
     return this.model
-      .find({ companyId: user.companyId })
+      .find({ companyId: user.companyId, isTemplate: { $ne: true } })
       .sort({ createdAt: -1 })
       .exec();
+  }
+
+  async findTemplates(user: AuthUser): Promise<Projektkalkyl[]> {
+    if (!user.companyId) return [];
+    return this.model
+      .find({ companyId: user.companyId, isTemplate: true })
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
+  private clone(v: unknown): Record<string, unknown>[] {
+    return JSON.parse(JSON.stringify(v || [])) as Record<string, unknown>[];
+  }
+
+  async saveAsTemplate(id: string, user: AuthUser): Promise<Projektkalkyl> {
+    const src = await this.findOne(id, user);
+    const doc = new this.model({
+      companyId: src.companyId,
+      createdByUserId: user.userId,
+      name: `${src.name || "Kalkyl"} (mall)`,
+      note: src.note,
+      tables: this.clone(src.tables),
+      isTemplate: true,
+    });
+    return doc.save();
+  }
+
+  async createFromTemplate(templateId: string, user: AuthUser): Promise<Projektkalkyl> {
+    const src = await this.findOne(templateId, user);
+    const doc = new this.model({
+      companyId: this.companyOf(user),
+      createdByUserId: user.userId,
+      name: (src.name || "").replace(/\s*\(mall\)$/i, "") || "Ny kalkyl",
+      note: src.note,
+      tables: this.clone(src.tables),
+      isTemplate: false,
+    });
+    return doc.save();
   }
 
   async findOne(id: string, user: AuthUser): Promise<ProjektkalkylDocument> {

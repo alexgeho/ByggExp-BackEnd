@@ -38,6 +38,24 @@ export class ProjektkalkylController {
     return this.service.create(dto, req.user);
   }
 
+  @Get("templates")
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
+  findTemplates(@Request() req) {
+    return this.service.findTemplates(req.user);
+  }
+
+  @Post(":id/save-as-template")
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
+  saveAsTemplate(@Request() req, @Param("id") id: string) {
+    return this.service.saveAsTemplate(id, req.user);
+  }
+
+  @Post("from-template/:templateId")
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
+  createFromTemplate(@Request() req, @Param("templateId") templateId: string) {
+    return this.service.createFromTemplate(templateId, req.user);
+  }
+
   @Get(":id/pdf")
   @Permissions(PERMISSIONS.FINANCE_MANAGE)
   async pdf(@Request() req, @Param("id") id: string, @Res() res: Response) {

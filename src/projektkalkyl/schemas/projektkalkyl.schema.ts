@@ -38,6 +38,10 @@ export class Projektkalkyl {
   // Discussion: [{ id, authorName, text, guest, createdAt }]
   @Prop({ type: [Object], default: [] })
   comments: Record<string, unknown>[];
+
+  // Reusable template (excluded from the normal list; used to start new calcs).
+  @Prop({ default: false, index: true })
+  isTemplate: boolean;
 }
 
 export const ProjektkalkylSchema = SchemaFactory.createForClass(Projektkalkyl);
