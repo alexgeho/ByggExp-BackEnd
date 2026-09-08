@@ -33,6 +33,7 @@ export const TOGGLEABLE_MODULES = [
   "expenses",
   "payroll",
   "profitability",
+  "projektkalkyl",
   "clients",
   "articles",
   "tools",
@@ -60,6 +61,7 @@ const TILLVAXT = [
   "invoices",
   "articles",
   "expenses",
+  "projektkalkyl",
 ];
 
 const PROFESSIONELL = [...TOGGLEABLE_MODULES];
