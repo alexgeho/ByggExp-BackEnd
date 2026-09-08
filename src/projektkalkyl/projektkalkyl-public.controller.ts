@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Sse, MessageEvent } from "@nestjs/common";
+import { Observable, from } from "rxjs";
+import { filter, mergeMap, map, startWith } from "rxjs/operators";
 import { Public } from "../common/decorators/public.decorator";
 import { ProjektkalkylService } from "./projektkalkyl.service";
 
@@ -21,5 +23,18 @@ export class ProjektkalkylPublicController {
     @Body() body: { text?: string; authorName?: string },
   ) {
     return this.service.addGuestComment(token, body?.authorName, body?.text);
+  }
+
+  // Instant live: SSE stream that pushes a fresh read-only snapshot whenever the
+  // owner saves (autosave) or someone comments. Client falls back to polling.
+  @Sse(":token/stream")
+  async stream(@Param("token") token: string): Promise<Observable<MessageEvent>> {
+    const id = await this.service.resolveShareId(token); // throws if invalid/expired
+    return this.service.changes$.pipe(
+      filter((changedId) => changedId === id),
+      startWith("__init__"),
+      mergeMap(() => from(this.service.findByShareToken(token))),
+      map((snapshot) => ({ data: snapshot } as MessageEvent)),
+    );
   }
 }

@@ -5,6 +5,7 @@ import {
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
+import { Subject } from "rxjs";
 import { randomBytes } from "crypto";
 import { launchForInvoicePdf } from "../invoices/puppeteer-launch";
 import { buildProjektkalkylHtml } from "./projektkalkyl-pdf.template";
@@ -30,6 +31,23 @@ export class ProjektkalkylService {
     @InjectModel(Projektkalkyl.name)
     private model: Model<ProjektkalkylDocument>,
   ) {}
+
+  // In-memory change bus (single PM2 instance): emits a calc id after any save
+  // so SSE viewers get an instant push. Falls back to client polling otherwise.
+  readonly changes$ = new Subject<string>();
+
+  private emitChange(id: unknown): void {
+    this.changes$.next(String(id));
+  }
+
+  async resolveShareId(token: string): Promise<string> {
+    const clean = (token || "").trim();
+    const doc = await this.model.findOne({ shareToken: clean }).select("_id shareExpiresAt").lean().exec();
+    if (!doc || !doc.shareExpiresAt || new Date(doc.shareExpiresAt) < new Date()) {
+      throw new NotFoundException("This link has expired or is invalid");
+    }
+    return String(doc._id);
+  }
 
   private companyOf(user: AuthUser): string {
     if (!user.companyId) {
@@ -85,7 +103,9 @@ export class ProjektkalkylService {
     // tables is a Mixed ([Object]) field — Mongoose can't detect deep mutations,
     // so flag it dirty explicitly or the board layout won't persist.
     if (dto.tables !== undefined) doc.markModified("tables");
-    return doc.save();
+    const saved = await doc.save();
+    this.emitChange(id);
+    return saved;
   }
 
   private static readonly SHARE_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -155,6 +175,7 @@ export class ProjektkalkylService {
     doc.comments = [...(doc.comments || []), this.buildComment(authorName, text, false)];
     doc.markModified("comments");
     await doc.save();
+    this.emitChange(id);
     return doc.comments;
   }
 
@@ -173,6 +194,7 @@ export class ProjektkalkylService {
     doc.comments = [...(doc.comments || []), this.buildComment(authorName, text, true)];
     doc.markModified("comments");
     await doc.save();
+    this.emitChange(doc._id);
     return doc.comments;
   }
 
