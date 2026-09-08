@@ -1,7 +1,6 @@
 // Server-side HTML for the Projektkalkyl PDF (rendered by puppeteer, reusing the
 // invoice PDF launcher). Mirrors the read-only board. Self-contained math.
 
-const VAT_RATE = 0.25;
 const COLORS: Record<string, { bg: string; head: string }> = {
   yellow: { bg: "#fdf6dd", head: "#f6e9a8" },
   green: { bg: "#e4efdd", head: "#cfe3c1" },
@@ -13,11 +12,16 @@ const COLORS: Record<string, { bg: string; head: string }> = {
 
 type Cell = string | number;
 interface Column { id: string; label: string; type: string }
-interface Row { id: string; cells: Record<string, Cell> }
+interface Row { id: string; cells: Record<string, Cell>; vatRate?: number }
 interface Table {
-  id: string; side: string; title: string; color: string; vatMode: string;
+  id: string; side: string; title: string; color: string; vatMode?: string; vatRate?: number;
   markupPct?: number; contingencyPct?: number; columns: Column[]; rows: Row[];
 }
+
+const tableVatRate = (t: Table): number =>
+  Number.isFinite(t.vatRate) ? (t.vatRate as number) : (t.vatMode === "inkl25" ? 25 : 0);
+const rowVatRate = (t: Table, r: Row): number =>
+  Number.isFinite(r.vatRate) ? (r.vatRate as number) : tableVatRate(t);
 interface Calc { name?: string; note?: string; tables?: unknown[] }
 
 const esc = (s: unknown) =>
@@ -40,11 +44,16 @@ function lineAmount(table: Table, row: Row): number {
 
 function tableTotals(table: Table) {
   let base = 0;
-  for (const r of table.rows || []) base += lineAmount(table, r);
+  let rowVat = 0;
+  for (const r of table.rows || []) {
+    const a = lineAmount(table, r);
+    base += a;
+    rowVat += a * (rowVatRate(table, r) / 100);
+  }
   const markup = base * ((table.markupPct || 0) / 100);
   const contingency = (base + markup) * ((table.contingencyPct || 0) / 100);
   const netto = base + markup + contingency;
-  const vat = table.vatMode === "inkl25" ? netto * VAT_RATE : 0;
+  const vat = rowVat + (markup + contingency) * (tableVatRate(table) / 100);
   return { base, markup, contingency, netto, vat, brutto: netto + vat };
 }
 
@@ -85,7 +94,7 @@ function renderTable(t: Table): string {
     <div class="tbl" style="background:${p.bg}">
       <div class="tbl-head" style="background:${p.head}">
         <span>${esc(t.title)}</span>
-        <span class="vat">${t.vatMode === "inkl25" ? "Med moms 25%" : "Utan moms"}</span>
+        <span class="vat">${tableVatRate(t) > 0 ? `Moms ${tableVatRate(t)}%` : "Utan moms"}</span>
       </div>
       <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
       <div class="sub">${extra}<b>${money(tt.brutto)}</b></div>
