@@ -115,11 +115,12 @@ body {
 .invoice-header__recipient { font-weight: bold; font-size: 14px; line-height: 1.5; margin-top: 0; }
 .invoice-header__meta {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  grid-template-columns: max-content max-content;
   column-gap: 24px;
   row-gap: 3px;
   font-size: 13px;
-  margin: 0;
+  width: fit-content;
+  margin-left: auto;
   align-content: start;
 }
 .invoice-header__meta dt { margin: 0; }
@@ -204,8 +205,8 @@ body {
 .invoice-footer {
   width: 100%;
   margin-top: 16px;
-  display: grid;
-  grid-template-columns: 1.2fr 1.1fr 0.8fr 1.1fr;
+  display: flex;
+  justify-content: space-between;
   gap: 16px;
   font-size: 12px;
   line-height: 1.5;

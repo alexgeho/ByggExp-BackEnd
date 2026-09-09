@@ -74,7 +74,7 @@ body {
 .offer-header__logo img { max-height: 110px; max-width: 100%; object-fit: contain; display: block; }
 .offer-header__title { font-size: 32px; font-weight: bold; margin-bottom: 8px; }
 .offer-header__recipient { font-size: 13px; }
-.offer-header__meta { display: grid; grid-template-columns: max-content 1fr; column-gap: 10px; row-gap: 2px; font-size: 13px; margin: 0; }
+.offer-header__meta { display: grid; grid-template-columns: max-content max-content; justify-self: end; column-gap: 10px; row-gap: 2px; font-size: 13px; margin: 0; }
 .offer-header__meta dt { font-weight: bold; }
 .offer-header__meta dd { margin: 0; }
 .offer-body { flex: 1; }
@@ -112,11 +112,12 @@ body {
   margin-top: auto;
   padding-top: 8px;
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0 4px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
   font-size: 13px;
 }
-.offer-footer td { width: 25%; vertical-align: top; padding: 0; border: none; }
+.offer-footer > div { vertical-align: top; line-height: 1.5; }
 `;
 
 function escapeHtml(value: string): string {
@@ -222,14 +223,12 @@ function buildItemsHtml(items: OfferPdfItem[], data: OfferPdfData): string {
 
 function buildFooter(footer: OfferPdfCompanyFooter = {}): string {
   return `
-    <table class="offer-footer">
-      <tr>
-        <td><b>Adress</b><br>${text(footer.name)}<br>${text(footer.address)}<br>${text(footer.city)}</td>
-        <td><b>Telefon</b><br>${text(footer.phone)}<br><b>E-post/Webbplats</b><br>${text(footer.email)}<br>${text(footer.website)}</td>
-        <td><b>Organisationsnr</b><br>${text(footer.orgNumber)}<br>${text(footer.vatStatus)}</td>
-        <td><b>Momsreg.nr</b><br>${text(footer.vatNumber)}</td>
-      </tr>
-    </table>
+    <div class="offer-footer">
+      <div><b>Adress</b><br>${text(footer.name)}<br>${text(footer.address)}<br>${text(footer.city)}</div>
+      <div><b>Telefon</b><br>${text(footer.phone)}<br><b>E-post/Webbplats</b><br>${text(footer.email)}<br>${text(footer.website)}</div>
+      <div><b>Organisationsnr</b><br>${text(footer.orgNumber)}<br>${text(footer.vatStatus)}</div>
+      <div><b>Momsreg.nr</b><br>${text(footer.vatNumber)}</div>
+    </div>
   `;
 }
 
