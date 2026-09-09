@@ -156,14 +156,14 @@ body {
 .invoice-lines thead th {
   text-align: left;
   font-weight: normal;
-  padding: 5px 10px 6px;
-  border-top: 1px solid #333;
-  border-bottom: 1px solid #333;
+  padding: 8px 10px 9px;
+  border-top: 1px solid #d5dae1;
+  border-bottom: 1px solid #d5dae1;
   font-size: 13px;
   vertical-align: bottom;
 }
 .invoice-lines tbody td {
-  padding: 8px 10px 0;
+  padding: 14px 10px 0;
   font-size: 13px;
   vertical-align: top;
 }
@@ -182,8 +182,8 @@ body {
 .invoice-summary__totals {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid #333;
-  padding: 6px 10px 8px;
+  border-top: 1px solid #d5dae1;
+  padding: 8px 10px 10px;
   column-gap: 12px;
 }
 .invoice-summary__totals .lbl { font-size: 13px; font-weight: bold; padding-bottom: 2px; }
@@ -193,8 +193,8 @@ body {
 .invoice-summary__vat {
   display: grid;
   grid-template-columns: 1fr auto;
-  border-top: 1px solid #333;
-  padding: 6px 10px 0;
+  border-top: 1px solid #d5dae1;
+  padding: 8px 10px 0;
   font-size: 13px;
   column-gap: 16px;
 }
@@ -365,12 +365,12 @@ const A4_PAGE_HEIGHT_PX = Math.floor(297 * MM_TO_PX);
 const BODY_FONT_SIZE_PX = 13;
 const BODY_LINE_HEIGHT = 1.4;
 const BODY_LINE_HEIGHT_PX = BODY_FONT_SIZE_PX * BODY_LINE_HEIGHT;
-const TABLE_CELL_VERTICAL_PADDING_PX = 16;
+const TABLE_CELL_VERTICAL_PADDING_PX = 22;
 const TABLE_ROW_HEIGHT_PX = Math.ceil(
   BODY_LINE_HEIGHT_PX + TABLE_CELL_VERTICAL_PADDING_PX,
 );
-// Header row uses 5+6 padding and two 1px rules.
-const TABLE_HEADER_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + 11 + 2);
+// Header row uses 8+9 padding and two 1px rules.
+const TABLE_HEADER_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + 17 + 2);
 const REVERSE_VAT_NOTICE_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + 12);
 
 // Header block: logo top band + bottom detail row, fixed min-height so the detail

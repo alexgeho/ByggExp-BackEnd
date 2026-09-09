@@ -94,18 +94,18 @@ body {
   margin: 0 0 18px;
   white-space: pre-wrap;
 }
-.offer-items { width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 13px; border: 1px solid #333; }
+.offer-items { width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 13px; border: 1px solid #d5dae1; }
 .offer-items th {
-  text-align: left; border-bottom: 1px solid #333; padding: 6px 8px 8px;
+  text-align: left; border-bottom: 1px solid #d5dae1; padding: 9px 8px 11px;
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b;
 }
-.offer-items td { padding: 7px 8px 0; vertical-align: top; }
-.offer-items tbody tr:last-child td { padding-bottom: 8px; }
+.offer-items td { padding: 12px 8px 0; vertical-align: top; }
+.offer-items tbody tr:last-child td { padding-bottom: 13px; }
 .offer-items .num { text-align: right; white-space: nowrap; }
 .offer-totals { width: 100%; margin: 0 0 18px; }
 .offer-totals table { margin-left: auto; border-collapse: collapse; font-size: 14px; }
-.offer-totals td { padding: 3px 0 3px 24px; text-align: right; }
-.offer-totals .grand td { border-top: 1px solid #333; font-size: 17px; font-weight: bold; padding-top: 7px; }
+.offer-totals td { padding: 5px 0 5px 24px; text-align: right; }
+.offer-totals .grand td { border-top: 1px solid #d5dae1; font-size: 17px; font-weight: bold; padding-top: 9px; }
 .offer-contacts { margin: 0 0 18px; }
 .offer-contacts__row { font-size: 14px; }
 .offer-footer {
