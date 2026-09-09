@@ -12,6 +12,7 @@ import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { Project, ProjectDocument } from "./schemas/project.schema";
 import { Client, ClientDocument } from "../clients/schemas/client.schema";
+import { Task, TaskDocument } from "../tasks/schemas/task.schema";
 import { CreateProjectDto } from "./dto/create-project.dto";
 import { UsersService } from "../users/users.service";
 import { CompanyService } from "../company/company.service";
@@ -38,6 +39,7 @@ export class ProjectsService {
   constructor(
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
     @InjectModel(Client.name) private clientModel: Model<ClientDocument>,
+    @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
     private usersService: UsersService,
     private companyService: CompanyService,
   ) {}
@@ -853,6 +855,9 @@ export class ProjectsService {
     if (!deletedProject) {
       throw new NotFoundException(`Project with ID "${id}" not found`);
     }
+    // Cascade: remove the project's tasks so none are left orphaned pointing at
+    // a deleted project (which previously showed a raw project id in the UI).
+    await this.taskModel.deleteMany({ projectId: id }).exec();
     return deletedProject;
   }
 
