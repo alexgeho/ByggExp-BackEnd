@@ -200,12 +200,6 @@ body {
   column-gap: 16px;
 }
 .invoice-summary__vat .bank b { font-weight: bold; }
-/* Payment QR sits to the left of the totals band, bottom-aligned with it. */
-.invoice-summary__body { display: flex; align-items: flex-end; gap: 22px; }
-.invoice-summary__main { flex: 1; }
-.invoice-summary__qr { flex: 0 0 auto; text-align: center; padding: 0 0 2px 10px; }
-.invoice-summary__qr img { width: 96px; height: 96px; display: block; }
-.invoice-summary__qr span { display: block; font-size: 10.5px; color: #64748b; margin-top: 3px; }
 
 /* ---- Footer ---- */
 .invoice-footer {
@@ -418,16 +412,14 @@ function calculateSummaryHeightPx(
   data: InvoicePdfData,
   isReverseVAT: boolean,
 ): number {
-  // Note line (optional) + body. The body is the totals band (~44px) + VAT/bank
-  // line (~24px) stacked, sitting beside the payment QR (96px + caption) when
-  // present — so the body height is the taller of the two.
+  // Note line (optional) + totals band (2 rows ~ 44px) + VAT/bank line (~24px).
+  const rounding = Number(data.rounding) || 0;
+  const rotDeduction = Number(data.rotDeduction) || 0;
   const noteLines = (isReverseVAT ? 1 : 0) + (data.rotEnabled ? 1 : 0);
   const noteHeight = noteLines ? noteLines * BODY_LINE_HEIGHT_PX + 8 : 0;
-  const totalsBand = 44;
+  const totalsBand = 44 + (rounding || rotDeduction ? 0 : 0);
   const vatLine = 24;
-  const qrHeight = data.qrDataUrl ? 96 + 16 : 0;
-  const bodyHeight = Math.max(totalsBand + vatLine, qrHeight);
-  return Math.ceil(noteHeight + bodyHeight + 8);
+  return Math.ceil(noteHeight + totalsBand + vatLine + 8);
 }
 
 function calculateReservedTableHeightPx(
@@ -563,44 +555,33 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
     ? `<div class="invoice-summary__note" style="font-style: italic;">${notes.join("<br>")}</div>`
     : "";
 
-  // Payment QR (Swedish BGC format), pre-rendered upstream. Shown only when a
-  // Bankgiro/Plusgiro is configured so there is something to scan-and-pay.
-  const qrHtml = data.qrDataUrl
-    ? `<div class="invoice-summary__qr"><img src="${data.qrDataUrl}" alt="" /><span>Skanna för att betala</span></div>`
-    : "";
-
   return `
     <tfoot class="invoice-lines__footer">
       <tr>
         <td colspan="6" class="invoice-summary-cell">
           <div class="invoice-summary">
             ${noteHtml}
-            <div class="invoice-summary__body">
-              ${qrHtml}
-              <div class="invoice-summary__main">
-                <div class="invoice-summary__totals">
-                  <div>
-                    <div class="lbl">Exkl. moms</div>
-                    <div class="val">${formatInvoiceAmount(subtotal)}</div>
-                  </div>
-                  <div>
-                    <div class="lbl">Moms</div>
-                    <div class="val">${formatInvoiceAmount(totalVat)}</div>
-                  </div>
-                  <div>
-                    <div class="lbl">Totalt</div>
-                    <div class="val">${formatInvoiceAmount(total)}</div>
-                  </div>
-                  <div>
-                    <div class="lbl att-lbl">ATT BETALA</div>
-                    <div class="val att-val">${text(currency)} ${formatInvoiceAmount(roundedTotal)}</div>
-                  </div>
-                </div>
-                <div class="invoice-summary__vat">
-                  <span>${vatBreakdown}</span>
-                  ${bankLine}
-                </div>
+            <div class="invoice-summary__totals">
+              <div>
+                <div class="lbl">Exkl. moms</div>
+                <div class="val">${formatInvoiceAmount(subtotal)}</div>
               </div>
+              <div>
+                <div class="lbl">Moms</div>
+                <div class="val">${formatInvoiceAmount(totalVat)}</div>
+              </div>
+              <div>
+                <div class="lbl">Totalt</div>
+                <div class="val">${formatInvoiceAmount(total)}</div>
+              </div>
+              <div>
+                <div class="lbl att-lbl">ATT BETALA</div>
+                <div class="val att-val">${text(currency)} ${formatInvoiceAmount(roundedTotal)}</div>
+              </div>
+            </div>
+            <div class="invoice-summary__vat">
+              <span>${vatBreakdown}</span>
+              ${bankLine}
             </div>
           </div>
         </td>
