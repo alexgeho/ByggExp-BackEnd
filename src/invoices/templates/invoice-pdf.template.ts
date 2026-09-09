@@ -126,17 +126,17 @@ body {
 .invoice-header__meta dt { margin: 0; }
 .invoice-header__meta dd { margin: 0; white-space: nowrap; }
 
-/* ---- Detail row: customer refs (left) | our refs (right), top-aligned ---- */
+/* ---- Detail row: customer refs (left edge) | our refs (right edge) ---- */
 .invoice-header__details {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 48px;
+  display: flex;
+  justify-content: space-between;
+  gap: 48px;
   align-items: start;
   margin: 30px 0 14px;
 }
 .invoice-header__details dl {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  grid-template-columns: max-content max-content;
   column-gap: 18px;
   row-gap: 3px;
   font-size: 13px;

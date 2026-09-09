@@ -75,7 +75,7 @@ body {
 .offer-header__title { font-size: 32px; font-weight: bold; margin-bottom: 8px; }
 .offer-header__recipient { font-size: 13px; }
 .offer-header__meta { display: grid; grid-template-columns: max-content max-content; justify-self: end; column-gap: 10px; row-gap: 2px; font-size: 13px; margin: 0; }
-.offer-header__meta dt { font-weight: bold; }
+.offer-header__meta dt { font-weight: normal; }
 .offer-header__meta dd { margin: 0; }
 .offer-body { flex: 1; }
 .offer-subtitle { font-size: 19px; font-weight: bold; margin: 54px 0 24px; }
