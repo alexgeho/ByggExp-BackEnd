@@ -102,17 +102,17 @@ body {
 .invoice-page__body { flex: 1; padding: 0 16mm; display: flex; flex-direction: column; }
 .invoice-page__footer { padding: 0 16mm 8mm; }
 
-/* ---- Header: logo (left) | title + meta + recipient (right) ---- */
+/* ---- Header: logo (left) | title + recipient (middle) | Sida + meta (right) ---- */
 .invoice-header__top {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1.1fr 1fr 1fr;
   gap: 20px;
   align-items: start;
 }
 .invoice-header__logo img { max-height: 130px; max-width: 100%; object-fit: contain; display: block; }
-.invoice-header__sida { text-align: right; font-size: 12px; color: #333; }
-.invoice-header__title { font-size: 30px; font-weight: bold; margin: 2px 0 16px; }
-.invoice-header__recipient { font-weight: bold; font-size: 14px; line-height: 1.5; margin-top: 28px; }
+.invoice-header__sida { text-align: right; font-size: 12px; color: #333; margin-bottom: 8px; }
+.invoice-header__title { font-size: 30px; font-weight: bold; margin: 0 0 18px; }
+.invoice-header__recipient { font-weight: bold; font-size: 14px; line-height: 1.5; margin-top: 0; }
 .invoice-header__meta {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -287,23 +287,25 @@ function buildHeader(
 
   return `
     <header class="invoice-header">
-      <!-- Top band: logo (left) | Sida + title + meta + recipient (right) -->
+      <!-- Top band: logo (left) | title + recipient (middle) | Sida + meta (right) -->
       <div class="invoice-header__top">
         <div class="invoice-header__logo">${logo}</div>
         <div>
-          <div class="invoice-header__sida">Sida ${pageIndex + 1}(${pageCount})</div>
           <div class="invoice-header__title">${data.creditOfNumber ? "Kreditfaktura" : "Faktura"}</div>
+          <div class="invoice-header__recipient">
+            ${text(data.companyName) || "&nbsp;"}<br>
+            ${text(data.address) || "&nbsp;"}<br>
+            ${text(data.postalCode) || "&nbsp;"}
+          </div>
+        </div>
+        <div>
+          <div class="invoice-header__sida">Sida ${pageIndex + 1}(${pageCount})</div>
           <dl class="invoice-header__meta">
             <dt>${dateLabel}</dt><dd>${text(data.date) || "&nbsp;"}</dd>
             <dt>Fakturanr</dt><dd>${text(data.invoiceNumber) || "&nbsp;"}</dd>
             ${data.creditOfNumber ? `<dt>Avser faktura</dt><dd>${text(data.creditOfNumber)}</dd>` : ""}
             <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || "&nbsp;"}</dd>
           </dl>
-          <div class="invoice-header__recipient">
-            ${text(data.companyName) || "&nbsp;"}<br>
-            ${text(data.address) || "&nbsp;"}<br>
-            ${text(data.postalCode) || "&nbsp;"}
-          </div>
         </div>
       </div>
       <!-- Detail row: customer refs | our refs, top-aligned -->
@@ -376,7 +378,7 @@ const REVERSE_VAT_NOTICE_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + 12);
 // Header block: logo top band + bottom detail row, fixed min-height so the detail
 // blocks pin near the base of the header (mirrors the reference).
 const HEADER_PAGE_TOP_PADDING_PX = Math.ceil(14 * MM_TO_PX);
-const HEADER_TOP_BAND_PX = 300; // logo + title + meta + recipient stack
+const HEADER_TOP_BAND_PX = 170; // logo | title + recipient | meta (side by side)
 const HEADER_DETAILS_GAP_PX = 30; // margin above the detail row
 const HEADER_DETAILS_ROWS = 4;
 const HEADER_BOTTOM_MARGIN_PX = 14;
