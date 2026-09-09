@@ -78,7 +78,7 @@ body {
 .offer-header__meta dt { font-weight: bold; }
 .offer-header__meta dd { margin: 0; }
 .offer-body { flex: 1; }
-.offer-subtitle { font-size: 19px; font-weight: bold; margin: 6px 0 24px; }
+.offer-subtitle { font-size: 19px; font-weight: bold; margin: 54px 0 24px; }
 .offer-section { margin: 0 0 30px; }
 .offer-section__title { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; margin: 0 0 10px; }
 .offer-section__text { word-break: break-word; }
