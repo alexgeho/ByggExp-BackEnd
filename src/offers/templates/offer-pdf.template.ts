@@ -78,9 +78,9 @@ body {
 .offer-header__meta dt { font-weight: bold; }
 .offer-header__meta dd { margin: 0; }
 .offer-body { flex: 1; }
-.offer-subtitle { font-size: 19px; font-weight: bold; margin: 4px 0 14px; }
-.offer-section { margin: 0 0 18px; }
-.offer-section__title { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; margin: 0 0 4px; }
+.offer-subtitle { font-size: 19px; font-weight: bold; margin: 6px 0 24px; }
+.offer-section { margin: 0 0 30px; }
+.offer-section__title { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; margin: 0 0 10px; }
 .offer-section__text { word-break: break-word; }
 .offer-section__text p { margin: 0 0 6px; }
 .offer-section__text ul, .offer-section__text ol { margin: 4px 0 6px; padding-left: 20px; }
