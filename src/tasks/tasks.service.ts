@@ -347,7 +347,21 @@ export class TasksService {
       throw new NotFoundException(`Task with ID "${id}" not found`);
     }
     if (task.projectId) {
-      await this.assertProjectAccessForTasks(String(task.projectId), user);
+      try {
+        await this.assertProjectAccessForTasks(String(task.projectId), user);
+      } catch (error) {
+        // Orphaned task: its project was deleted, so the access check can't
+        // resolve the project. Let company-level managers still act on it (e.g.
+        // delete the leftover); project-scoped roles keep the original error.
+        if (
+          error instanceof NotFoundException &&
+          (user.role === UserRole.SuperAdmin ||
+            user.role === UserRole.CompanyAdmin)
+        ) {
+          return task;
+        }
+        throw error;
+      }
       return task;
     }
 
