@@ -36,6 +36,18 @@ export class SupplierInvoice {
   @Prop({ default: "" })
   category: string;
 
+  // Payment references read from the invoice (used to pay it in the bank and to
+  // build a bank payment file). OCR = the structured payment reference; bankgiro/
+  // plusgiro = the supplier's giro number the payment is sent to.
+  @Prop({ default: "" })
+  ocr: string;
+
+  @Prop({ default: "" })
+  bankgiro: string;
+
+  @Prop({ default: "" })
+  plusgiro: string;
+
   @Prop({ type: Number, default: 0 })
   amountExclVat: number;
 

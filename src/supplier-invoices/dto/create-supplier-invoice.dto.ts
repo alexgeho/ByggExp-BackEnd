@@ -31,6 +31,18 @@ export class CreateSupplierInvoiceDto {
   category?: string;
 
   @IsOptional()
+  @IsString()
+  ocr?: string;
+
+  @IsOptional()
+  @IsString()
+  bankgiro?: string;
+
+  @IsOptional()
+  @IsString()
+  plusgiro?: string;
+
+  @IsOptional()
   @IsNumber()
   amountExclVat?: number;
 

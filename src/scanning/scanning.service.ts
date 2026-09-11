@@ -16,6 +16,9 @@ export type ScannedDocument = {
   total: number;
   currency: string;
   category: string;
+  ocr: string; // OCR/payment reference (OCR-referens) used to pay the invoice
+  bankgiro: string; // supplier bankgiro number, digits/dashes as printed
+  plusgiro: string; // supplier plusgiro number, if bankgiro is absent
   suggestedKind: "expense" | "supplier_invoice";
   raw?: string;
 };
@@ -57,14 +60,19 @@ Extract the fields and return ONLY a JSON object (no prose, no code fences) with
   "total": number,                   // grand total incl. VAT (att betala)
   "currency": string,                // e.g. "SEK"
   "category": string,                // short expense category in Swedish, e.g. "Material", "Drivmedel", "Verktyg", "Underentreprenör"
+  "ocr": string,                     // OCR reference (OCR-referens / OCR-nummer) — the long payment reference number, digits only, else ""
+  "bankgiro": string,                // supplier bankgiro number as printed (e.g. "123-4567"), else ""
+  "plusgiro": string,                // supplier plusgiro number as printed (e.g. "12 34 56-7"), else ""
   "suggestedKind": string            // "supplier_invoice" if it is a formal invoice with an invoice number/due date, otherwise "expense"
 }
 
 Rules:
 - Amounts are plain numbers with a dot decimal separator, no currency symbol or spaces (e.g. 1234.50).
 - If VAT is shown as 25% and only the total is given, compute: vat = total - total/1.25, amountExclVat = total - vat.
+- The OCR reference is the payment reference near "OCR", "Betalningsreferens" or the giro payment slip — return digits only (strip spaces), never the invoice number unless it is explicitly the OCR.
+- Keep bankgiro/plusgiro exactly as printed including the dash.
 - If a value is missing, use "" for strings and 0 for numbers.
-- Never invent an org number or invoice number.`;
+- Never invent an org number, invoice number, OCR or giro number.`;
 
   private buildSourceBlock(buffer: Buffer, mimetype: string) {
     const data = buffer.toString("base64");
@@ -217,6 +225,9 @@ Rules:
       total,
       currency: this.str(parsed.currency) || "SEK",
       category: this.str(parsed.category),
+      ocr: this.str(parsed.ocr),
+      bankgiro: this.str(parsed.bankgiro),
+      plusgiro: this.str(parsed.plusgiro),
       suggestedKind: kind,
     };
   }
