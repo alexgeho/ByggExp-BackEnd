@@ -25,6 +25,7 @@ import { InvoicesModule } from "./invoices/invoices.module";
 import { PayrollModule } from "./payroll/payroll.module";
 import { SupplierInvoicesModule } from "./supplier-invoices/supplier-invoices.module";
 import { InboundInvoicesModule } from "./inbound-invoices/inbound-invoices.module";
+import { BudgetModule } from "./budget/budget.module";
 import { AuditModule } from "./audit/audit.module";
 import { BillingModule } from "./billing/billing.module";
 import { ClientsModule } from "./clients/clients.module";
@@ -79,6 +80,7 @@ import { SystemModule } from "./system/system.module";
     PayrollModule,
     SupplierInvoicesModule,
     InboundInvoicesModule,
+    BudgetModule,
     AuditModule,
     BillingModule,
     AtaModule,
