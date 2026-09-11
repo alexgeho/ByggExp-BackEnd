@@ -19,6 +19,7 @@ export type ScannedDocument = {
   ocr: string; // OCR/payment reference (OCR-referens) used to pay the invoice
   bankgiro: string; // supplier bankgiro number, digits/dashes as printed
   plusgiro: string; // supplier plusgiro number, if bankgiro is absent
+  vatExempt: boolean; // true for momsfria purchases (insurance, bank fees, …)
   suggestedKind: "expense" | "supplier_invoice";
   raw?: string;
 };
@@ -63,12 +64,14 @@ Extract the fields and return ONLY a JSON object (no prose, no code fences) with
   "ocr": string,                     // OCR reference (OCR-referens / OCR-nummer) — the long payment reference number, digits only, else ""
   "bankgiro": string,                // supplier bankgiro number as printed (e.g. "123-4567"), else ""
   "plusgiro": string,                // supplier plusgiro number as printed (e.g. "12 34 56-7"), else ""
+  "vatExempt": boolean,              // true if this purchase carries no VAT (see rules)
   "suggestedKind": string            // "supplier_invoice" if it is a formal invoice with an invoice number/due date, otherwise "expense"
 }
 
 Rules:
 - Amounts are plain numbers with a dot decimal separator, no currency symbol or spaces (e.g. 1234.50).
-- If VAT is shown as 25% and only the total is given, compute: vat = total - total/1.25, amountExclVat = total - vat.
+- VAT-EXEMPT purchases carry NO VAT: insurance (försäkring), bank/interest fees (ränta, bankavgift), rent of premises without moms, and other momsfria items. For these set "vatExempt": true, "vat": 0 and "amountExclVat" equal to the total — do NOT invent a 25% VAT. An insurance document (e.g. "Dina Försäkringar", "trafikförsäkring", "försäkringspremie", "påminnelse" for a premium) is ALWAYS vatExempt.
+- Otherwise "vatExempt": false. If the document shows a VAT/moms line, use those exact figures. Only if VAT is explicitly 25% and just the total is given, compute: vat = total - total/1.25, amountExclVat = total - vat.
 - The OCR reference is the payment reference near "OCR", "Betalningsreferens" or the giro payment slip — return digits only (strip spaces), never the invoice number unless it is explicitly the OCR.
 - Keep bankgiro/plusgiro exactly as printed including the dash.
 - If a value is missing, use "" for strings and 0 for numbers.
@@ -203,8 +206,13 @@ Rules:
     const total = this.num(parsed.total);
     let vat = this.num(parsed.vat);
     let amountExclVat = this.num(parsed.amountExclVat);
-    // Backfill missing pieces from a 25% assumption when only the total is read.
-    if (total && !amountExclVat && !vat) {
+    const vatExempt = parsed.vatExempt === true;
+    if (vatExempt) {
+      // Momsfria purchases (insurance, bank fees, …): the total IS the net, no VAT.
+      vat = 0;
+      amountExclVat = total;
+    } else if (total && !amountExclVat && !vat) {
+      // Backfill missing pieces from a 25% assumption when only the total is read.
       vat = Math.round((total - total / 1.25) * 100) / 100;
       amountExclVat = Math.round((total - vat) * 100) / 100;
     }
@@ -228,6 +236,7 @@ Rules:
       ocr: this.str(parsed.ocr),
       bankgiro: this.str(parsed.bankgiro),
       plusgiro: this.str(parsed.plusgiro),
+      vatExempt,
       suggestedKind: kind,
     };
   }
