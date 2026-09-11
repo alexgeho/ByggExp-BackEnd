@@ -9,6 +9,10 @@ export class CreateProjektkalkylDto {
   @IsString()
   note?: string;
 
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
   // Flexible board layout (tables → columns/rows). Validated shallowly; the
   // admin app owns the shape. Stored as-is.
   @IsOptional()

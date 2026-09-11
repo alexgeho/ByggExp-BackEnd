@@ -21,6 +21,11 @@ export class Projektkalkyl {
   @Prop({ default: "" })
   note?: string;
 
+  // Display currency for this calculation (e.g. "SEK", "NOK", "EUR"). Empty =
+  // fall back to the company's currency in the admin app.
+  @Prop({ default: "" })
+  currency?: string;
+
   // Array of table objects:
   // { id, side: 'income'|'expense', title, color, vatMode: 'inkl25'|'none',
   //   columns: [{ id, label, type: 'text'|'date'|'amount' }],
