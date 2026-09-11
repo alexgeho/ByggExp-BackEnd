@@ -18,6 +18,12 @@ import { CreateInvoiceDto, InvoiceItemDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { generateOCR } from './generate-ocr';
 import { calculateInvoiceTotals, deriveInvoiceSettlement } from './invoice-math';
+import {
+  computeReminder,
+  DEFAULT_REFERENCE_RATE_PERCENT,
+  DEFAULT_REMINDER_FEE_SEK,
+  ReminderResult,
+} from './reminder-math';
 import { Invoice, InvoiceDocument, InvoiceStatus } from './schemas/invoice.schema';
 import { launchForInvoicePdf } from './puppeteer-launch';
 import { buildInvoiceQrDataUrl } from './invoice-qr';
@@ -93,6 +99,72 @@ export class InvoicesService {
     }
 
     return result;
+  }
+
+  // Send a betalningspåminnelse for an overdue invoice: accrues dröjsmålsränta
+  // (referensränta + 8%) + a påminnelseavgift, emails the customer in Swedish,
+  // and records the reminder on the invoice. The reference rate and fee are
+  // env-configurable (they change twice a year / by agreement).
+  async sendReminder(
+    id: string,
+    user: AuthUser,
+    body: { email?: string; message?: string; fee?: number } = {},
+  ): Promise<{ sent: boolean; to: string; reminder: ReminderResult; reminderCount: number }> {
+    const invoice = await this.findOne(id, user);
+    const to = (body.email || invoice.email || '').trim();
+    if (!to) {
+      throw new BadRequestException(
+        'No recipient email — set the customer email or provide one',
+      );
+    }
+
+    const principal = invoice.roundedTotal || invoice.total || 0;
+    const referenceRatePercent = Number(
+      process.env.REFERENCE_RATE_PERCENT ?? DEFAULT_REFERENCE_RATE_PERCENT,
+    );
+    const feeSek =
+      body.fee != null
+        ? Number(body.fee)
+        : Number(process.env.REMINDER_FEE_SEK ?? DEFAULT_REMINDER_FEE_SEK);
+
+    const reminder = computeReminder({
+      principal,
+      dueDate: invoice.dueDate,
+      referenceRatePercent,
+      feeSek,
+    });
+
+    let pdf: Buffer | undefined;
+    try {
+      pdf = await this.buildInvoicePdf(id, user);
+    } catch (error) {
+      this.logger.warn(
+        `Reminder PDF build failed for invoice ${id}: ${(error as Error)?.message}`,
+      );
+    }
+
+    const result = await this.mailService.sendReminderEmail(to, {
+      invoiceNumber: invoice.invoiceNumber,
+      senderName: invoice.companyFooter?.name,
+      dueDate: invoice.dueDate,
+      daysOverdue: reminder.daysOverdue,
+      principal: reminder.principal,
+      interest: reminder.interest,
+      interestRatePercent: reminder.interestRatePercent,
+      fee: reminder.fee,
+      newTotal: reminder.newTotal,
+      ocr: invoice.ocr,
+      bankgiro: invoice.companyFooter?.bankgiro,
+      plusgiro: invoice.companyFooter?.plusgiro,
+      message: body.message,
+      pdf,
+    });
+
+    invoice.lastReminderAt = new Date();
+    invoice.reminderCount = (invoice.reminderCount || 0) + 1;
+    await invoice.save();
+
+    return { ...result, reminder, reminderCount: invoice.reminderCount };
   }
 
   async setStatus(

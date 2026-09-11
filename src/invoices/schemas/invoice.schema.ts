@@ -205,6 +205,13 @@ export class Invoice {
   @Prop({ type: Date, default: null })
   paidAt?: Date | null;
 
+  // Payment-reminder (betalningspåminnelse) tracking for overdue invoices.
+  @Prop({ type: Date, default: null })
+  lastReminderAt?: Date | null;
+
+  @Prop({ type: Number, default: 0 })
+  reminderCount: number;
+
   @Prop({ type: InvoiceCompanyFooterSchema, default: () => ({}) })
   companyFooter: InvoiceCompanyFooter;
 }

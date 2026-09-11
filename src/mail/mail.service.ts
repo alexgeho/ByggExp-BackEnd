@@ -493,6 +493,107 @@ export class MailService {
     return { sent: true, to };
   }
 
+  // Betalningspåminnelse for an overdue invoice. Always Swedish (customer-facing
+   // outgoing comms). Includes the accrued dröjsmålsränta + påminnelseavgift and
+  // the payment details so the customer can pay immediately. Inert-safe: logs and
+  // returns { sent:false } when SMTP is not configured.
+  async sendReminderEmail(
+    to: string,
+    opts: {
+      invoiceNumber: string | number;
+      senderName?: string;
+      dueDate?: string;
+      daysOverdue: number;
+      principal: number;
+      interest: number;
+      interestRatePercent: number;
+      fee: number;
+      newTotal: number;
+      ocr?: string;
+      bankgiro?: string;
+      plusgiro?: string;
+      currency?: string;
+      message?: string;
+      pdf?: Buffer;
+    },
+  ): Promise<{ sent: boolean; to: string }> {
+    const nr = String(opts.invoiceNumber);
+    const cur = opts.currency || "kr";
+    const money = (v: number) =>
+      `${new Intl.NumberFormat("sv-SE", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(Number(v) || 0)} ${cur}`;
+    const subject = `Betalningspåminnelse — faktura ${nr}${opts.senderName ? ` — ${opts.senderName}` : ""}`;
+
+    const payLine = opts.bankgiro
+      ? `Bankgiro: ${opts.bankgiro}`
+      : opts.plusgiro
+        ? `Plusgiro: ${opts.plusgiro}`
+        : "";
+
+    const lines = [
+      "Hej,",
+      "",
+      `Vi vill påminna om att faktura ${nr}${opts.dueDate ? ` med förfallodatum ${opts.dueDate}` : ""} ännu inte är betald${opts.daysOverdue > 0 ? ` (${opts.daysOverdue} dagar försenad)` : ""}.`,
+      "",
+      `Fakturabelopp: ${money(opts.principal)}`,
+      opts.interest > 0 ? `Dröjsmålsränta (${opts.interestRatePercent} %): ${money(opts.interest)}` : "",
+      opts.fee > 0 ? `Påminnelseavgift: ${money(opts.fee)}` : "",
+      `Att betala: ${money(opts.newTotal)}`,
+      opts.ocr ? `OCR: ${opts.ocr}` : "",
+      payLine,
+      "",
+      opts.message || "Vänligen betala snarast. Har betalning redan skett kan du bortse från denna påminnelse.",
+      "",
+      "Med vänliga hälsningar",
+      opts.senderName || "",
+    ];
+    const text = lines
+      .filter((line, i, arr) => line !== "" || (arr[i - 1] !== "" && i !== 0))
+      .join("\n");
+
+    const html = `
+      <p>Hej,</p>
+      <p>Vi vill påminna om att <strong>faktura ${this.escapeHtml(nr)}</strong>${opts.dueDate ? ` med förfallodatum ${this.escapeHtml(opts.dueDate)}` : ""} ännu inte är betald${opts.daysOverdue > 0 ? ` (${opts.daysOverdue} dagar försenad)` : ""}.</p>
+      <table style="border-collapse:collapse">
+        <tr><td>Fakturabelopp:</td><td style="text-align:right;padding-left:16px">${this.escapeHtml(money(opts.principal))}</td></tr>
+        ${opts.interest > 0 ? `<tr><td>Dröjsmålsränta (${this.escapeHtml(String(opts.interestRatePercent))} %):</td><td style="text-align:right;padding-left:16px">${this.escapeHtml(money(opts.interest))}</td></tr>` : ""}
+        ${opts.fee > 0 ? `<tr><td>Påminnelseavgift:</td><td style="text-align:right;padding-left:16px">${this.escapeHtml(money(opts.fee))}</td></tr>` : ""}
+        <tr><td><strong>Att betala:</strong></td><td style="text-align:right;padding-left:16px"><strong>${this.escapeHtml(money(opts.newTotal))}</strong></td></tr>
+      </table>
+      ${opts.ocr ? `<p>OCR: <strong>${this.escapeHtml(opts.ocr)}</strong></p>` : ""}
+      ${payLine ? `<p>${this.escapeHtml(payLine)}</p>` : ""}
+      <p>${this.escapeHtml(opts.message || "Vänligen betala snarast. Har betalning redan skett kan du bortse från denna påminnelse.")}</p>
+      <p>Med vänliga hälsningar<br>${this.escapeHtml(opts.senderName || "")}</p>
+    `;
+
+    if (!this.transporter) {
+      this.logger.log(
+        `Reminder email for ${to} (faktura ${nr}) — SMTP not configured, skipped`,
+      );
+      return { sent: false, to };
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to,
+      subject,
+      text,
+      html,
+      attachments: opts.pdf
+        ? [
+            {
+              filename: `faktura-${nr}.pdf`,
+              content: opts.pdf,
+              contentType: "application/pdf",
+            },
+          ]
+        : [],
+    });
+    return { sent: true, to };
+  }
+
   async sendOfferEmail(
     to: string,
     opts: {

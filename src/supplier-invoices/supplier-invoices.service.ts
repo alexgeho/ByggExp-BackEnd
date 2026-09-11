@@ -1,17 +1,26 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
-import { UserRole } from "../users/schemas/user.schema";
+import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
+import { NotificationsService } from "../notifications/notifications.service";
 import { CreateSupplierInvoiceDto } from "./dto/create-supplier-invoice.dto";
 import {
   SupplierInvoice,
   SupplierInvoiceDocument,
   SupplierInvoiceStatus,
 } from "./schemas/supplier-invoice.schema";
+
+const DAY_MS = 86400000;
+const addDays = (iso: string, days: number): string => {
+  const d = new Date(iso);
+  return new Date(d.getTime() + days * DAY_MS).toISOString().slice(0, 10);
+};
 
 type AuthUser = {
   role: UserRole;
@@ -23,10 +32,77 @@ const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
 @Injectable()
 export class SupplierInvoicesService {
+  private readonly logger = new Logger(SupplierInvoicesService.name);
+
   constructor(
     @InjectModel(SupplierInvoice.name)
     private model: Model<SupplierInvoiceDocument>,
+    @InjectModel(User.name)
+    private userModel: Model<UserDocument>,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  // Daily heads-up so a supplier bill never slips into inkasso: push the company
+  // admins when an unpaid invoice is due today or in exactly `lead` days. Two
+  // stateless touch-points (lead + due day) — no per-invoice flag, no spam.
+  // Fully inert unless PAYMENT_REMINDERS_ENABLED=true (and only sends where the
+  // admins have a mobile push token).
+  @Cron(CronExpression.EVERY_DAY_AT_7AM)
+  async remindUpcomingPayments(): Promise<void> {
+    if (process.env.PAYMENT_REMINDERS_ENABLED !== "true") return;
+    const lead = Math.max(
+      0,
+      Number(process.env.PAYMENT_REMINDER_LEAD_DAYS ?? 3) || 0,
+    );
+    const today = new Date().toISOString().slice(0, 10);
+    const leadDay = addDays(today, lead);
+
+    const due = await this.model
+      .find({
+        status: { $ne: SupplierInvoiceStatus.Paid },
+        dueDate: { $in: [today, leadDay] },
+      })
+      .lean()
+      .exec();
+    if (!due.length) return;
+
+    // Group by company so each admin gets one summary.
+    const byCompany = new Map<string, typeof due>();
+    for (const inv of due) {
+      const key = String(inv.companyId);
+      if (!byCompany.has(key)) byCompany.set(key, []);
+      byCompany.get(key)!.push(inv);
+    }
+
+    for (const [companyId, invoices] of byCompany) {
+      const admins = await this.userModel
+        .find({ companyId, role: UserRole.CompanyAdmin })
+        .select("_id")
+        .lean()
+        .exec();
+      if (!admins.length) continue;
+
+      const total = invoices.reduce((s, i) => s + (Number(i.total) || 0), 0);
+      const n = invoices.length;
+      try {
+        await this.notifications.sendToUsers(
+          admins.map((a) => String(a._id)),
+          {
+            title: "Betalning förfaller",
+            body:
+              n === 1
+                ? `Leverantörsfaktura till ${invoices[0].supplierName || "leverantör"} förfaller (${Math.round(total)} kr).`
+                : `${n} leverantörsfakturor förfaller snart (${Math.round(total)} kr).`,
+            data: { type: "payment_due", screen: "SupplierInvoices" },
+          },
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Payment reminder push failed for company ${companyId}: ${(error as Error)?.message}`,
+        );
+      }
+    }
+  }
 
   private resolveCompanyId(user: AuthUser): string {
     if (!user.companyId) {

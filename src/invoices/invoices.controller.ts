@@ -102,6 +102,16 @@ export class InvoicesController {
     );
   }
 
+  @Post(":id/reminder")
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
+  sendReminder(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() body: { email?: string; message?: string; fee?: number },
+  ) {
+    return this.invoicesService.sendReminder(id, req.user, body || {});
+  }
+
   @Patch(":id/status")
   @Permissions(PERMISSIONS.FINANCE_MANAGE)
   setStatus(

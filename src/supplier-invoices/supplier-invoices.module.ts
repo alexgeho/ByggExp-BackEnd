@@ -6,12 +6,16 @@ import {
   SupplierInvoice,
   SupplierInvoiceSchema,
 } from "./schemas/supplier-invoice.schema";
+import { User, UserSchema } from "../users/schemas/user.schema";
+import { NotificationsModule } from "../notifications/notifications.module";
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: SupplierInvoice.name, schema: SupplierInvoiceSchema },
+      { name: User.name, schema: UserSchema },
     ]),
+    NotificationsModule,
   ],
   controllers: [SupplierInvoicesController],
   providers: [SupplierInvoicesService],
