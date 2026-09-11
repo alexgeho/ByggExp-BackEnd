@@ -18,6 +18,10 @@ export class Projektkalkyl {
   @Prop({ default: "" })
   name: string;
 
+  // Optional link to a real project; empty = a standalone calculation.
+  @Prop({ type: String, ref: "Project", default: null, index: true })
+  projectId?: string | null;
+
   @Prop({ default: "" })
   note?: string;
 
