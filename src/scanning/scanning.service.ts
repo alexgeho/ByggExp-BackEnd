@@ -55,7 +55,7 @@ Extract the fields and return ONLY a JSON object (no prose, no code fences) with
   "supplierOrgNumber": string,       // Swedish org.nr like "556000-0000" if present, else ""
   "invoiceNumber": string,           // invoice/receipt number if present, else ""
   "date": string,                    // purchase/invoice date as YYYY-MM-DD, else ""
-  "dueDate": string,                 // due date (förfallodatum) as YYYY-MM-DD, else ""
+  "dueDate": string,                 // PAYMENT due date as YYYY-MM-DD — the date the money must be paid/received (see rules), else ""
   "amountExclVat": number,           // net amount excluding VAT (exkl. moms)
   "vat": number,                     // VAT amount (moms)
   "total": number,                   // grand total incl. VAT (att betala)
@@ -72,6 +72,7 @@ Rules:
 - Amounts are plain numbers with a dot decimal separator, no currency symbol or spaces (e.g. 1234.50).
 - VAT-EXEMPT purchases carry NO VAT: insurance (försäkring), bank/interest fees (ränta, bankavgift), rent of premises without moms, and other momsfria items. For these set "vatExempt": true, "vat": 0 and "amountExclVat" equal to the total — do NOT invent a 25% VAT. An insurance document (e.g. "Dina Försäkringar", "trafikförsäkring", "försäkringspremie", "påminnelse" for a premium) is ALWAYS vatExempt.
 - Otherwise "vatExempt": false. If the document shows a VAT/moms line, use those exact figures. Only if VAT is explicitly 25% and just the total is given, compute: vat = total - total/1.25, amountExclVat = total - vat.
+- dueDate is the date the PAYMENT must be made/received — look for "Förfallodatum", "Betalas senast", "Oss tillhanda senast", "Sista betalningsdag", "Att betala senast", "Betalningsdatum" or "Förfallodag" (often on the giro/payment slip). Do NOT use an insurance/subscription period end, "Huvudförfallodag", "Förnyelsedag", renewal date or the period "avser" range — those are not the payment deadline.
 - The OCR reference is the payment reference near "OCR", "Betalningsreferens" or the giro payment slip — return digits only (strip spaces), never the invoice number unless it is explicitly the OCR.
 - Keep bankgiro/plusgiro exactly as printed including the dash.
 - If a value is missing, use "" for strings and 0 for numbers.
