@@ -1,10 +1,15 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
+import type { Response } from "express";
+import * as fs from "fs";
+import * as path from "path";
+import archiver from "archiver";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
@@ -151,6 +156,76 @@ export class SupplierInvoicesService {
     }
     this.assertCanAccess(doc, user);
     return doc;
+  }
+
+  // Stream a zip of the attached original documents for the selected invoices.
+  // Only invoices the user may access and that actually have a file on disk are
+  // included; the response is a downloadable purchase-invoices.zip.
+  async streamAttachmentsZip(
+    ids: string[],
+    user: AuthUser,
+    res: Response,
+  ): Promise<void> {
+    const unique = Array.from(new Set((ids || []).map(String))).filter(Boolean);
+    if (!unique.length) {
+      throw new BadRequestException("No invoices selected");
+    }
+
+    const uploadsRoot = path.join(process.cwd(), "uploads");
+    const files: { path: string; name: string }[] = [];
+    const usedNames = new Set<string>();
+    for (const id of unique) {
+      let doc: SupplierInvoiceDocument;
+      try {
+        doc = await this.findOne(id, user);
+      } catch {
+        continue; // inaccessible or missing — skip silently
+      }
+      if (!doc.attachmentUrl) continue;
+      const rel = String(doc.attachmentUrl).replace(/^\/+/, "");
+      const abs = path.join(process.cwd(), rel);
+      // Guard against path traversal — must resolve inside ./uploads.
+      if (!abs.startsWith(uploadsRoot)) continue;
+      if (!fs.existsSync(abs)) continue;
+      const ext = path.extname(abs) || ".pdf";
+      const base =
+        `${doc.supplierName || "faktura"}-${doc.invoiceNumber || String(doc._id)}`
+          .replace(/[^a-zA-Z0-9-_åäöÅÄÖ ]/g, "")
+          .trim() || "faktura";
+      let name = `${base}${ext}`;
+      let i = 2;
+      while (usedNames.has(name.toLowerCase())) {
+        name = `${base}-${i}${ext}`;
+        i += 1;
+      }
+      usedNames.add(name.toLowerCase());
+      files.push({ path: abs, name });
+    }
+
+    if (!files.length) {
+      throw new NotFoundException(
+        "None of the selected invoices have an attached document",
+      );
+    }
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="purchase-invoices.zip"',
+    );
+
+    const archive = archiver("zip", { zlib: { level: 9 } });
+    archive.on("error", (err) => {
+      this.logger.error("Zip stream failed", err as Error);
+      try {
+        res.status(500).end();
+      } catch {
+        /* response already gone */
+      }
+    });
+    archive.pipe(res);
+    for (const f of files) archive.file(f.path, { name: f.name });
+    await archive.finalize();
   }
 
   async update(id: string, dto: CreateSupplierInvoiceDto, user: AuthUser) {

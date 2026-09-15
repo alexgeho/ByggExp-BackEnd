@@ -10,10 +10,12 @@ import {
   Put,
   Query,
   Request,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { AuthGuard } from "@nestjs/passport";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { diskStorage } from "multer";
@@ -56,6 +58,16 @@ export class SupplierInvoicesController {
   @Post()
   create(@Request() req, @Body() dto: CreateSupplierInvoiceDto) {
     return this.service.create(dto, req.user);
+  }
+
+  // Download the attached originals for several invoices as one zip.
+  @Post("attachments/zip")
+  downloadAttachmentsZip(
+    @Request() req,
+    @Body() body: { ids: string[] },
+    @Res() res: Response,
+  ): Promise<void> {
+    return this.service.streamAttachmentsZip(body?.ids || [], req.user, res);
   }
 
   @Get("project/:projectId/summary")
