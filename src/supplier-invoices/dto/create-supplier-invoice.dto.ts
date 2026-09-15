@@ -43,6 +43,18 @@ export class CreateSupplierInvoiceDto {
   plusgiro?: string;
 
   @IsOptional()
+  @IsString()
+  iban?: string;
+
+  @IsOptional()
+  @IsString()
+  bic?: string;
+
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @IsOptional()
   @IsNumber()
   amountExclVat?: number;
 

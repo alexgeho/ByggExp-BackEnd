@@ -14,11 +14,13 @@ export type ScannedDocument = {
   amountExclVat: number;
   vat: number;
   total: number;
-  currency: string;
+  currency: string; // ISO code as printed on the document (SEK, EUR, NOK, …)
   category: string;
   ocr: string; // OCR/payment reference (OCR-referens) used to pay the invoice
   bankgiro: string; // supplier bankgiro number, digits/dashes as printed
   plusgiro: string; // supplier plusgiro number, if bankgiro is absent
+  iban: string; // IBAN for foreign/SEPA payments, no spaces
+  bic: string; // BIC/SWIFT for foreign/SEPA payments
   vatExempt: boolean; // true for momsfria purchases (insurance, bank fees, …)
   suggestedKind: "expense" | "supplier_invoice";
   raw?: string;
@@ -52,24 +54,27 @@ export class ScanningService {
 Extract the fields and return ONLY a JSON object (no prose, no code fences) with exactly these keys:
 {
   "supplierName": string,            // the seller/vendor company name
-  "supplierOrgNumber": string,       // Swedish org.nr like "556000-0000" if present, else ""
+  "supplierOrgNumber": string,       // Swedish org.nr like "556000-0000". If the supplier is foreign, use its company registration number or VAT number as printed (e.g. "HU32360042", "13-09-229138"), else ""
   "invoiceNumber": string,           // invoice/receipt number if present, else ""
   "date": string,                    // purchase/invoice date as YYYY-MM-DD, else ""
   "dueDate": string,                 // PAYMENT due date as YYYY-MM-DD — the date the money must be paid/received (see rules), else ""
   "amountExclVat": number,           // net amount excluding VAT (exkl. moms)
   "vat": number,                     // VAT amount (moms)
   "total": number,                   // grand total incl. VAT (att betala)
-  "currency": string,                // e.g. "SEK"
+  "currency": string,                // the ISO currency code actually printed on the document — "SEK", "EUR", "NOK", "USD", "DKK", … Do NOT assume SEK; read it from the amounts/totals (kr/SEK, €/EUR, etc.)
   "category": string,                // short expense category in Swedish, e.g. "Material", "Drivmedel", "Verktyg", "Underentreprenör"
   "ocr": string,                     // OCR reference (OCR-referens / OCR-nummer) — the long payment reference number, digits only, else ""
   "bankgiro": string,                // supplier bankgiro number as printed (e.g. "123-4567"), else ""
   "plusgiro": string,                // supplier plusgiro number as printed (e.g. "12 34 56-7"), else ""
+  "iban": string,                    // IBAN for a foreign/SEPA bank transfer, letters+digits, no spaces (e.g. "FI6379600103710595"), else ""
+  "bic": string,                     // BIC/SWIFT code for the beneficiary bank (e.g. "NARYFIH2"), else ""
   "vatExempt": boolean,              // true if this purchase carries no VAT (see rules)
   "suggestedKind": string            // "supplier_invoice" if it is a formal invoice with an invoice number/due date, otherwise "expense"
 }
 
 Rules:
-- Amounts are plain numbers with a dot decimal separator, no currency symbol or spaces (e.g. 1234.50).
+- Amounts are plain numbers with a dot decimal separator, no currency symbol or spaces (e.g. 1234.50). Read the currency from the document itself — foreign supplier invoices are often in EUR; never silently treat them as SEK.
+- For a foreign supplier that pays via IBAN/BIC (no Swedish bankgiro/plusgiro), fill "iban" and "bic" and leave "bankgiro"/"plusgiro" as "". Strip spaces from the IBAN.
 - VAT-EXEMPT purchases carry NO VAT: insurance (försäkring), bank/interest fees (ränta, bankavgift), rent of premises without moms, and other momsfria items. For these set "vatExempt": true, "vat": 0 and "amountExclVat" equal to the total — do NOT invent a 25% VAT. An insurance document (e.g. "Dina Försäkringar", "trafikförsäkring", "försäkringspremie", "påminnelse" for a premium) is ALWAYS vatExempt.
 - Otherwise "vatExempt": false. If the document shows a VAT/moms line, use those exact figures. Only if VAT is explicitly 25% and just the total is given, compute: vat = total - total/1.25, amountExclVat = total - vat.
 - dueDate is the date the PAYMENT must be made/received — look for "Förfallodatum", "Betalas senast", "Oss tillhanda senast", "Sista betalningsdag", "Att betala senast", "Betalningsdatum" or "Förfallodag" (often on the giro/payment slip). Do NOT use an insurance/subscription period end, "Huvudförfallodag", "Förnyelsedag", renewal date or the period "avser" range — those are not the payment deadline.
@@ -232,11 +237,13 @@ Rules:
       amountExclVat,
       vat,
       total,
-      currency: this.str(parsed.currency) || "SEK",
+      currency: (this.str(parsed.currency) || "SEK").toUpperCase(),
       category: this.str(parsed.category),
       ocr: this.str(parsed.ocr),
       bankgiro: this.str(parsed.bankgiro),
       plusgiro: this.str(parsed.plusgiro),
+      iban: this.str(parsed.iban).replace(/\s+/g, "").toUpperCase(),
+      bic: this.str(parsed.bic).replace(/\s+/g, "").toUpperCase(),
       vatExempt,
       suggestedKind: kind,
     };

@@ -48,6 +48,20 @@ export class SupplierInvoice {
   @Prop({ default: "" })
   plusgiro: string;
 
+  // Foreign/SEPA payment details, read from invoices that pay via IBAN rather
+  // than a Swedish giro number.
+  @Prop({ default: "" })
+  iban: string;
+
+  @Prop({ default: "" })
+  bic: string;
+
+  // The currency the invoice is denominated in (ISO code). Defaults to SEK for
+  // domestic bills; foreign supplier invoices are often EUR — amounts are stored
+  // in this currency, not auto-converted to SEK.
+  @Prop({ default: "SEK" })
+  currency: string;
+
   @Prop({ type: Number, default: 0 })
   amountExclVat: number;
 
