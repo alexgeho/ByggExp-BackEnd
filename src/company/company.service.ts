@@ -33,6 +33,7 @@ import {
   TOGGLEABLE_MODULES,
 } from "./modules";
 import { isPlanTier, maxUsersForPlan } from "../billing/plans";
+import { computeStorageUsage, StorageUsageReport } from "./storage-usage";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -245,6 +246,11 @@ export class CompanyService {
 
   async findAll(): Promise<Company[]> {
     return this.companyModel.find().exec();
+  }
+
+  // Superadmin: how much uploaded-file storage each company occupies on disk.
+  async storageUsage(): Promise<StorageUsageReport> {
+    return computeStorageUsage(this.connection);
   }
 
   async findOne(id: string): Promise<Company> {

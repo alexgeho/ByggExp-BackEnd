@@ -73,6 +73,13 @@ export class CompanyController {
     return this.companyService.findAll();
   }
 
+  // Per-company uploaded-file storage usage (superadmin dashboard).
+  @Get("storage-usage")
+  @Roles(UserRole.SuperAdmin)
+  storageUsage() {
+    return this.companyService.storageUsage();
+  }
+
   @Get("my")
   @Roles(
     UserRole.SuperAdmin,
