@@ -41,6 +41,7 @@ import { BlogPostsModule } from "./blog-posts/blog-posts.module";
 import { SiteSeoModule } from "./site-seo/site-seo.module";
 import { AtaModule } from "./ata/ata.module";
 import { ExpensesModule } from "./expenses/expenses.module";
+import { NotesModule } from "./notes/notes.module";
 import { AccountingModule } from "./accounting/accounting.module";
 import { DagbokModule } from "./dagbok/dagbok.module";
 import { ChecklistsModule } from "./checklists/checklists.module";
@@ -87,6 +88,7 @@ import { SystemModule } from "./system/system.module";
     BillingModule,
     AtaModule,
     ExpensesModule,
+    NotesModule,
     AccountingModule,
     DagbokModule,
     ChecklistsModule,

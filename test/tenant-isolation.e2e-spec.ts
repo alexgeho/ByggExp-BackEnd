@@ -209,6 +209,52 @@ describe("Tenant isolation (e2e)", () => {
         .expect(403));
   });
 
+  describe("Company B cannot reach Company A's personal note", () => {
+    let noteIdA = "";
+    beforeAll(async () => {
+      const res = await request(http)
+        .post("/notes")
+        .set("Authorization", `Bearer ${tokenA}`)
+        .send({ title: "A-Secret-Note", body: "private" });
+      noteIdA = res.body._id || res.body.id;
+    });
+
+    it("A created a note", () => expect(noteIdA).toBeTruthy());
+
+    it("GET /notes/:id -> 403", () =>
+      request(http)
+        .get(`/notes/${noteIdA}`)
+        .set("Authorization", `Bearer ${tokenB}`)
+        .expect(403));
+
+    it("PUT /notes/:id -> 403", () =>
+      request(http)
+        .put(`/notes/${noteIdA}`)
+        .set("Authorization", `Bearer ${tokenB}`)
+        .send({ title: "hacked" })
+        .expect(403));
+
+    it("DELETE /notes/:id -> 403", () =>
+      request(http)
+        .delete(`/notes/${noteIdA}`)
+        .set("Authorization", `Bearer ${tokenB}`)
+        .expect(403));
+
+    it("GET /notes excludes A's note", async () => {
+      const res = await request(http)
+        .get("/notes")
+        .set("Authorization", `Bearer ${tokenB}`)
+        .expect(200);
+      expect(JSON.stringify(res.body)).not.toContain(noteIdA);
+    });
+
+    it("A GET /notes/:id -> 200", () =>
+      request(http)
+        .get(`/notes/${noteIdA}`)
+        .set("Authorization", `Bearer ${tokenA}`)
+        .expect(200));
+  });
+
   describe("Own-company access still works", () => {
     it("A GET /projects/:id -> 200", () =>
       request(http)
