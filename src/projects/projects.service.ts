@@ -584,11 +584,14 @@ export class ProjectsService {
 
     for (const workerId of workerIds) {
       const user = await this.usersService.findOne(workerId);
+      // Tenant boundary is the only hard rule: a user must belong to the same
+      // company as the project. Any company member (worker, project admin,
+      // company admin) can be a project team member — this mirrors create(),
+      // which adds whoever is on the payload without a role check. The old
+      // role=Worker restriction is why the "add workers" picker showed nobody
+      // for companies whose members aren't tagged as workers.
       if (String(user.companyId) !== String(project.companyId)) {
         throw new ForbiddenException(`User ${workerId} belongs to another company`);
-      }
-      if (user.role !== UserRole.Worker) {
-        throw new ForbiddenException(`User ${workerId} is not a Worker`);
       }
 
       if (!project.workers.includes(workerId)) {
