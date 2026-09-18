@@ -118,10 +118,15 @@ export class UsersController {
     @Body() createUserDto: CreateUserDto,
     @Request() req,
   ): Promise<User> {
-    // ProjectAdmin can only create Workers
+    // ProjectAdmin may create workers and (scoped) project admins — never a
+    // company admin / superadmin. Escalation attempts fall back to worker. The
+    // finance capability is never grantable by a project admin (permission edits
+    // stay company-admin+), so a project admin can only mint peers no stronger
+    // than itself.
     if (
       req.user.role === UserRole.ProjectAdmin &&
-      createUserDto.role !== UserRole.Worker
+      createUserDto.role !== UserRole.Worker &&
+      createUserDto.role !== UserRole.ProjectAdmin
     ) {
       createUserDto.role = UserRole.Worker;
     }
@@ -136,6 +141,10 @@ export class UsersController {
     ) {
       createUserDto.role = UserRole.Worker;
     }
+
+    // Stamp the creator so a project admin's staff list can be scoped to the
+    // users they actually created (see findManageableUsers).
+    const createdBy = req.user.userId ? String(req.user.userId) : null;
 
     // Tenant isolation: any non-superadmin ALWAYS creates users inside their own
     // company; a companyId supplied in the body is ignored (anti cross-tenant).
@@ -173,6 +182,7 @@ export class UsersController {
       return this.usersService.createUserPendingApproval({
         ...createUserDto,
         role,
+        createdBy,
       });
     }
 
@@ -183,6 +193,7 @@ export class UsersController {
     return this.usersService.create({
       ...createUserDto,
       role,
+      createdBy,
       password: hashedPassword,
       accountStatus: UserAccountStatus.Active,
     });
@@ -271,11 +282,12 @@ export class UsersController {
   @Get("my-company")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   findAllByMyCompany(@Request() req): Promise<User[]> {
-    // Scoped to the caller's own company for every role (superadmin included).
+    // Company-scoped for every role; additionally narrowed for a project admin
+    // to the users it created + members of the projects it manages.
     if (!req.user.companyId) {
       return Promise.resolve([]);
     }
-    return this.usersService.findAllByCompany(req.user.companyId);
+    return this.usersService.findManageableUsers(req.user);
   }
 
   // Colleagues the caller can chat with. Available to ALL roles (workers

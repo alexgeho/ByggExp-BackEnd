@@ -262,6 +262,12 @@ export class User {
   @Prop({ type: [String], ref: "Project", default: [] })
   projectIds: string[];
 
+  // Who created this user (admin userId). Lets a project admin manage only the
+  // users they created/invited — their staff list is scoped to this + project
+  // co-members, so they never see the whole company roster.
+  @Prop({ type: String, ref: "User", default: null, index: true })
+  createdBy?: string | null;
+
   @Prop({
     required: true,
     enum: UserWorkStatus,

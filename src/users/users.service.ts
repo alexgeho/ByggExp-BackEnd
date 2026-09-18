@@ -58,6 +58,7 @@ type AccessTargetUser = {
   _id: unknown;
   role: UserRole;
   companyId?: string | null;
+  createdBy?: string | null;
 };
 
 type UserActivityLogListResponse = {
@@ -218,6 +219,7 @@ export class UsersService {
     createUserDto: CreateUserDto & {
       password: string;
       accountStatus?: UserAccountStatus;
+      createdBy?: string | null;
     },
   ): Promise<UserDocument> {
     const createdUser = new this.userModel(
@@ -319,6 +321,7 @@ export class UsersService {
     createUserDto: CreateUserDto & {
       password: string;
       accountStatus?: UserAccountStatus;
+      createdBy?: string | null;
     },
   ) {
     return {
@@ -350,6 +353,20 @@ export class UsersService {
     });
 
     return managedProjectsCount > 0;
+  }
+
+  // A project admin fully manages the users it created/invited itself — workers
+  // and (peer) project admins alike — but never a company admin / superadmin.
+  private projectAdminCreated(
+    actorUserId: string,
+    targetUser: AccessTargetUser,
+  ): boolean {
+    return Boolean(
+      targetUser.createdBy &&
+      String(targetUser.createdBy) === actorUserId &&
+      targetUser.role !== UserRole.CompanyAdmin &&
+      targetUser.role !== UserRole.SuperAdmin,
+    );
   }
 
   private async canViewUser(
@@ -384,11 +401,13 @@ export class UsersService {
       );
     }
 
-    if (
-      actor.role === UserRole.ProjectAdmin &&
-      targetUser.role === UserRole.Worker
-    ) {
-      return this.canProjectAdminManageWorker(actorUserId, targetUserId);
+    if (actor.role === UserRole.ProjectAdmin) {
+      if (this.projectAdminCreated(actorUserId, targetUser)) {
+        return true;
+      }
+      if (targetUser.role === UserRole.Worker) {
+        return this.canProjectAdminManageWorker(actorUserId, targetUserId);
+      }
     }
 
     return false;
@@ -433,8 +452,12 @@ export class UsersService {
       );
     }
 
-    // Project admin can only manage workers they manage.
+    // Project admin manages the users it created (workers + peer project admins)
+    // and workers on its projects — never company admins / superadmins.
     if (actor.role === UserRole.ProjectAdmin) {
+      if (this.projectAdminCreated(actorUserId, targetUser)) {
+        return true;
+      }
       if (targetUser.role !== UserRole.Worker) {
         return false;
       }
@@ -478,8 +501,12 @@ export class UsersService {
       );
     }
 
-    // Project admin may only delete workers they manage.
+    // Project admin may delete the users it created (workers + peer project
+    // admins) and workers it manages — never company admins / superadmins.
     if (actor.role === UserRole.ProjectAdmin) {
+      if (this.projectAdminCreated(actorUserId, targetUser)) {
+        return true;
+      }
       if (targetUser.role !== UserRole.Worker) {
         return false;
       }
@@ -638,6 +665,7 @@ export class UsersService {
     createUserDto: CreateUserDto & {
       role: UserRole;
       companyId?: string | null;
+      createdBy?: string | null;
     },
   ): Promise<UserDocument> {
     // Seat limit applies to every creation path — bulk import and invite go
@@ -1004,6 +1032,34 @@ export class UsersService {
 
   async findAllByCompany(companyId: string): Promise<User[]> {
     return this.userModel.find({ companyId, erasedAt: null }).exec();
+  }
+
+  // Staff list scoped to what the actor may manage. Full admins see the whole
+  // company; a project admin sees only the users it created/invited plus members
+  // of the projects it manages — never the entire roster.
+  async findManageableUsers(actor: AuthUser): Promise<User[]> {
+    if (!actor.companyId) return [];
+    if (
+      actor.role === UserRole.SuperAdmin ||
+      actor.role === UserRole.CompanyAdmin
+    ) {
+      return this.findAllByCompany(actor.companyId);
+    }
+    if (actor.role === UserRole.ProjectAdmin) {
+      const actorId = this.normalizeId(actor.userId);
+      const managed = await this.projectModel
+        .find({ projectAdmins: actorId })
+        .select("_id")
+        .lean()
+        .exec();
+      const projectIds = managed.map((p) => String(p._id));
+      const or: Record<string, unknown>[] = [{ createdBy: actorId }];
+      if (projectIds.length) or.push({ projectIds: { $in: projectIds } });
+      return this.userModel
+        .find({ companyId: actor.companyId, erasedAt: null, $or: or })
+        .exec();
+    }
+    return [];
   }
 
   async findAllByProject(
