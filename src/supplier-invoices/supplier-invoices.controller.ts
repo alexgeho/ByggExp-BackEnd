@@ -12,12 +12,16 @@ import {
   Request,
   Res,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
 import type { Response } from "express";
 import { AuthGuard } from "@nestjs/passport";
-import { FileInterceptor } from "@nestjs/platform-express";
+import {
+  FileInterceptor,
+  FilesInterceptor,
+} from "@nestjs/platform-express";
 import { diskStorage } from "multer";
 import { extname } from "path";
 import * as fs from "fs";
@@ -118,6 +122,37 @@ export class SupplierInvoicesController {
     }
     const url = `/uploads/supplier-invoices/${file.filename}`;
     return this.service.update(id, { attachmentUrl: url }, req.user);
+  }
+
+  // Attach one or more EXTRA files to an invoice (kept alongside the primary
+  // scan; all are included when the originals are downloaded).
+  @Post(":id/attachments")
+  @UseInterceptors(
+    FilesInterceptor("files", 10, {
+      storage: attachmentStorage,
+      limits: { fileSize: 15 * 1024 * 1024 },
+    }),
+  )
+  async uploadAttachments(
+    @Request() req,
+    @Param("id") id: string,
+    @UploadedFiles() files: { filename: string }[] | undefined,
+  ) {
+    if (!files?.length) {
+      throw new BadRequestException("No files uploaded");
+    }
+    const urls = files.map((f) => `/uploads/supplier-invoices/${f.filename}`);
+    return this.service.addAttachments(id, urls, req.user);
+  }
+
+  // Remove one attached file (the primary scan or an extra).
+  @Delete(":id/attachments")
+  removeAttachment(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() body: { url: string },
+  ) {
+    return this.service.removeAttachment(id, body?.url, req.user);
   }
 
   @Delete(":id")

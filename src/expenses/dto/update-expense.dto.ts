@@ -1,4 +1,10 @@
-import { IsIn, IsNumber, IsOptional, IsString } from "class-validator";
+import {
+  IsArray,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from "class-validator";
 import { ExpensePaidBy, ExpenseStatus } from "../schemas/expense.schema";
 
 export class UpdateExpenseDto {
@@ -37,6 +43,11 @@ export class UpdateExpenseDto {
   @IsOptional()
   @IsString()
   receiptUrl?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachments?: string[];
 
   @IsOptional()
   @IsIn(Object.values(ExpenseStatus))

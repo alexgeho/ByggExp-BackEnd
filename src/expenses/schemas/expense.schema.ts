@@ -55,6 +55,11 @@ export class Expense {
   @Prop({ type: String, default: null })
   receiptUrl?: string | null;
 
+  // Extra files attached to the same expense (kept alongside the primary
+  // receipt above; all are included when the receipts are downloaded).
+  @Prop({ type: [String], default: [] })
+  attachments: string[];
+
   @Prop({ enum: ExpenseStatus, default: ExpenseStatus.Submitted, index: true })
   status: ExpenseStatus;
 

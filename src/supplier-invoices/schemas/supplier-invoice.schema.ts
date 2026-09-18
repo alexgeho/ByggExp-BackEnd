@@ -80,9 +80,15 @@ export class SupplierInvoice {
   @Prop({ default: "manual" })
   source: string;
 
-  // Uploaded scan/PDF of the supplier's invoice.
+  // Uploaded scan/PDF of the supplier's invoice (the primary/original document).
   @Prop({ type: String, default: null })
   attachmentUrl?: string | null;
+
+  // Extra files attached to the same invoice (e.g. a delivery note, a reminder,
+  // a specification). The primary `attachmentUrl` above stays the main scan; all
+  // of these are included when the originals are opened/downloaded.
+  @Prop({ type: [String], default: [] })
+  attachments: string[];
 
   @Prop({
     enum: SupplierInvoiceStatus,

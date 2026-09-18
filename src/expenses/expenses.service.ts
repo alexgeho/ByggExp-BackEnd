@@ -1,8 +1,12 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
+import * as fs from "fs";
+import * as path from "path";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { UserRole } from "../users/schemas/user.schema";
@@ -31,6 +35,8 @@ const ADMIN_ROLES = [
 
 @Injectable()
 export class ExpensesService {
+  private readonly logger = new Logger(ExpensesService.name);
+
   constructor(
     @InjectModel(Expense.name) private model: Model<ExpenseDocument>,
   ) {}
@@ -111,6 +117,51 @@ export class ExpensesService {
     });
     await doc.save();
     return doc;
+  }
+
+  // Append extra files to an expense (kept alongside the primary receipt).
+  async addAttachments(id: string, urls: string[], user: AuthUser) {
+    const doc = await this.findOne(id, user);
+    this.assertCanModify(doc, user);
+    const clean = (urls || []).map(String).filter(Boolean);
+    doc.attachments = [...(doc.attachments || []), ...clean];
+    await doc.save();
+    return doc;
+  }
+
+  // Remove one attached file (the primary receipt or an extra) and delete it
+  // from disk (best-effort, guarded to stay inside ./uploads).
+  async removeAttachment(id: string, url: string, user: AuthUser) {
+    const doc = await this.findOne(id, user);
+    this.assertCanModify(doc, user);
+    const target = String(url || "");
+    if (!target) throw new BadRequestException("No file specified");
+    let matched = false;
+    if (doc.receiptUrl === target) {
+      doc.receiptUrl = null;
+      matched = true;
+    }
+    const before = (doc.attachments || []).length;
+    doc.attachments = (doc.attachments || []).filter((u) => u !== target);
+    if (doc.attachments.length !== before) matched = true;
+    if (matched) {
+      this.deleteUploadFile(target);
+      await doc.save();
+    }
+    return doc;
+  }
+
+  private deleteUploadFile(url: string): void {
+    try {
+      const uploadsRoot = path.join(process.cwd(), "uploads");
+      const abs = path.join(process.cwd(), String(url).replace(/^\/+/, ""));
+      if (!abs.startsWith(uploadsRoot)) return;
+      if (fs.existsSync(abs)) fs.unlinkSync(abs);
+    } catch (error) {
+      this.logger.warn(
+        `Could not delete receipt file ${url}: ${(error as Error)?.message}`,
+      );
+    }
   }
 
   async setStatus(id: string, user: AuthUser, status: ExpenseStatus) {

@@ -181,25 +181,30 @@ export class SupplierInvoicesService {
       } catch {
         continue; // inaccessible or missing — skip silently
       }
-      if (!doc.attachmentUrl) continue;
-      const rel = String(doc.attachmentUrl).replace(/^\/+/, "");
-      const abs = path.join(process.cwd(), rel);
-      // Guard against path traversal — must resolve inside ./uploads.
-      if (!abs.startsWith(uploadsRoot)) continue;
-      if (!fs.existsSync(abs)) continue;
-      const ext = path.extname(abs) || ".pdf";
+      // Include the primary scan plus any extra attachments on the invoice.
+      const urls = [doc.attachmentUrl, ...(doc.attachments || [])].filter(
+        Boolean,
+      ) as string[];
       const base =
         `${doc.supplierName || "faktura"}-${doc.invoiceNumber || String(doc._id)}`
           .replace(/[^a-zA-Z0-9-_åäöÅÄÖ ]/g, "")
           .trim() || "faktura";
-      let name = `${base}${ext}`;
-      let i = 2;
-      while (usedNames.has(name.toLowerCase())) {
-        name = `${base}-${i}${ext}`;
-        i += 1;
+      for (const url of urls) {
+        const rel = String(url).replace(/^\/+/, "");
+        const abs = path.join(process.cwd(), rel);
+        // Guard against path traversal — must resolve inside ./uploads.
+        if (!abs.startsWith(uploadsRoot)) continue;
+        if (!fs.existsSync(abs)) continue;
+        const ext = path.extname(abs) || ".pdf";
+        let name = `${base}${ext}`;
+        let i = 2;
+        while (usedNames.has(name.toLowerCase())) {
+          name = `${base}-${i}${ext}`;
+          i += 1;
+        }
+        usedNames.add(name.toLowerCase());
+        files.push({ path: abs, name });
       }
-      usedNames.add(name.toLowerCase());
-      files.push({ path: abs, name });
     }
 
     if (!files.length) {
@@ -244,6 +249,50 @@ export class SupplierInvoicesService {
     });
     await doc.save();
     return doc;
+  }
+
+  // Append extra files to an invoice (kept alongside the primary scan).
+  async addAttachments(id: string, urls: string[], user: AuthUser) {
+    const doc = await this.findOne(id, user);
+    const clean = (urls || []).map(String).filter(Boolean);
+    doc.attachments = [...(doc.attachments || []), ...clean];
+    await doc.save();
+    return doc;
+  }
+
+  // Remove one attached file (the primary scan or an extra) and delete it from
+  // disk (best-effort, guarded to stay inside ./uploads).
+  async removeAttachment(id: string, url: string, user: AuthUser) {
+    const doc = await this.findOne(id, user);
+    const target = String(url || "");
+    if (!target) throw new BadRequestException("No file specified");
+    let matched = false;
+    if (doc.attachmentUrl === target) {
+      doc.attachmentUrl = null;
+      matched = true;
+    }
+    const before = (doc.attachments || []).length;
+    doc.attachments = (doc.attachments || []).filter((u) => u !== target);
+    if (doc.attachments.length !== before) matched = true;
+    if (matched) {
+      this.deleteUploadFile(target);
+      await doc.save();
+    }
+    return doc;
+  }
+
+  // Delete a stored file from ./uploads, refusing anything that escapes it.
+  private deleteUploadFile(url: string): void {
+    try {
+      const uploadsRoot = path.join(process.cwd(), "uploads");
+      const abs = path.join(process.cwd(), String(url).replace(/^\/+/, ""));
+      if (!abs.startsWith(uploadsRoot)) return;
+      if (fs.existsSync(abs)) fs.unlinkSync(abs);
+    } catch (error) {
+      this.logger.warn(
+        `Could not delete attachment ${url}: ${(error as Error)?.message}`,
+      );
+    }
   }
 
   async setStatus(id: string, user: AuthUser, status: SupplierInvoiceStatus) {
