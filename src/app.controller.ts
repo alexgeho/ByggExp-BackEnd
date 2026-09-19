@@ -59,11 +59,12 @@ export class AppController {
         .send(errorHtml("Ogiltig länk", "Inloggningskoden saknas."));
       return;
     }
-    // Reaching this page means the app did NOT intercept the Universal Link —
-    // i.e. we're on desktop or the app isn't installed. The byggexp:// deep link
-    // is useless here, so only offer the store downloads (localized to the
-    // browser's language).
-    res.status(200).type("html").send(appMagicFallbackHtml(lang));
+    // Reaching this page means the Universal/App Link didn't intercept — either
+    // the app isn't installed, OR it is but iOS didn't fire the link (typed/
+    // pasted/reloaded in Safari). Pass the code so the page can offer an "Open
+    // the app" deep link that works when the app IS installed, plus the store
+    // downloads. Localized to the browser's language.
+    res.status(200).type("html").send(appMagicFallbackHtml(lang, code.trim()));
   }
 
   @Get("bimi-logo.svg")

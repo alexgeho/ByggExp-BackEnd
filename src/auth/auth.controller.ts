@@ -123,14 +123,27 @@ function chooseDestinationHtml(magicLoginCode: string, lang: MailLang): string {
 </html>`;
 }
 
-// Fallback served at GET /app/magic when the browser actually loads the URL —
-// i.e. the app is NOT installed (an installed app would have intercepted the
-// Universal/App Link tap). Offers the store links plus a custom-scheme retry.
-export function appMagicFallbackHtml(lang: MailLang = "sv"): string {
+// Fallback served at GET /app/magic when the browser actually loads the URL.
+// This happens when the app is NOT installed, but ALSO when it IS installed and
+// the Universal/App Link simply didn't fire (iOS does not trigger Universal
+// Links when the URL is typed/pasted/reloaded in Safari, only when tapped from
+// another app). So we lead with an "Open the app" deep link (custom scheme +
+// Android intent) that works when the app is installed, and fall back to the
+// store links below it.
+export function appMagicFallbackHtml(
+  lang: MailLang = "sv",
+  code = "",
+): string {
   const c = authPageCopy[lang]();
   const appStore = "https://apps.apple.com/app/id6748280779";
   const playStore =
     "https://play.google.com/store/apps/details?id=se.byggexp.app";
+  const encodedCode = encodeURIComponent(code || "");
+  const deepLink = `byggexp://auth/magic?code=${encodedCode}`;
+  const androidIntent = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=se.byggexp.app;end`;
+  const openAppButton = code
+    ? `<a class="button primary" id="openApp" href="${deepLink}">${c.confirmedOpenApp}</a>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="${lang}">
   <head>
@@ -143,15 +156,28 @@ export function appMagicFallbackHtml(lang: MailLang = "sv"): string {
       h1 { font-size: 24px; margin: 0 0 12px; }
       p { margin: 0 0 20px; line-height: 1.5; color: #5a6b7d; }
       a.button { display: block; background: #eef4fb; color: #0785f4; text-decoration: none; padding: 16px 20px; border-radius: 16px; font-weight: 500; font-size: 17px; margin: 0 0 10px; }
+      a.primary { background: #0785f4; color: #fff; font-weight: 700; }
+      .divider { margin: 4px 0 14px; color: #9aa8b6; font-size: 13px; }
     </style>
   </head>
   <body>
     <div class="card">
       <h1>${c.fallbackTitle}</h1>
+      ${openAppButton}
       <p>${c.fallbackBody}</p>
       <a class="button" href="${appStore}">${c.fallbackIos}</a>
       <a class="button" href="${playStore}">${c.fallbackAndroid}</a>
     </div>
+    <script>
+      // If the app is installed, the custom-scheme link opens it. Android needs
+      // the intent:// form, so rewrite the button there once the DOM is ready.
+      (function () {
+        if (/Android/i.test(navigator.userAgent || '')) {
+          var b = document.getElementById('openApp');
+          if (b) { b.setAttribute('href', ${JSON.stringify(androidIntent)}); }
+        }
+      })();
+    </script>
   </body>
 </html>`;
 }
