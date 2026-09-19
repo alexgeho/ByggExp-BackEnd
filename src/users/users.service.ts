@@ -852,6 +852,24 @@ export class UsersService {
       .exec();
   }
 
+  // The invited user's language, resolved from a valid (non-expired) invite
+  // token — so the create-password PAGE can be shown in the same language as the
+  // invite email. Read-only; returns null when the token is invalid/expired.
+  async getInviteLanguageCode(token: string): Promise<string | null> {
+    const hashedToken = this.hashVerificationToken(String(token || "").trim());
+    const user = await this.userModel
+      .findOne({
+        emailVerificationToken: hashedToken,
+        emailVerificationExpiresAt: { $gt: new Date() },
+      })
+      .select("language")
+      .lean();
+    if (!user) {
+      return null;
+    }
+    return languageCode(user.language);
+  }
+
   // Invite activation: the invited user chose a password on the verify-email
   // page. Match the (7-day) invite token, set their chosen password, activate
   // the account, and clear the token (single-use — safe here because this runs

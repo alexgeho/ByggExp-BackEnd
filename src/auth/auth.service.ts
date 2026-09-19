@@ -27,6 +27,7 @@ import { getEffectivePermissions } from "../common/permissions/permissions.const
 import { UserActivityLogLevel } from "../users/schemas/user-activity-log.schema";
 import { ConfigService } from "@nestjs/config";
 import { MailService } from "../mail/mail.service";
+import { resolveMailLang, type MailLang } from "../mail/email-copy";
 import { languageCode } from "../common/language";
 
 @Injectable()
@@ -448,15 +449,25 @@ export class AuthService {
   }
 
   // Invite activation step 1: validate the invite (verify-email) token so the
-  // controller can show the "create your password" page. Read-only — safe for
-  // email preview prefetch. Throws if the link is invalid/expired.
-  async assertInviteTokenValid(token: string): Promise<void> {
-    const count = await this.usersService.countInviteToken(token);
-    if (count < 1) {
+  // controller can show the "create your password" page, and resolve the invited
+  // user's language so that page is shown in the same language as the invite
+  // email. Read-only — safe for email preview prefetch. Throws if the link is
+  // invalid/expired.
+  async getInviteMailLangOrThrow(token: string): Promise<MailLang> {
+    const code = await this.usersService.getInviteLanguageCode(token);
+    if (code === null) {
       throw new BadRequestException(
         "This invitation link is invalid or has expired. Please ask your admin to re-send it.",
       );
     }
+    return resolveMailLang(code);
+  }
+
+  // Same lookup but non-throwing — used when re-rendering the form after a failed
+  // submit, where we just want the right language and a fallback is fine.
+  async getInviteMailLang(token: string): Promise<MailLang> {
+    const code = await this.usersService.getInviteLanguageCode(token);
+    return resolveMailLang(code ?? undefined);
   }
 
   // Invite activation step 2: the invited user chose a password on the

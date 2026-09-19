@@ -172,6 +172,167 @@ export const inviteCopy: Record<
   }),
 };
 
+// Resolve a stored language hint (mobile "no", locale "gb"/"us", or a plain
+// code) to one of our mail languages, defaulting to Swedish. Exported so the
+// backend-served HTML pages (e.g. the invite create-password page) can localize
+// to the SAME language the emails use.
+export function resolveMailLang(hint?: string): MailLang {
+  const h = (hint || "").toLowerCase();
+  if (h === "no" || h === "nn") return "nb"; // mobile uses "no", mail uses "nb"
+  if (h === "gb" || h === "us") return "en";
+  return (MAIL_LANGS as string[]).includes(h) ? (h as MailLang) : "sv";
+}
+
+// Copy for the invite create-password PAGE (GET /auth/verify-email) — the HTML
+// form the invited user lands on. Localized so the page matches the language of
+// the invite email they clicked.
+export type InvitePageCopy = {
+  title: string;
+  intro: string;
+  passwordLabel: string;
+  confirmLabel: string;
+  passwordPlaceholder: string;
+  confirmPlaceholder: string;
+  submit: string;
+  errShort: string;
+  errMismatch: string;
+};
+
+export const invitePageCopy: Record<MailLang, () => InvitePageCopy> = {
+  sv: () => ({
+    title: "Skapa ditt lösenord",
+    intro:
+      "Välkommen till ByggExp! Välj ett lösenord för att aktivera ditt konto. Du loggar in med din e-post och detta lösenord i både appen och webbadmin.",
+    passwordLabel: "Lösenord",
+    confirmLabel: "Bekräfta lösenord",
+    passwordPlaceholder: "Minst 6 tecken",
+    confirmPlaceholder: "Upprepa lösenordet",
+    submit: "Aktivera konto",
+    errShort: "Lösenordet måste vara minst 6 tecken.",
+    errMismatch: "Lösenorden matchar inte.",
+  }),
+  en: () => ({
+    title: "Create your password",
+    intro:
+      "Welcome to ByggExp! Choose a password to finish activating your account. You'll use your email and this password to sign in on the app and the web admin.",
+    passwordLabel: "Password",
+    confirmLabel: "Confirm password",
+    passwordPlaceholder: "At least 6 characters",
+    confirmPlaceholder: "Repeat your password",
+    submit: "Activate account",
+    errShort: "Password must be at least 6 characters.",
+    errMismatch: "Passwords don't match.",
+  }),
+  nb: () => ({
+    title: "Opprett passordet ditt",
+    intro:
+      "Velkommen til ByggExp! Velg et passord for å aktivere kontoen din. Du logger inn med e-posten din og dette passordet i både appen og webadmin.",
+    passwordLabel: "Passord",
+    confirmLabel: "Bekreft passord",
+    passwordPlaceholder: "Minst 6 tegn",
+    confirmPlaceholder: "Gjenta passordet",
+    submit: "Aktiver konto",
+    errShort: "Passordet må være minst 6 tegn.",
+    errMismatch: "Passordene stemmer ikke overens.",
+  }),
+  pl: () => ({
+    title: "Utwórz hasło",
+    intro:
+      "Witamy w ByggExp! Wybierz hasło, aby aktywować konto. Będziesz logować się swoim adresem e-mail i tym hasłem w aplikacji i panelu web.",
+    passwordLabel: "Hasło",
+    confirmLabel: "Potwierdź hasło",
+    passwordPlaceholder: "Co najmniej 6 znaków",
+    confirmPlaceholder: "Powtórz hasło",
+    submit: "Aktywuj konto",
+    errShort: "Hasło musi mieć co najmniej 6 znaków.",
+    errMismatch: "Hasła nie są zgodne.",
+  }),
+  et: () => ({
+    title: "Loo oma parool",
+    intro:
+      "Tere tulemast ByggExpi! Vali parool, et oma konto aktiveerida. Logid sisse oma e-posti ja selle parooliga nii rakenduses kui ka veebiadminis.",
+    passwordLabel: "Parool",
+    confirmLabel: "Kinnita parool",
+    passwordPlaceholder: "Vähemalt 6 tähemärki",
+    confirmPlaceholder: "Korda parooli",
+    submit: "Aktiveeri konto",
+    errShort: "Parool peab olema vähemalt 6 tähemärki.",
+    errMismatch: "Paroolid ei ühti.",
+  }),
+  uk: () => ({
+    title: "Створіть пароль",
+    intro:
+      "Ласкаво просимо до ByggExp! Виберіть пароль, щоб активувати обліковий запис. Ви входитимете за своєю поштою та цим паролем і в застосунку, і у веб-адмінці.",
+    passwordLabel: "Пароль",
+    confirmLabel: "Підтвердьте пароль",
+    passwordPlaceholder: "Щонайменше 6 символів",
+    confirmPlaceholder: "Повторіть пароль",
+    submit: "Активувати обліковий запис",
+    errShort: "Пароль має містити щонайменше 6 символів.",
+    errMismatch: "Паролі не збігаються.",
+  }),
+  ru: () => ({
+    title: "Создайте пароль",
+    intro:
+      "Добро пожаловать в ByggExp! Выберите пароль, чтобы активировать аккаунт. Вы будете входить по своей эл. почте и этому паролю и в приложении, и в веб-админке.",
+    passwordLabel: "Пароль",
+    confirmLabel: "Подтвердите пароль",
+    passwordPlaceholder: "Не менее 6 символов",
+    confirmPlaceholder: "Повторите пароль",
+    submit: "Активировать аккаунт",
+    errShort: "Пароль должен быть не менее 6 символов.",
+    errMismatch: "Пароли не совпадают.",
+  }),
+  fi: () => ({
+    title: "Luo salasanasi",
+    intro:
+      "Tervetuloa ByggExpiin! Valitse salasana viimeistelläksesi tilisi aktivoinnin. Kirjaudut sähköpostillasi ja tällä salasanalla sekä sovelluksessa että verkkoadminissa.",
+    passwordLabel: "Salasana",
+    confirmLabel: "Vahvista salasana",
+    passwordPlaceholder: "Vähintään 6 merkkiä",
+    confirmPlaceholder: "Toista salasana",
+    submit: "Aktivoi tili",
+    errShort: "Salasanan on oltava vähintään 6 merkkiä.",
+    errMismatch: "Salasanat eivät täsmää.",
+  }),
+  lt: () => ({
+    title: "Sukurkite slaptažodį",
+    intro:
+      "Sveiki atvykę į ByggExp! Pasirinkite slaptažodį, kad aktyvuotumėte paskyrą. Prisijungsite su savo el. paštu ir šiuo slaptažodžiu tiek programėlėje, tiek žiniatinklio administratoriuje.",
+    passwordLabel: "Slaptažodis",
+    confirmLabel: "Patvirtinkite slaptažodį",
+    passwordPlaceholder: "Bent 6 simboliai",
+    confirmPlaceholder: "Pakartokite slaptažodį",
+    submit: "Aktyvuoti paskyrą",
+    errShort: "Slaptažodį turi sudaryti bent 6 simboliai.",
+    errMismatch: "Slaptažodžiai nesutampa.",
+  }),
+  lv: () => ({
+    title: "Izveidojiet paroli",
+    intro:
+      "Laipni lūdzam ByggExp! Izvēlieties paroli, lai aktivizētu savu kontu. Jūs pieteiksieties ar savu e-pastu un šo paroli gan lietotnē, gan tīmekļa administratorā.",
+    passwordLabel: "Parole",
+    confirmLabel: "Apstipriniet paroli",
+    passwordPlaceholder: "Vismaz 6 rakstzīmes",
+    confirmPlaceholder: "Atkārtojiet paroli",
+    submit: "Aktivizēt kontu",
+    errShort: "Parolei jābūt vismaz 6 rakstzīmēm.",
+    errMismatch: "Paroles nesakrīt.",
+  }),
+  bs: () => ({
+    title: "Kreirajte lozinku",
+    intro:
+      "Dobro došli u ByggExp! Odaberite lozinku da aktivirate svoj račun. Prijavljivat ćete se svojim e-mailom i ovom lozinkom u aplikaciji i web adminu.",
+    passwordLabel: "Lozinka",
+    confirmLabel: "Potvrdite lozinku",
+    passwordPlaceholder: "Najmanje 6 znakova",
+    confirmPlaceholder: "Ponovite lozinku",
+    submit: "Aktiviraj račun",
+    errShort: "Lozinka mora imati najmanje 6 znakova.",
+    errMismatch: "Lozinke se ne podudaraju.",
+  }),
+};
+
 export type ResetCopy = {
   subject: string;
   hi: string;

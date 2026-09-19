@@ -12,6 +12,7 @@ import { AuthService } from "./auth.service";
 import { CreateUserDto } from "../users/dto/create-user.dto";
 import { RegisterCompanyPublicDto } from "./dto/register-company-public.dto";
 import { Public } from "../common/decorators/public.decorator";
+import { invitePageCopy, type MailLang } from "../mail/email-copy";
 
 const apiBase = () =>
   (process.env.API_PUBLIC_URL || "https://api.byggexp.se").replace(/\/+$/, "");
@@ -208,14 +209,19 @@ function passwordFormHtml(token: string, error?: string): string {
 // they sign in with their email + this password on BOTH the app and web admin —
 // no more "forgot password" detour. The GET that renders this page changes no
 // state, so email preview/Safe-Links prefetch is harmless.
-function invitePasswordFormHtml(token: string, error?: string): string {
+function invitePasswordFormHtml(
+  token: string,
+  lang: MailLang,
+  error?: string,
+): string {
   const safeToken = token.replace(/"/g, "&quot;");
+  const c = invitePageCopy[lang]();
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Create your password</title>
+    <title>${c.title}</title>
     <style>
       body { font-family: Arial, sans-serif; background: #eef4fb; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
       .card { background: #fff; border-radius: 16px; padding: 28px; max-width: 380px; width: 100%; box-shadow: 0 8px 24px rgba(5,45,80,.08); }
@@ -229,24 +235,26 @@ function invitePasswordFormHtml(token: string, error?: string): string {
   </head>
   <body>
     <div class="card">
-      <h1>Create your password</h1>
-      <p>Welcome to ByggExp! Choose a password to finish activating your account. You'll use your email and this password to sign in on the app and the web admin.</p>
+      <h1>${c.title}</h1>
+      <p>${c.intro}</p>
       ${error ? `<div class="err">${error}</div>` : ""}
       <form method="POST" action="/auth/verify-email/set-password" onsubmit="return checkForm()">
         <input type="hidden" name="token" value="${safeToken}" />
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" minlength="6" required placeholder="At least 6 characters" />
-        <label for="confirm">Confirm password</label>
-        <input id="confirm" name="confirm" type="password" minlength="6" required placeholder="Repeat your password" />
-        <button type="submit">Activate account</button>
+        <label for="password">${c.passwordLabel}</label>
+        <input id="password" name="password" type="password" minlength="6" required placeholder="${c.passwordPlaceholder}" />
+        <label for="confirm">${c.confirmLabel}</label>
+        <input id="confirm" name="confirm" type="password" minlength="6" required placeholder="${c.confirmPlaceholder}" />
+        <button type="submit">${c.submit}</button>
       </form>
     </div>
     <script>
+      var ERR_SHORT = ${JSON.stringify(c.errShort)};
+      var ERR_MISMATCH = ${JSON.stringify(c.errMismatch)};
       function checkForm() {
         var p = document.getElementById('password').value;
         var c = document.getElementById('confirm').value;
-        if (p.length < 6) { alert('Password must be at least 6 characters.'); return false; }
-        if (p !== c) { alert("Passwords don't match."); return false; }
+        if (p.length < 6) { alert(ERR_SHORT); return false; }
+        if (p !== c) { alert(ERR_MISMATCH); return false; }
         return true;
       }
     </script>
@@ -575,8 +583,13 @@ export class AuthController {
     }
 
     try {
-      await this.authService.assertInviteTokenValid(token.trim());
-      res.status(200).type("html").send(invitePasswordFormHtml(token.trim()));
+      const lang = await this.authService.getInviteMailLangOrThrow(
+        token.trim(),
+      );
+      res
+        .status(200)
+        .type("html")
+        .send(invitePasswordFormHtml(token.trim(), lang));
     } catch (error) {
       const message =
         error instanceof BadRequestException
@@ -607,6 +620,9 @@ export class AuthController {
         .send(errorHtml("Something went wrong", "Missing invitation token."));
       return;
     }
+    // Resolve the language up front so a re-shown form (on error) stays in the
+    // invited user's language. Cheap, non-throwing (falls back to sv).
+    const lang = await this.authService.getInviteMailLang(token);
     try {
       const { magicLoginCode, user } =
         await this.authService.activateInviteWithPassword(token, password);
@@ -634,7 +650,10 @@ export class AuthController {
           ? error.message
           : "Unable to set your password. Please try again.";
       // Re-show the form with the error so they can retry.
-      res.status(400).type("html").send(invitePasswordFormHtml(token, message));
+      res
+        .status(400)
+        .type("html")
+        .send(invitePasswordFormHtml(token, lang, message));
     }
   }
 }
