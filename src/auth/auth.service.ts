@@ -447,6 +447,60 @@ export class AuthService {
     return role;
   }
 
+  // Invite activation step 1: validate the invite (verify-email) token so the
+  // controller can show the "create your password" page. Read-only — safe for
+  // email preview prefetch. Throws if the link is invalid/expired.
+  async assertInviteTokenValid(token: string): Promise<void> {
+    const count = await this.usersService.countInviteToken(token);
+    if (count < 1) {
+      throw new BadRequestException(
+        "This invitation link is invalid or has expired. Please ask your admin to re-send it.",
+      );
+    }
+  }
+
+  // Invite activation step 2: the invited user chose a password on the
+  // verify-email page. Hash it, set it, activate the account, and mint a magic
+  // code so we can sign them straight in (app or web admin). From here on they
+  // sign in everywhere with their email + this password.
+  async activateInviteWithPassword(token: string, password: string) {
+    if (!password || password.length < 6) {
+      throw new BadRequestException(
+        "Password must be at least 6 characters long.",
+      );
+    }
+    const hashedPassword = await this.hashPassword(password);
+    const { user, magicLoginCode } =
+      await this.usersService.setPasswordAndActivateByToken(
+        token,
+        hashedPassword,
+      );
+
+    try {
+      await this.usersService.logActivity(user._id.toString(), {
+        category: "auth",
+        type: "invite_activated",
+        level: UserActivityLogLevel.Info,
+        message: "Invited user set a password and activated their account.",
+        source: "backend",
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to store invite-activation activity for user ${user._id.toString()}`,
+      );
+    }
+
+    return {
+      magicLoginCode,
+      user: {
+        id: user._id.toString(),
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    };
+  }
+
   // Register the SuperAdmin (first-time only)
   async registerSuperAdmin(createUserDto: CreateUserDto) {
     const { email, password, ...userData } = createUserDto;
@@ -585,23 +639,6 @@ export class AuthService {
 
   async validateUser(id: string) {
     return this.usersService.findOne(id);
-  }
-
-  async verifyEmail(token: string) {
-    const { user, magicLoginCode } =
-      await this.usersService.verifyEmailByToken(token);
-
-    return {
-      success: true,
-      message: "Email confirmed. Opening ByggExp to sign you in automatically.",
-      magicLoginCode,
-      user: {
-        id: user._id.toString(),
-        email: user.email,
-        name: user.name,
-        role: user.role,
-      },
-    };
   }
 
   async magicLogin(code: string) {

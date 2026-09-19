@@ -203,6 +203,57 @@ function passwordFormHtml(token: string, error?: string): string {
 </html>`;
 }
 
+// Invite activation page: the invited user clicks the emailed link and chooses
+// a password here. Posts back to /auth/verify-email/set-password. From then on
+// they sign in with their email + this password on BOTH the app and web admin —
+// no more "forgot password" detour. The GET that renders this page changes no
+// state, so email preview/Safe-Links prefetch is harmless.
+function invitePasswordFormHtml(token: string, error?: string): string {
+  const safeToken = token.replace(/"/g, "&quot;");
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create your password</title>
+    <style>
+      body { font-family: Arial, sans-serif; background: #eef4fb; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
+      .card { background: #fff; border-radius: 16px; padding: 28px; max-width: 380px; width: 100%; box-shadow: 0 8px 24px rgba(5,45,80,.08); }
+      h1 { font-size: 22px; margin: 0 0 6px; }
+      p { margin: 0 0 18px; color: #5a6b7d; font-size: 14px; line-height: 1.4; }
+      label { display: block; font-size: 12px; color: #052d50; margin: 12px 0 6px; }
+      input { width: 100%; box-sizing: border-box; height: 46px; padding: 0 14px; border: 1px solid #e0e7ee; border-radius: 12px; font-size: 15px; }
+      button { width: 100%; height: 48px; margin-top: 20px; border: 0; border-radius: 24px; background: #3183ff; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
+      .err { color: #c62828; font-size: 13px; margin-bottom: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Create your password</h1>
+      <p>Welcome to ByggExp! Choose a password to finish activating your account. You'll use your email and this password to sign in on the app and the web admin.</p>
+      ${error ? `<div class="err">${error}</div>` : ""}
+      <form method="POST" action="/auth/verify-email/set-password" onsubmit="return checkForm()">
+        <input type="hidden" name="token" value="${safeToken}" />
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" minlength="6" required placeholder="At least 6 characters" />
+        <label for="confirm">Confirm password</label>
+        <input id="confirm" name="confirm" type="password" minlength="6" required placeholder="Repeat your password" />
+        <button type="submit">Activate account</button>
+      </form>
+    </div>
+    <script>
+      function checkForm() {
+        var p = document.getElementById('password').value;
+        var c = document.getElementById('confirm').value;
+        if (p.length < 6) { alert('Password must be at least 6 characters.'); return false; }
+        if (p !== c) { alert("Passwords don't match."); return false; }
+        return true;
+      }
+    </script>
+  </body>
+</html>`;
+}
+
 // "Forgot password" page: the user picks a new password here after clicking the
 // reset link. Posts back to /auth/reset-password/set.
 function resetPasswordFormHtml(token: string, error?: string): string {
@@ -513,6 +564,10 @@ export class AuthController {
     }
   }
 
+  // Step 2a: the invited user clicks the emailed link. Show the "create your
+  // password" page (or an error if the link is invalid/expired). This GET
+  // changes no state, so email preview/Safe-Links prefetch is harmless — the
+  // account is only activated when the form below is submitted.
   @Get("verify-email")
   async verifyEmail(@Query("token") token: string, @Res() res: Response) {
     if (!token?.trim()) {
@@ -520,31 +575,66 @@ export class AuthController {
     }
 
     try {
-      const result = await this.authService.verifyEmail(token.trim());
+      await this.authService.assertInviteTokenValid(token.trim());
+      res.status(200).type("html").send(invitePasswordFormHtml(token.trim()));
+    } catch (error) {
+      const message =
+        error instanceof BadRequestException
+          ? error.message
+          : "This invitation link is invalid or has expired. Please ask your admin to re-send it.";
+      res
+        .status(400)
+        .type("html")
+        .send(errorHtml("Verification failed", message));
+    }
+  }
+
+  // Step 2b: the invite password form posts here. Set the chosen password,
+  // activate the account, then hand off a magic sign-in. Admins pick app vs web
+  // admin; workers go straight to the app. From now on they sign in everywhere
+  // with their email + this password.
+  @Post("verify-email/set-password")
+  async setInvitePassword(
+    @Body() body: { token?: string; password?: string },
+    @Res() res: Response,
+  ) {
+    const token = (body?.token || "").trim();
+    const password = body?.password || "";
+    if (!token) {
+      res
+        .status(400)
+        .type("html")
+        .send(errorHtml("Something went wrong", "Missing invitation token."));
+      return;
+    }
+    try {
+      const { magicLoginCode, user } =
+        await this.authService.activateInviteWithPassword(token, password);
       // Admins (company/project) can also use the web admin, so let them pick
       // where to continue. Workers only have the app → straight to it.
       const canUseAdmin = [
         "companyAdmin",
         "projectAdmin",
         "superadmin",
-      ].includes(result.user?.role);
+      ].includes(user?.role);
       res
         .status(200)
         .type("html")
         .send(
           canUseAdmin
-            ? chooseDestinationHtml(result.magicLoginCode)
-            : magicRedirectHtml(result.magicLoginCode, result.message),
+            ? chooseDestinationHtml(magicLoginCode)
+            : magicRedirectHtml(
+                magicLoginCode,
+                "Account activated. Opening ByggExp to sign you in.",
+              ),
         );
     } catch (error) {
       const message =
         error instanceof BadRequestException
           ? error.message
-          : "Unable to verify email.";
-      res
-        .status(400)
-        .type("html")
-        .send(errorHtml("Verification failed", message));
+          : "Unable to set your password. Please try again.";
+      // Re-show the form with the error so they can retry.
+      res.status(400).type("html").send(invitePasswordFormHtml(token, message));
     }
   }
 }

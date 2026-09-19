@@ -839,6 +839,54 @@ export class UsersService {
     };
   }
 
+  // How many accounts a verify-email (invite) token currently unlocks (0 =
+  // invalid/expired). Read-only — safe to call from the GET page and from email
+  // preview/Safe-Links prefetch, since it changes no state.
+  async countInviteToken(token: string): Promise<number> {
+    const hashedToken = this.hashVerificationToken(String(token || "").trim());
+    return this.userModel
+      .countDocuments({
+        emailVerificationToken: hashedToken,
+        emailVerificationExpiresAt: { $gt: new Date() },
+      })
+      .exec();
+  }
+
+  // Invite activation: the invited user chose a password on the verify-email
+  // page. Match the (7-day) invite token, set their chosen password, activate
+  // the account, and clear the token (single-use — safe here because this runs
+  // on a POST form submit, which email preview bots don't trigger, unlike the
+  // idempotent GET in verifyEmailByToken). Returns a fresh magic code so the
+  // caller can sign them straight in (app or web admin).
+  async setPasswordAndActivateByToken(
+    token: string,
+    hashedPassword: string,
+  ): Promise<{ user: UserDocument; magicLoginCode: string }> {
+    const hashedToken = this.hashVerificationToken(String(token || "").trim());
+    const user = await this.userModel
+      .findOne({
+        emailVerificationToken: hashedToken,
+        emailVerificationExpiresAt: { $gt: new Date() },
+      })
+      .select("+emailVerificationToken +emailVerificationExpiresAt")
+      .exec();
+
+    if (!user) {
+      throw new BadRequestException("Invalid or expired verification link");
+    }
+
+    user.password = hashedPassword;
+    user.accountStatus = UserAccountStatus.Active;
+    user.emailVerificationToken = null;
+    user.emailVerificationExpiresAt = null;
+    const savedUser = await user.save();
+    const magicLoginCode = await this.createMagicLoginCode(
+      savedUser._id.toString(),
+    );
+
+    return { user: savedUser, magicLoginCode };
+  }
+
   async createMagicLoginCode(userId: string): Promise<string> {
     const plainCode = randomBytes(32).toString("hex");
     const hashedCode = this.hashVerificationToken(plainCode);
