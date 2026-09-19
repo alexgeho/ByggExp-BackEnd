@@ -12,6 +12,20 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    # MongoDB for the e2e gate (invite/auth flow, tenant isolation, company
+    # onboarding). Each e2e spec uses its own throwaway DB on this instance.
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +40,16 @@ jobs:
       # Gate: a failing test (money math, SIE, etc.) blocks the deploy.
       - name: Run tests
         run: npm test -- --ci
+
+      # Runs the full invite/auth/onboarding flow on every main push. Kept
+      # non-blocking for now (this suite has never run in CI before) so an
+      # environment hiccup can't block a production deploy. Once it's proven
+      # green here, remove `continue-on-error` to make it a hard deploy gate.
+      - name: Run e2e tests
+        run: npm run test:e2e -- --ci --runInBand
+        continue-on-error: true
+        env:
+          JWT_SECRET: e2e_test_secret
 
       - name: Build NestJS
         run: npm run build
