@@ -567,6 +567,9 @@ export class AuthService {
         id,
         email,
         name: user.name,
+        // Self-authored job title (yrkestitel). Shown in the app menu instead of
+        // the bare system role, so people identify by their trade, not "Arbetare".
+        profession: user.profession ?? "",
         role,
         companyId,
         // Effective capabilities (role defaults ∪ granted − revoked) so the
