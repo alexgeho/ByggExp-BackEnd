@@ -338,9 +338,18 @@ export class ProjectsController {
   }
 
   @Delete(":id")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+  )
   async remove(@Param("id") id: string, @Request() req): Promise<Project> {
-    await this.projectsService.assertProjectAccessById(id, req.user);
+    const project = await this.projectsService.assertProjectAccessById(
+      id,
+      req.user,
+    );
+    // A ProjectAdmin may only delete projects they lead/created.
+    this.projectsService.assertCanDeleteProject(project, req.user);
     return this.projectsService.remove(id);
   }
 }

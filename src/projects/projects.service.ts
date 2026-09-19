@@ -139,6 +139,31 @@ export class ProjectsService {
     }
   }
 
+  // Who may DELETE a project. Company-level admins may remove any project in
+  // their company; a ProjectAdmin may only remove projects they lead — i.e.
+  // the ones they created (create() stamps them as projectManagerId) or own.
+  // Workers may never delete.
+  assertCanDeleteProject(project: Project, user: ProjectAuthUser): void {
+    if (
+      user.role === UserRole.SuperAdmin ||
+      user.role === UserRole.CompanyAdmin
+    ) {
+      return;
+    }
+    if (user.role === UserRole.ProjectAdmin) {
+      const uid = String(user.userId || "");
+      const leadsProject =
+        this.getEntityId(project.ownerId) === uid ||
+        this.getEntityId(project.projectManagerId) === uid;
+      if (leadsProject) {
+        return;
+      }
+    }
+    throw new ForbiddenException(
+      "You can only delete projects you created",
+    );
+  }
+
   async assertProjectAccessById(
     id: string,
     user: ProjectAuthUser,
