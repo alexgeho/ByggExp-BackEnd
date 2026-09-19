@@ -5,15 +5,20 @@ import { AppModule } from "./app.module";
 import { ValidationPipe, Logger } from "@nestjs/common";
 import { AllExceptionsFilter } from "./filtres/exception.filter";
 import { NullJsonBodyInterceptor } from "./common/interceptors/null-json-body.interceptor";
+import { NestExpressApplication } from "@nestjs/platform-express";
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import express from "express";
 
 async function bootstrap() {
   // rawBody is needed to verify Stripe webhook signatures.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   // Avoid 304 + empty body on repeat API requests (breaks fetch/axios clients).
   app.getHttpAdapter().getInstance().set("etag", false);
+  // A big Projektkalkyl (e.g. a full bank import with hundreds of rows) posts a
+  // large JSON body — raise the default 100kb limit so saving doesn't 500.
+  app.useBodyParser("json", { limit: "15mb" });
+  app.useBodyParser("urlencoded", { limit: "15mb", extended: true });
   const uploadsDir = join(process.cwd(), "uploads", "project-documents");
   const taskUploadsDir = join(process.cwd(), "uploads", "task-documents");
   const shiftUploadsDir = join(process.cwd(), "uploads", "shift-photos");
