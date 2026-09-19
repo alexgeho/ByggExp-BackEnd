@@ -169,13 +169,31 @@ export function appMagicFallbackHtml(
       <a class="button" href="${playStore}">${c.fallbackAndroid}</a>
     </div>
     <script>
-      // If the app is installed, the custom-scheme link opens it. Android needs
-      // the intent:// form, so rewrite the button there once the DOM is ready.
       (function () {
-        if (/Android/i.test(navigator.userAgent || '')) {
-          var b = document.getElementById('openApp');
-          if (b) { b.setAttribute('href', ${JSON.stringify(androidIntent)}); }
-        }
+        var code = ${JSON.stringify(code || "")};
+        if (!code) { return; }
+        var isAndroid = /Android/i.test(navigator.userAgent || '');
+        var appLink = isAndroid
+          ? ${JSON.stringify(androidIntent)}
+          : ${JSON.stringify(deepLink)};
+        var store = isAndroid
+          ? ${JSON.stringify(playStore)}
+          : ${JSON.stringify(appStore)};
+        // Point the visible "Open the app" button at the right link.
+        var b = document.getElementById('openApp');
+        if (b) { b.setAttribute('href', appLink); }
+        // Auto: try to open the installed app immediately. If nothing happens
+        // (the page stays visible ~2s), the app isn't installed → go to the
+        // store. Backgrounding the page (app opened) throttles the timer, which
+        // the elapsed-time check below detects, so we don't redirect then.
+        var start = Date.now();
+        var timer = setTimeout(function () {
+          if (Date.now() - start < 2500) { window.location = store; }
+        }, 2000);
+        document.addEventListener('visibilitychange', function () {
+          if (document.hidden) { clearTimeout(timer); }
+        });
+        window.location = appLink;
       })();
     </script>
   </body>
