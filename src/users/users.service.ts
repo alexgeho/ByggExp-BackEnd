@@ -1024,6 +1024,21 @@ export class UsersService {
     return { user: users[0], token: plainToken };
   }
 
+  // The language of the account a reset token unlocks — so the reset-password
+  // PAGE matches the language of the reset email. Read-only; null if invalid.
+  async getResetLanguageCode(token: string): Promise<string | null> {
+    const hashedToken = this.hashVerificationToken(String(token || "").trim());
+    const user = await this.userModel
+      .findOne({
+        passwordResetToken: hashedToken,
+        passwordResetExpiresAt: { $gt: new Date() },
+        accountStatus: UserAccountStatus.Active,
+      })
+      .select("language")
+      .lean();
+    return user ? languageCode(user.language) : null;
+  }
+
   // How many active accounts a reset token currently unlocks (0 = invalid/expired).
   async countPasswordResetToken(token: string): Promise<number> {
     const hashedToken = this.hashVerificationToken(String(token || "").trim());
@@ -1041,16 +1056,24 @@ export class UsersService {
   async applyPasswordReset(
     token: string,
     hashedPassword: string,
-  ): Promise<{ count: number; role: UserRole | null }> {
+  ): Promise<{
+    count: number;
+    role: UserRole | null;
+    language: string | null;
+  }> {
     const hashedToken = this.hashVerificationToken(String(token || "").trim());
     const filter = {
       passwordResetToken: hashedToken,
       passwordResetExpiresAt: { $gt: new Date() },
       accountStatus: UserAccountStatus.Active,
     };
-    // Capture the role before clearing the token, so the success page can show
-    // admin-only affordances (e.g. the web-admin link) to admins only.
-    const target = await this.userModel.findOne(filter).select("role").lean();
+    // Capture the role + language before clearing the token, so the success page
+    // can show admin-only affordances (web-admin link) and render in the user's
+    // language.
+    const target = await this.userModel
+      .findOne(filter)
+      .select("role language")
+      .lean();
     const result = await this.userModel.updateMany(filter, {
       password: hashedPassword,
       passwordResetToken: null,
@@ -1059,6 +1082,7 @@ export class UsersService {
     return {
       count: result.modifiedCount ?? 0,
       role: (target?.role as UserRole) ?? null,
+      language: target?.language ? languageCode(target.language) : null,
     };
   }
 

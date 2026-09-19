@@ -5,14 +5,31 @@ import {
   Get,
   Query,
   Res,
+  Req,
   BadRequestException,
 } from "@nestjs/common";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { CreateUserDto } from "../users/dto/create-user.dto";
 import { RegisterCompanyPublicDto } from "./dto/register-company-public.dto";
 import { Public } from "../common/decorators/public.decorator";
-import { invitePageCopy, type MailLang } from "../mail/email-copy";
+import {
+  invitePageCopy,
+  authPageCopy,
+  resolveMailLang,
+  type MailLang,
+} from "../mail/email-copy";
+
+// Best-effort page language for pages without a stored user language (company
+// sign-up confirm, app-store fallback): the browser's Accept-Language header,
+// resolved to one of our supported languages (defaults to sv).
+export function langFromReq(req?: {
+  headers?: Record<string, unknown>;
+}): MailLang {
+  const raw = String(req?.headers?.["accept-language"] || "");
+  const first = raw.split(",")[0]?.trim().split("-")[0] || "";
+  return resolveMailLang(first);
+}
 
 const apiBase = () =>
   (process.env.API_PUBLIC_URL || "https://api.byggexp.se").replace(/\/+$/, "");
@@ -24,17 +41,18 @@ const apiBase = () =>
 // it's not, the browser loads that URL and GET /app/magic serves the install
 // fallback. The JS below is a best-effort custom-scheme open for the case where
 // the user is already sitting on this page right after confirming.
-function magicRedirectHtml(magicLoginCode: string, message: string): string {
+function magicRedirectHtml(magicLoginCode: string, lang: MailLang): string {
+  const c = authPageCopy[lang]();
   const encodedCode = encodeURIComponent(magicLoginCode);
   const magicUrl = `byggexp://auth/magic?code=${encodedCode}`;
   const androidIntentUrl = `intent://auth/magic?code=${encodedCode}#Intent;scheme=byggexp;package=se.byggexp.app;end`;
   const universalUrl = `${apiBase()}/app/magic?code=${encodedCode}`;
   return `<!DOCTYPE html>
-<html lang="sv">
+<html lang="${lang}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>E-post bekräftad</title>
+    <title>${c.confirmedTitle}</title>
     <style>
       body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
       .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
@@ -46,10 +64,10 @@ function magicRedirectHtml(magicLoginCode: string, message: string): string {
   </head>
   <body>
     <div class="card">
-      <h1>E-post bekräftad ✅</h1>
-      <p>${message}</p>
-      <a class="button" href="${universalUrl}">Öppna ByggExp</a>
-      <p class="hint">Tryck på knappen för att öppna appen och logga in automatiskt. Har du inte appen? Installera ByggExp, öppna den och logga in med din e-post och ditt lösenord.</p>
+      <h1>${c.confirmedTitle} ✅</h1>
+      <p>${c.confirmedMessage}</p>
+      <a class="button" href="${universalUrl}">${c.confirmedOpenApp}</a>
+      <p class="hint">${c.confirmedHint}</p>
     </div>
     <script>
       (function () {
@@ -74,16 +92,17 @@ function magicRedirectHtml(magicLoginCode: string, message: string): string {
 // the mobile app (Universal Link → app, or install fallback) or the web admin
 // (auto sign-in via /auth/web-magic). The magic code is single-use, so whichever
 // button is tapped signs them in there.
-function chooseDestinationHtml(magicLoginCode: string): string {
+function chooseDestinationHtml(magicLoginCode: string, lang: MailLang): string {
+  const c = authPageCopy[lang]();
   const encodedCode = encodeURIComponent(magicLoginCode);
   const appUrl = `${apiBase()}/app/magic?code=${encodedCode}`;
   const adminUrl = `${apiBase()}/auth/web-magic?code=${encodedCode}`;
   return `<!DOCTYPE html>
-<html lang="sv">
+<html lang="${lang}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Konto klart</title>
+    <title>${c.destTitle}</title>
     <style>
       body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
       .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
@@ -95,10 +114,10 @@ function chooseDestinationHtml(magicLoginCode: string): string {
   </head>
   <body>
     <div class="card">
-      <h1>Konto klart ✅</h1>
-      <p>Var vill du fortsätta?</p>
-      <a class="button" href="${appUrl}">Öppna appen</a>
-      <a class="button secondary" href="${adminUrl}">Öppna webbadmin</a>
+      <h1>${c.destTitle} ✅</h1>
+      <p>${c.destQuestion}</p>
+      <a class="button" href="${appUrl}">${c.destOpenApp}</a>
+      <a class="button secondary" href="${adminUrl}">${c.destOpenWebAdmin}</a>
     </div>
   </body>
 </html>`;
@@ -107,16 +126,17 @@ function chooseDestinationHtml(magicLoginCode: string): string {
 // Fallback served at GET /app/magic when the browser actually loads the URL —
 // i.e. the app is NOT installed (an installed app would have intercepted the
 // Universal/App Link tap). Offers the store links plus a custom-scheme retry.
-export function appMagicFallbackHtml(): string {
+export function appMagicFallbackHtml(lang: MailLang = "sv"): string {
+  const c = authPageCopy[lang]();
   const appStore = "https://apps.apple.com/app/id6748280779";
   const playStore =
     "https://play.google.com/store/apps/details?id=se.byggexp.app";
   return `<!DOCTYPE html>
-<html lang="sv">
+<html lang="${lang}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Öppna ByggExp</title>
+    <title>${c.fallbackTitle}</title>
     <style>
       body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
       .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
@@ -127,10 +147,10 @@ export function appMagicFallbackHtml(): string {
   </head>
   <body>
     <div class="card">
-      <h1>Öppna ByggExp</h1>
-      <p>Ladda ner appen och logga sedan in med din e-post och ditt lösenord.</p>
-      <a class="button" href="${appStore}">Ladda ner för iPhone</a>
-      <a class="button" href="${playStore}">Ladda ner för Android</a>
+      <h1>${c.fallbackTitle}</h1>
+      <p>${c.fallbackBody}</p>
+      <a class="button" href="${appStore}">${c.fallbackIos}</a>
+      <a class="button" href="${playStore}">${c.fallbackAndroid}</a>
     </div>
   </body>
 </html>`;
@@ -158,14 +178,20 @@ export function errorHtml(title: string, message: string): string {
 
 // Step-2 page: after clicking the confirmation link, the user chooses a
 // password here. Posts back to /auth/register-company/set-password.
-function passwordFormHtml(token: string, error?: string): string {
+function passwordFormHtml(
+  token: string,
+  lang: MailLang,
+  error?: string,
+): string {
   const safeToken = token.replace(/"/g, "&quot;");
+  const c = authPageCopy[lang]();
+  const f = invitePageCopy[lang]();
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Choose your password</title>
+    <title>${c.confirmTitle}</title>
     <style>
       body { font-family: Arial, sans-serif; background: #eef4fb; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
       .card { background: #fff; border-radius: 16px; padding: 28px; max-width: 380px; width: 100%; box-shadow: 0 8px 24px rgba(5,45,80,.08); }
@@ -179,24 +205,26 @@ function passwordFormHtml(token: string, error?: string): string {
   </head>
   <body>
     <div class="card">
-      <h1>Choose your password</h1>
-      <p>Set a password to finish creating your ByggExp account. You'll sign in with your email and this password.</p>
+      <h1>${c.confirmTitle}</h1>
+      <p>${c.confirmIntro}</p>
       ${error ? `<div class="err">${error}</div>` : ""}
       <form method="POST" action="/auth/register-company/set-password" onsubmit="return checkForm()">
         <input type="hidden" name="token" value="${safeToken}" />
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" minlength="6" required placeholder="At least 6 characters" />
-        <label for="confirm">Confirm password</label>
-        <input id="confirm" name="confirm" type="password" minlength="6" required placeholder="Repeat your password" />
-        <button type="submit">Create account</button>
+        <label for="password">${f.passwordLabel}</label>
+        <input id="password" name="password" type="password" minlength="6" required placeholder="${f.passwordPlaceholder}" />
+        <label for="confirm">${f.confirmLabel}</label>
+        <input id="confirm" name="confirm" type="password" minlength="6" required placeholder="${f.confirmPlaceholder}" />
+        <button type="submit">${c.confirmSubmit}</button>
       </form>
     </div>
     <script>
+      var ERR_SHORT = ${JSON.stringify(f.errShort)};
+      var ERR_MISMATCH = ${JSON.stringify(f.errMismatch)};
       function checkForm() {
         var p = document.getElementById('password').value;
         var c = document.getElementById('confirm').value;
-        if (p.length < 6) { alert('Password must be at least 6 characters.'); return false; }
-        if (p !== c) { alert("Passwords don't match."); return false; }
+        if (p.length < 6) { alert(ERR_SHORT); return false; }
+        if (p !== c) { alert(ERR_MISMATCH); return false; }
         return true;
       }
     </script>
@@ -264,14 +292,20 @@ function invitePasswordFormHtml(
 
 // "Forgot password" page: the user picks a new password here after clicking the
 // reset link. Posts back to /auth/reset-password/set.
-function resetPasswordFormHtml(token: string, error?: string): string {
+function resetPasswordFormHtml(
+  token: string,
+  lang: MailLang,
+  error?: string,
+): string {
   const safeToken = token.replace(/"/g, "&quot;");
+  const c = authPageCopy[lang]();
+  const f = invitePageCopy[lang]();
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Reset your password</title>
+    <title>${c.resetTitle}</title>
     <style>
       body { font-family: Arial, sans-serif; background: #eef4fb; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
       .card { background: #fff; border-radius: 16px; padding: 28px; max-width: 380px; width: 100%; box-shadow: 0 8px 24px rgba(5,45,80,.08); }
@@ -285,24 +319,26 @@ function resetPasswordFormHtml(token: string, error?: string): string {
   </head>
   <body>
     <div class="card">
-      <h1>Reset your password</h1>
-      <p>Choose a new password for your ByggExp account. You'll sign in with your email and this password.</p>
+      <h1>${c.resetTitle}</h1>
+      <p>${c.resetIntro}</p>
       ${error ? `<div class="err">${error}</div>` : ""}
       <form method="POST" action="/auth/reset-password/set" onsubmit="return checkForm()">
         <input type="hidden" name="token" value="${safeToken}" />
-        <label for="password">New password</label>
-        <input id="password" name="password" type="password" minlength="6" required placeholder="At least 6 characters" />
-        <label for="confirm">Confirm new password</label>
-        <input id="confirm" name="confirm" type="password" minlength="6" required placeholder="Repeat your new password" />
-        <button type="submit">Set new password</button>
+        <label for="password">${f.passwordLabel}</label>
+        <input id="password" name="password" type="password" minlength="6" required placeholder="${f.passwordPlaceholder}" />
+        <label for="confirm">${f.confirmLabel}</label>
+        <input id="confirm" name="confirm" type="password" minlength="6" required placeholder="${f.confirmPlaceholder}" />
+        <button type="submit">${c.resetSubmit}</button>
       </form>
     </div>
     <script>
+      var ERR_SHORT = ${JSON.stringify(f.errShort)};
+      var ERR_MISMATCH = ${JSON.stringify(f.errMismatch)};
       function checkForm() {
         var p = document.getElementById('password').value;
         var c = document.getElementById('confirm').value;
-        if (p.length < 6) { alert('Password must be at least 6 characters.'); return false; }
-        if (p !== c) { alert("Passwords don't match."); return false; }
+        if (p.length < 6) { alert(ERR_SHORT); return false; }
+        if (p !== c) { alert(ERR_MISMATCH); return false; }
         return true;
       }
     </script>
@@ -312,21 +348,22 @@ function resetPasswordFormHtml(token: string, error?: string): string {
 
 // Shown after a successful password reset. The web-admin link is admin-only —
 // workers have no admin-panel access, so they never see it (they use the app).
-function resetSuccessHtml(role?: string | null): string {
+function resetSuccessHtml(role: string | null, lang: MailLang): string {
+  const c = authPageCopy[lang]();
   const appUrl = "byggexp://";
   const androidIntentUrl =
     "intent://#Intent;scheme=byggexp;package=se.byggexp.app;end";
   const isAdmin =
     role === "superadmin" || role === "companyAdmin" || role === "projectAdmin";
   const webAdminLink = isAdmin
-    ? `<p><a class="secondary" href="https://admin.byggexp.se/login">or sign in on the web admin</a></p>`
+    ? `<p><a class="secondary" href="https://admin.byggexp.se/login">${c.okWebAdmin}</a></p>`
     : "";
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Password updated</title>
+    <title>${c.okTitle}</title>
     <style>
       body { font-family: Arial, sans-serif; background: #f5f7fa; color: #052d50; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
       .card { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; box-shadow: 0 8px 24px rgba(5, 45, 80, 0.08); text-align: center; }
@@ -338,10 +375,10 @@ function resetSuccessHtml(role?: string | null): string {
   </head>
   <body>
     <div class="card">
-      <h1>Password updated</h1>
-      <p>Your password has been changed. Open the app and sign in with your new password.</p>
-      <a class="button" id="openIos" href="${appUrl}">Open the app</a>
-      <a class="button" id="openAndroid" href="${androidIntentUrl}" style="display:none;">Open the app</a>
+      <h1>${c.okTitle}</h1>
+      <p>${c.okBody}</p>
+      <a class="button" id="openIos" href="${appUrl}">${c.okOpenApp}</a>
+      <a class="button" id="openAndroid" href="${androidIntentUrl}" style="display:none;">${c.okOpenApp}</a>
       ${webAdminLink}
     </div>
     <script>
@@ -378,14 +415,17 @@ export class AuthController {
   @Get("register-company/confirm")
   async confirmRegistration(
     @Query("token") token: string,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     if (!token?.trim()) {
       throw new BadRequestException("Confirmation token is required");
     }
+    // Company sign-up stores no per-user language yet → use the browser's.
+    const lang = langFromReq(req);
     try {
       await this.authService.getPendingByToken(token.trim());
-      res.status(200).type("html").send(passwordFormHtml(token.trim()));
+      res.status(200).type("html").send(passwordFormHtml(token.trim(), lang));
     } catch (error) {
       const message =
         error instanceof BadRequestException
@@ -403,10 +443,12 @@ export class AuthController {
   @Post("register-company/set-password")
   async setRegistrationPassword(
     @Body() body: { token?: string; password?: string },
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const token = (body?.token || "").trim();
     const password = body?.password || "";
+    const lang = langFromReq(req);
     if (!token) {
       res
         .status(400)
@@ -419,14 +461,17 @@ export class AuthController {
         token,
         password,
       );
-      res.status(200).type("html").send(chooseDestinationHtml(magicLoginCode));
+      res
+        .status(200)
+        .type("html")
+        .send(chooseDestinationHtml(magicLoginCode, lang));
     } catch (error) {
       const message =
         error instanceof BadRequestException
           ? error.message
           : "Unable to create your account. Please try again.";
       // Re-show the form with the error so they can retry.
-      res.status(400).type("html").send(passwordFormHtml(token, message));
+      res.status(400).type("html").send(passwordFormHtml(token, lang, message));
     }
   }
 
@@ -460,7 +505,11 @@ export class AuthController {
     }
     try {
       await this.authService.assertPasswordResetTokenValid(token.trim());
-      res.status(200).type("html").send(resetPasswordFormHtml(token.trim()));
+      const lang = await this.authService.getResetMailLang(token.trim());
+      res
+        .status(200)
+        .type("html")
+        .send(resetPasswordFormHtml(token.trim(), lang));
     } catch (error) {
       const message =
         error instanceof BadRequestException
@@ -485,16 +534,22 @@ export class AuthController {
         .send(errorHtml("Something went wrong", "Missing reset token."));
       return;
     }
+    // Resolve the language before consuming the token so a re-shown form (on
+    // error) stays in the user's language.
+    const lang = await this.authService.getResetMailLang(token);
     try {
-      const role = await this.authService.resetPassword(token, password);
-      res.status(200).type("html").send(resetSuccessHtml(role));
+      const { role } = await this.authService.resetPassword(token, password);
+      res.status(200).type("html").send(resetSuccessHtml(role, lang));
     } catch (error) {
       const message =
         error instanceof BadRequestException
           ? error.message
           : "Unable to reset your password. Please try again.";
       // Re-show the form with the error so they can retry.
-      res.status(400).type("html").send(resetPasswordFormHtml(token, message));
+      res
+        .status(400)
+        .type("html")
+        .send(resetPasswordFormHtml(token, lang, message));
     }
   }
 
@@ -638,11 +693,8 @@ export class AuthController {
         .type("html")
         .send(
           canUseAdmin
-            ? chooseDestinationHtml(magicLoginCode)
-            : magicRedirectHtml(
-                magicLoginCode,
-                "Account activated. Opening ByggExp to sign you in.",
-              ),
+            ? chooseDestinationHtml(magicLoginCode, lang)
+            : magicRedirectHtml(magicLoginCode, lang),
         );
     } catch (error) {
       const message =

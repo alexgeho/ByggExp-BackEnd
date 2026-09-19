@@ -333,6 +333,360 @@ export const invitePageCopy: Record<MailLang, () => InvitePageCopy> = {
   }),
 };
 
+// Copy for the OTHER backend-served auth HTML pages (reset-password form +
+// success, register-company choose-password form, the app/web destination
+// chooser, the "email confirmed" deep-link page, and the app-store fallback).
+// Localized the same way as the emails so a user never lands on a page in a
+// language different from the mail they clicked. Password field labels/alerts
+// are shared with invitePageCopy (see the controller) and not repeated here.
+export type AuthPageCopy = {
+  resetTitle: string;
+  resetIntro: string;
+  resetSubmit: string;
+  confirmTitle: string;
+  confirmIntro: string;
+  confirmSubmit: string;
+  okTitle: string;
+  okBody: string;
+  okOpenApp: string;
+  okWebAdmin: string;
+  destTitle: string;
+  destQuestion: string;
+  destOpenApp: string;
+  destOpenWebAdmin: string;
+  confirmedTitle: string;
+  confirmedMessage: string;
+  confirmedOpenApp: string;
+  confirmedHint: string;
+  fallbackTitle: string;
+  fallbackBody: string;
+  fallbackIos: string;
+  fallbackAndroid: string;
+  errorTitle: string;
+};
+
+export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
+  sv: () => ({
+    resetTitle: "Återställ ditt lösenord",
+    resetIntro:
+      "Välj ett nytt lösenord för ditt ByggExp-konto. Du loggar in med din e-post och detta lösenord.",
+    resetSubmit: "Ange nytt lösenord",
+    confirmTitle: "Välj ditt lösenord",
+    confirmIntro:
+      "Välj ett lösenord för att slutföra ditt ByggExp-konto. Du loggar in med din e-post och detta lösenord.",
+    confirmSubmit: "Skapa konto",
+    okTitle: "Lösenordet uppdaterat",
+    okBody:
+      "Ditt lösenord har ändrats. Öppna appen och logga in med ditt nya lösenord.",
+    okOpenApp: "Öppna appen",
+    okWebAdmin: "eller logga in i webbadmin",
+    destTitle: "Konto klart",
+    destQuestion: "Var vill du fortsätta?",
+    destOpenApp: "Öppna appen",
+    destOpenWebAdmin: "Öppna webbadmin",
+    confirmedTitle: "E-post bekräftad",
+    confirmedMessage: "Kontot är aktiverat. Öppnar ByggExp för att logga in dig.",
+    confirmedOpenApp: "Öppna ByggExp",
+    confirmedHint:
+      "Tryck på knappen för att öppna appen och logga in. Har du inte appen? Installera ByggExp, öppna den och logga in med din e-post och ditt lösenord.",
+    fallbackTitle: "Öppna ByggExp",
+    fallbackBody: "Ladda ner appen och logga sedan in med din e-post och ditt lösenord.",
+    fallbackIos: "Ladda ner för iPhone",
+    fallbackAndroid: "Ladda ner för Android",
+    errorTitle: "Något gick fel",
+  }),
+  en: () => ({
+    resetTitle: "Reset your password",
+    resetIntro:
+      "Choose a new password for your ByggExp account. You'll sign in with your email and this password.",
+    resetSubmit: "Set new password",
+    confirmTitle: "Choose your password",
+    confirmIntro:
+      "Set a password to finish creating your ByggExp account. You'll sign in with your email and this password.",
+    confirmSubmit: "Create account",
+    okTitle: "Password updated",
+    okBody:
+      "Your password has been changed. Open the app and sign in with your new password.",
+    okOpenApp: "Open the app",
+    okWebAdmin: "or sign in on the web admin",
+    destTitle: "Account ready",
+    destQuestion: "Where do you want to continue?",
+    destOpenApp: "Open the app",
+    destOpenWebAdmin: "Open web admin",
+    confirmedTitle: "Email confirmed",
+    confirmedMessage: "Account activated. Opening ByggExp to sign you in.",
+    confirmedOpenApp: "Open ByggExp",
+    confirmedHint:
+      "Tap the button to open the app and sign in. Don't have the app? Install ByggExp, open it and sign in with your email and password.",
+    fallbackTitle: "Open ByggExp",
+    fallbackBody: "Download the app, then sign in with your email and password.",
+    fallbackIos: "Download for iPhone",
+    fallbackAndroid: "Download for Android",
+    errorTitle: "Something went wrong",
+  }),
+  nb: () => ({
+    resetTitle: "Tilbakestill passordet ditt",
+    resetIntro:
+      "Velg et nytt passord for ByggExp-kontoen din. Du logger inn med e-posten din og dette passordet.",
+    resetSubmit: "Angi nytt passord",
+    confirmTitle: "Velg passordet ditt",
+    confirmIntro:
+      "Velg et passord for å fullføre ByggExp-kontoen din. Du logger inn med e-posten din og dette passordet.",
+    confirmSubmit: "Opprett konto",
+    okTitle: "Passordet er oppdatert",
+    okBody:
+      "Passordet ditt er endret. Åpne appen og logg inn med det nye passordet.",
+    okOpenApp: "Åpne appen",
+    okWebAdmin: "eller logg inn i webadmin",
+    destTitle: "Kontoen er klar",
+    destQuestion: "Hvor vil du fortsette?",
+    destOpenApp: "Åpne appen",
+    destOpenWebAdmin: "Åpne webadmin",
+    confirmedTitle: "E-post bekreftet",
+    confirmedMessage: "Kontoen er aktivert. Åpner ByggExp for å logge deg inn.",
+    confirmedOpenApp: "Åpne ByggExp",
+    confirmedHint:
+      "Trykk på knappen for å åpne appen og logge inn. Har du ikke appen? Installer ByggExp, åpne den og logg inn med e-post og passord.",
+    fallbackTitle: "Åpne ByggExp",
+    fallbackBody: "Last ned appen og logg deretter inn med e-post og passord.",
+    fallbackIos: "Last ned for iPhone",
+    fallbackAndroid: "Last ned for Android",
+    errorTitle: "Noe gikk galt",
+  }),
+  pl: () => ({
+    resetTitle: "Zresetuj hasło",
+    resetIntro:
+      "Wybierz nowe hasło do swojego konta ByggExp. Będziesz logować się swoim adresem e-mail i tym hasłem.",
+    resetSubmit: "Ustaw nowe hasło",
+    confirmTitle: "Wybierz hasło",
+    confirmIntro:
+      "Ustaw hasło, aby dokończyć tworzenie konta ByggExp. Będziesz logować się swoim adresem e-mail i tym hasłem.",
+    confirmSubmit: "Utwórz konto",
+    okTitle: "Hasło zaktualizowane",
+    okBody:
+      "Twoje hasło zostało zmienione. Otwórz aplikację i zaloguj się nowym hasłem.",
+    okOpenApp: "Otwórz aplikację",
+    okWebAdmin: "lub zaloguj się w panelu web",
+    destTitle: "Konto gotowe",
+    destQuestion: "Gdzie chcesz kontynuować?",
+    destOpenApp: "Otwórz aplikację",
+    destOpenWebAdmin: "Otwórz panel web",
+    confirmedTitle: "E-mail potwierdzony",
+    confirmedMessage: "Konto aktywowane. Otwieram ByggExp, aby Cię zalogować.",
+    confirmedOpenApp: "Otwórz ByggExp",
+    confirmedHint:
+      "Naciśnij przycisk, aby otworzyć aplikację i zalogować się. Nie masz aplikacji? Zainstaluj ByggExp, otwórz ją i zaloguj się swoim adresem e-mail i hasłem.",
+    fallbackTitle: "Otwórz ByggExp",
+    fallbackBody: "Pobierz aplikację, a następnie zaloguj się e-mailem i hasłem.",
+    fallbackIos: "Pobierz na iPhone'a",
+    fallbackAndroid: "Pobierz na Androida",
+    errorTitle: "Coś poszło nie tak",
+  }),
+  et: () => ({
+    resetTitle: "Lähtesta oma parool",
+    resetIntro:
+      "Vali oma ByggExpi kontole uus parool. Logid sisse oma e-posti ja selle parooliga.",
+    resetSubmit: "Määra uus parool",
+    confirmTitle: "Vali oma parool",
+    confirmIntro:
+      "Määra parool, et oma ByggExpi konto loomine lõpetada. Logid sisse oma e-posti ja selle parooliga.",
+    confirmSubmit: "Loo konto",
+    okTitle: "Parool uuendatud",
+    okBody:
+      "Sinu parool on muudetud. Ava rakendus ja logi sisse uue parooliga.",
+    okOpenApp: "Ava rakendus",
+    okWebAdmin: "või logi sisse veebiadminis",
+    destTitle: "Konto valmis",
+    destQuestion: "Kust soovid jätkata?",
+    destOpenApp: "Ava rakendus",
+    destOpenWebAdmin: "Ava veebiadmin",
+    confirmedTitle: "E-post kinnitatud",
+    confirmedMessage: "Konto aktiveeritud. Avan ByggExpi, et sind sisse logida.",
+    confirmedOpenApp: "Ava ByggExp",
+    confirmedHint:
+      "Vajuta nuppu, et rakendus avada ja sisse logida. Kas sul pole rakendust? Paigalda ByggExp, ava see ja logi sisse oma e-posti ja parooliga.",
+    fallbackTitle: "Ava ByggExp",
+    fallbackBody: "Laadi rakendus alla ja logi seejärel sisse oma e-posti ja parooliga.",
+    fallbackIos: "Laadi alla iPhone'ile",
+    fallbackAndroid: "Laadi alla Androidile",
+    errorTitle: "Midagi läks valesti",
+  }),
+  uk: () => ({
+    resetTitle: "Скиньте пароль",
+    resetIntro:
+      "Виберіть новий пароль для облікового запису ByggExp. Ви входитимете за своєю поштою та цим паролем.",
+    resetSubmit: "Встановити новий пароль",
+    confirmTitle: "Виберіть пароль",
+    confirmIntro:
+      "Встановіть пароль, щоб завершити створення облікового запису ByggExp. Ви входитимете за своєю поштою та цим паролем.",
+    confirmSubmit: "Створити обліковий запис",
+    okTitle: "Пароль оновлено",
+    okBody:
+      "Ваш пароль змінено. Відкрийте застосунок і увійдіть із новим паролем.",
+    okOpenApp: "Відкрити застосунок",
+    okWebAdmin: "або увійдіть у веб-адмінці",
+    destTitle: "Обліковий запис готовий",
+    destQuestion: "Куди бажаєте продовжити?",
+    destOpenApp: "Відкрити застосунок",
+    destOpenWebAdmin: "Відкрити веб-адмінку",
+    confirmedTitle: "Пошту підтверджено",
+    confirmedMessage: "Обліковий запис активовано. Відкриваю ByggExp, щоб вас увійти.",
+    confirmedOpenApp: "Відкрити ByggExp",
+    confirmedHint:
+      "Натисніть кнопку, щоб відкрити застосунок і увійти. Немає застосунку? Встановіть ByggExp, відкрийте його та увійдіть за своєю поштою й паролем.",
+    fallbackTitle: "Відкрити ByggExp",
+    fallbackBody: "Завантажте застосунок, потім увійдіть за поштою та паролем.",
+    fallbackIos: "Завантажити для iPhone",
+    fallbackAndroid: "Завантажити для Android",
+    errorTitle: "Щось пішло не так",
+  }),
+  ru: () => ({
+    resetTitle: "Сбросьте пароль",
+    resetIntro:
+      "Выберите новый пароль для аккаунта ByggExp. Вы будете входить по своей эл. почте и этому паролю.",
+    resetSubmit: "Задать новый пароль",
+    confirmTitle: "Выберите пароль",
+    confirmIntro:
+      "Задайте пароль, чтобы завершить создание аккаунта ByggExp. Вы будете входить по своей эл. почте и этому паролю.",
+    confirmSubmit: "Создать аккаунт",
+    okTitle: "Пароль обновлён",
+    okBody:
+      "Ваш пароль изменён. Откройте приложение и войдите с новым паролем.",
+    okOpenApp: "Открыть приложение",
+    okWebAdmin: "или войдите в веб-админке",
+    destTitle: "Аккаунт готов",
+    destQuestion: "Куда хотите продолжить?",
+    destOpenApp: "Открыть приложение",
+    destOpenWebAdmin: "Открыть веб-админку",
+    confirmedTitle: "Почта подтверждена",
+    confirmedMessage: "Аккаунт активирован. Открываю ByggExp, чтобы войти.",
+    confirmedOpenApp: "Открыть ByggExp",
+    confirmedHint:
+      "Нажмите кнопку, чтобы открыть приложение и войти. Нет приложения? Установите ByggExp, откройте его и войдите по своей эл. почте и паролю.",
+    fallbackTitle: "Открыть ByggExp",
+    fallbackBody: "Скачайте приложение, затем войдите по эл. почте и паролю.",
+    fallbackIos: "Скачать для iPhone",
+    fallbackAndroid: "Скачать для Android",
+    errorTitle: "Что-то пошло не так",
+  }),
+  fi: () => ({
+    resetTitle: "Nollaa salasanasi",
+    resetIntro:
+      "Valitse uusi salasana ByggExp-tilillesi. Kirjaudut sähköpostillasi ja tällä salasanalla.",
+    resetSubmit: "Aseta uusi salasana",
+    confirmTitle: "Valitse salasanasi",
+    confirmIntro:
+      "Aseta salasana viimeistelläksesi ByggExp-tilisi. Kirjaudut sähköpostillasi ja tällä salasanalla.",
+    confirmSubmit: "Luo tili",
+    okTitle: "Salasana päivitetty",
+    okBody:
+      "Salasanasi on vaihdettu. Avaa sovellus ja kirjaudu uudella salasanalla.",
+    okOpenApp: "Avaa sovellus",
+    okWebAdmin: "tai kirjaudu verkkoadminissa",
+    destTitle: "Tili valmis",
+    destQuestion: "Missä haluat jatkaa?",
+    destOpenApp: "Avaa sovellus",
+    destOpenWebAdmin: "Avaa verkkoadmin",
+    confirmedTitle: "Sähköposti vahvistettu",
+    confirmedMessage: "Tili aktivoitu. Avataan ByggExp kirjatakseen sinut sisään.",
+    confirmedOpenApp: "Avaa ByggExp",
+    confirmedHint:
+      "Avaa sovellus ja kirjaudu painamalla painiketta. Eikö sinulla ole sovellusta? Asenna ByggExp, avaa se ja kirjaudu sähköpostillasi ja salasanallasi.",
+    fallbackTitle: "Avaa ByggExp",
+    fallbackBody: "Lataa sovellus ja kirjaudu sitten sähköpostilla ja salasanalla.",
+    fallbackIos: "Lataa iPhonelle",
+    fallbackAndroid: "Lataa Androidille",
+    errorTitle: "Jotain meni pieleen",
+  }),
+  lt: () => ({
+    resetTitle: "Atkurkite slaptažodį",
+    resetIntro:
+      "Pasirinkite naują ByggExp paskyros slaptažodį. Prisijungsite su savo el. paštu ir šiuo slaptažodžiu.",
+    resetSubmit: "Nustatyti naują slaptažodį",
+    confirmTitle: "Pasirinkite slaptažodį",
+    confirmIntro:
+      "Nustatykite slaptažodį, kad užbaigtumėte ByggExp paskyros kūrimą. Prisijungsite su savo el. paštu ir šiuo slaptažodžiu.",
+    confirmSubmit: "Sukurti paskyrą",
+    okTitle: "Slaptažodis atnaujintas",
+    okBody:
+      "Jūsų slaptažodis pakeistas. Atidarykite programėlę ir prisijunkite su nauju slaptažodžiu.",
+    okOpenApp: "Atidaryti programėlę",
+    okWebAdmin: "arba prisijunkite žiniatinklio administratoriuje",
+    destTitle: "Paskyra paruošta",
+    destQuestion: "Kur norite tęsti?",
+    destOpenApp: "Atidaryti programėlę",
+    destOpenWebAdmin: "Atidaryti žiniatinklio administratorių",
+    confirmedTitle: "El. paštas patvirtintas",
+    confirmedMessage: "Paskyra aktyvuota. Atidaroma ByggExp, kad jus prijungtų.",
+    confirmedOpenApp: "Atidaryti ByggExp",
+    confirmedHint:
+      "Paspauskite mygtuką, kad atidarytumėte programėlę ir prisijungtumėte. Neturite programėlės? Įdiekite ByggExp, atidarykite ją ir prisijunkite su savo el. paštu ir slaptažodžiu.",
+    fallbackTitle: "Atidaryti ByggExp",
+    fallbackBody: "Atsisiųskite programėlę, tada prisijunkite su el. paštu ir slaptažodžiu.",
+    fallbackIos: "Atsisiųsti iPhone",
+    fallbackAndroid: "Atsisiųsti Android",
+    errorTitle: "Kažkas nutiko",
+  }),
+  lv: () => ({
+    resetTitle: "Atiestatiet paroli",
+    resetIntro:
+      "Izvēlieties jaunu ByggExp konta paroli. Jūs pieteiksieties ar savu e-pastu un šo paroli.",
+    resetSubmit: "Iestatīt jaunu paroli",
+    confirmTitle: "Izvēlieties paroli",
+    confirmIntro:
+      "Iestatiet paroli, lai pabeigtu ByggExp konta izveidi. Jūs pieteiksieties ar savu e-pastu un šo paroli.",
+    confirmSubmit: "Izveidot kontu",
+    okTitle: "Parole atjaunināta",
+    okBody:
+      "Jūsu parole ir nomainīta. Atveriet lietotni un piesakieties ar jauno paroli.",
+    okOpenApp: "Atvērt lietotni",
+    okWebAdmin: "vai piesakieties tīmekļa administratorā",
+    destTitle: "Konts gatavs",
+    destQuestion: "Kur vēlaties turpināt?",
+    destOpenApp: "Atvērt lietotni",
+    destOpenWebAdmin: "Atvērt tīmekļa administratoru",
+    confirmedTitle: "E-pasts apstiprināts",
+    confirmedMessage: "Konts aktivizēts. Atveru ByggExp, lai jūs pieteiktu.",
+    confirmedOpenApp: "Atvērt ByggExp",
+    confirmedHint:
+      "Nospiediet pogu, lai atvērtu lietotni un pieteiktos. Nav lietotnes? Instalējiet ByggExp, atveriet to un piesakieties ar savu e-pastu un paroli.",
+    fallbackTitle: "Atvērt ByggExp",
+    fallbackBody: "Lejupielādējiet lietotni, pēc tam piesakieties ar e-pastu un paroli.",
+    fallbackIos: "Lejupielādēt iPhone",
+    fallbackAndroid: "Lejupielādēt Android",
+    errorTitle: "Kaut kas nogāja greizi",
+  }),
+  bs: () => ({
+    resetTitle: "Resetujte lozinku",
+    resetIntro:
+      "Odaberite novu lozinku za svoj ByggExp račun. Prijavljivat ćete se svojim e-mailom i ovom lozinkom.",
+    resetSubmit: "Postavi novu lozinku",
+    confirmTitle: "Odaberite lozinku",
+    confirmIntro:
+      "Postavite lozinku da završite kreiranje ByggExp računa. Prijavljivat ćete se svojim e-mailom i ovom lozinkom.",
+    confirmSubmit: "Kreiraj račun",
+    okTitle: "Lozinka ažurirana",
+    okBody:
+      "Vaša lozinka je promijenjena. Otvorite aplikaciju i prijavite se novom lozinkom.",
+    okOpenApp: "Otvori aplikaciju",
+    okWebAdmin: "ili se prijavite u web adminu",
+    destTitle: "Račun spreman",
+    destQuestion: "Gdje želite nastaviti?",
+    destOpenApp: "Otvori aplikaciju",
+    destOpenWebAdmin: "Otvori web admin",
+    confirmedTitle: "E-mail potvrđen",
+    confirmedMessage: "Račun aktiviran. Otvaram ByggExp da vas prijavim.",
+    confirmedOpenApp: "Otvori ByggExp",
+    confirmedHint:
+      "Pritisnite dugme da otvorite aplikaciju i prijavite se. Nemate aplikaciju? Instalirajte ByggExp, otvorite je i prijavite se svojim e-mailom i lozinkom.",
+    fallbackTitle: "Otvori ByggExp",
+    fallbackBody: "Preuzmite aplikaciju, zatim se prijavite e-mailom i lozinkom.",
+    fallbackIos: "Preuzmi za iPhone",
+    fallbackAndroid: "Preuzmi za Android",
+    errorTitle: "Nešto je pošlo po zlu",
+  }),
+};
+
 export type ResetCopy = {
   subject: string;
   hi: string;

@@ -1,8 +1,12 @@
-import { Controller, Get, Header, Query, Res } from "@nestjs/common";
-import type { Response } from "express";
+import { Controller, Get, Header, Query, Req, Res } from "@nestjs/common";
+import type { Request, Response } from "express";
 import { AppService } from "./app.service";
 import { Public } from "./common/decorators/public.decorator";
-import { appMagicFallbackHtml, errorHtml } from "./auth/auth.controller";
+import {
+  appMagicFallbackHtml,
+  errorHtml,
+  langFromReq,
+} from "./auth/auth.controller";
 
 // BIMI-compliant logo (SVG Tiny 1.2 Portable/Secure): square viewBox, text
 // outlined to paths, a <title>, no scripts/filters/raster. Served so mail
@@ -42,7 +46,12 @@ export class AppController {
   // assetlinks components. An installed app intercepts the tap; otherwise the
   // browser loads this install-fallback page.
   @Get("app/magic")
-  appMagic(@Query("code") code: string, @Res() res: Response) {
+  appMagic(
+    @Query("code") code: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const lang = langFromReq(req);
     if (!code?.trim()) {
       res
         .status(400)
@@ -52,8 +61,9 @@ export class AppController {
     }
     // Reaching this page means the app did NOT intercept the Universal Link —
     // i.e. we're on desktop or the app isn't installed. The byggexp:// deep link
-    // is useless here, so only offer the store downloads.
-    res.status(200).type("html").send(appMagicFallbackHtml());
+    // is useless here, so only offer the store downloads (localized to the
+    // browser's language).
+    res.status(200).type("html").send(appMagicFallbackHtml(lang));
   }
 
   @Get("bimi-logo.svg")

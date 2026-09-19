@@ -427,25 +427,33 @@ export class AuthService {
     }
   }
 
+  // Resolve the reset token's account language so the reset page matches the
+  // language of the reset email. Non-throwing (falls back to sv).
+  async getResetMailLang(token: string): Promise<MailLang> {
+    const code = await this.usersService.getResetLanguageCode(token);
+    return resolveMailLang(code ?? undefined);
+  }
+
   // "Forgot password" step 2: the user submitted a new password on the reset
   // page. Hash it and apply it to every account the token unlocks.
-  async resetPassword(token: string, password: string): Promise<string | null> {
+  async resetPassword(
+    token: string,
+    password: string,
+  ): Promise<{ role: string | null; lang: MailLang }> {
     if (!password || password.length < 6) {
       throw new BadRequestException(
         "Password must be at least 6 characters long.",
       );
     }
     const hashedPassword = await this.hashPassword(password);
-    const { count, role } = await this.usersService.applyPasswordReset(
-      token,
-      hashedPassword,
-    );
+    const { count, role, language } =
+      await this.usersService.applyPasswordReset(token, hashedPassword);
     if (count < 1) {
       throw new BadRequestException(
         "This password reset link is invalid or has expired. Please request a new one.",
       );
     }
-    return role;
+    return { role, lang: resolveMailLang(language ?? undefined) };
   }
 
   // Invite activation step 1: validate the invite (verify-email) token so the
