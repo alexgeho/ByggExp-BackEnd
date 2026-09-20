@@ -31,7 +31,7 @@ export class Ata {
   @Prop({ type: Number, required: true })
   number: number;
 
-  @Prop({ enum: AtaType, default: AtaType.Addition })
+  @Prop({ type: String, enum: AtaType, default: AtaType.Addition })
   type: AtaType;
 
   @Prop({ default: "" })
@@ -53,7 +53,7 @@ export class Ata {
   @Prop({ type: String, default: null })
   attachmentUrl?: string | null;
 
-  @Prop({ enum: AtaStatus, default: AtaStatus.Registered, index: true })
+  @Prop({ type: String, enum: AtaStatus, default: AtaStatus.Registered, index: true })
   status: AtaStatus;
 
   @Prop({ type: String, ref: "User", default: null })

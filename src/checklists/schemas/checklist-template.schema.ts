@@ -28,7 +28,7 @@ export class ChecklistTemplate {
   @Prop({ required: true })
   name: string;
 
-  @Prop({ enum: ChecklistCategory, default: ChecklistCategory.Quality })
+  @Prop({ type: String, enum: ChecklistCategory, default: ChecklistCategory.Quality })
   category: ChecklistCategory;
 
   @Prop({ default: "" })

@@ -15,7 +15,7 @@ export class ChecklistItem {
   @Prop({ default: "" })
   reference: string;
 
-  @Prop({ enum: ChecklistItemResult, default: ChecklistItemResult.Pending })
+  @Prop({ type: String, enum: ChecklistItemResult, default: ChecklistItemResult.Pending })
   result: ChecklistItemResult;
 
   @Prop({ default: "" })
@@ -41,7 +41,7 @@ export class Checklist {
   @Prop({ required: true })
   title: string;
 
-  @Prop({ enum: ChecklistCategory, default: ChecklistCategory.Quality })
+  @Prop({ type: String, enum: ChecklistCategory, default: ChecklistCategory.Quality })
   category: ChecklistCategory;
 
   @Prop({ default: "" })
@@ -57,7 +57,7 @@ export class Checklist {
   @Prop({ type: [ChecklistItemSchema], default: [] })
   items: ChecklistItem[];
 
-  @Prop({ enum: ChecklistStatus, default: ChecklistStatus.Draft, index: true })
+  @Prop({ type: String, enum: ChecklistStatus, default: ChecklistStatus.Draft, index: true })
   status: ChecklistStatus;
 
   @Prop({ default: "" })

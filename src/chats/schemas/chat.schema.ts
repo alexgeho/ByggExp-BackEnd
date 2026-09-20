@@ -18,7 +18,7 @@ export class Chat {
   @Prop({ required: true, ref: "User" }) // Chat owner
   ownerId: string;
 
-  @Prop({ required: true, enum: ChatType })
+  @Prop({ type: String, required: true, enum: ChatType })
   type: ChatType;
 
   @Prop({ type: [String], ref: "User", default: [] }) // Chat participants

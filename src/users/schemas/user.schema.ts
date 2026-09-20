@@ -206,7 +206,7 @@ export class User {
   @Prop({ type: [String], default: [] })
   additionalDocuments: string[];
 
-  @Prop({ required: true, enum: UserRole, default: UserRole.Worker })
+  @Prop({ type: String, required: true, enum: UserRole, default: UserRole.Worker })
   role: UserRole;
 
   // Capability overrides on top of the role's default permission set.

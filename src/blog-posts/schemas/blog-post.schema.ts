@@ -17,7 +17,12 @@ export class BlogPost {
   @Prop({ required: true, trim: true })
   slug: string;
 
-  @Prop({ enum: BlogPostLocale, default: BlogPostLocale.Sv, index: true })
+  @Prop({
+    type: String,
+    enum: BlogPostLocale,
+    default: BlogPostLocale.Sv,
+    index: true,
+  })
   locale: BlogPostLocale;
 
   @Prop({ default: "" })

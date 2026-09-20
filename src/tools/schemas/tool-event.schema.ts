@@ -22,7 +22,7 @@ export class ToolEvent {
   @Prop({ type: String, ref: "Company", required: true, index: true })
   companyId: string;
 
-  @Prop({ enum: ToolEventType, required: true })
+  @Prop({ type: String, enum: ToolEventType, required: true })
   type: ToolEventType;
 
   @Prop({ type: String, ref: "User", default: null })

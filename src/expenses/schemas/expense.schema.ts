@@ -49,7 +49,7 @@ export class Expense {
   @Prop({ type: Number, default: 0 })
   vat: number;
 
-  @Prop({ enum: ExpensePaidBy, default: ExpensePaidBy.Own })
+  @Prop({ type: String, enum: ExpensePaidBy, default: ExpensePaidBy.Own })
   paidBy: ExpensePaidBy;
 
   @Prop({ type: String, default: null })
@@ -60,7 +60,7 @@ export class Expense {
   @Prop({ type: [String], default: [] })
   attachments: string[];
 
-  @Prop({ enum: ExpenseStatus, default: ExpenseStatus.Submitted, index: true })
+  @Prop({ type: String, enum: ExpenseStatus, default: ExpenseStatus.Submitted, index: true })
   status: ExpenseStatus;
 
   @Prop({ type: Date, default: null })

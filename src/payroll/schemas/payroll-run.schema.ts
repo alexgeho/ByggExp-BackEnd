@@ -65,7 +65,7 @@ export class PayrollRun {
   @Prop({ type: String, ref: 'Project', default: null })
   projectId?: string | null;
 
-  @Prop({ enum: PayrollStatus, default: PayrollStatus.Draft, index: true })
+  @Prop({ type: String, enum: PayrollStatus, default: PayrollStatus.Draft, index: true })
   status: PayrollStatus;
 
   @Prop({ type: [PayrollLineSchema], default: [] })

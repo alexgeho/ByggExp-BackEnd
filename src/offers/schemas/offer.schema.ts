@@ -101,7 +101,7 @@ export class Offer {
   @Prop({ type: Number, default: 0 })
   total: number;
 
-  @Prop({ enum: OfferStatus, default: OfferStatus.Draft })
+  @Prop({ type: String, enum: OfferStatus, default: OfferStatus.Draft })
   status: OfferStatus;
 }
 

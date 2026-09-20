@@ -43,10 +43,10 @@ export class ShiftEvent {
   @Prop({ type: String, ref: "Company", default: null, index: true })
   companyId?: string | null;
 
-  @Prop({ enum: ShiftEventType, required: true })
+  @Prop({ type: String, enum: ShiftEventType, required: true })
   type: ShiftEventType;
 
-  @Prop({ enum: ShiftEventSource, default: ShiftEventSource.Manual })
+  @Prop({ type: String, enum: ShiftEventSource, default: ShiftEventSource.Manual })
   source: ShiftEventSource;
 
   // completionReason / autoPausedReason as reported by the transition, kept for

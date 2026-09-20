@@ -29,7 +29,7 @@ export class LeaveRequest {
   @Prop({ type: String, ref: "User", required: true, index: true })
   userId: string;
 
-  @Prop({ enum: LeaveType, default: LeaveType.Vacation })
+  @Prop({ type: String, enum: LeaveType, default: LeaveType.Vacation })
   type: LeaveType;
 
   @Prop({ default: "" })
@@ -45,7 +45,7 @@ export class LeaveRequest {
   @Prop({ default: "" })
   reason: string;
 
-  @Prop({ enum: LeaveStatus, default: LeaveStatus.Pending, index: true })
+  @Prop({ type: String, enum: LeaveStatus, default: LeaveStatus.Pending, index: true })
   status: LeaveStatus;
 
   @Prop({ default: "" })

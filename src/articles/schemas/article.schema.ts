@@ -47,7 +47,7 @@ export class Article {
   @Prop({ type: Number, default: 0 })
   purchasePriceExclMoms: number;
 
-  @Prop({ enum: HouseworkType, default: HouseworkType.None })
+  @Prop({ type: String, enum: HouseworkType, default: HouseworkType.None })
   houseworkType: HouseworkType;
 
   @Prop({ type: [String], default: [] })

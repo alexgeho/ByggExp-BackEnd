@@ -6,7 +6,9 @@ export type SiteSeoDocument = SiteSeo & Document;
 
 @Schema({ timestamps: true })
 export class SiteSeo {
-  @Prop({ required: true, enum: BlogPostLocale, unique: true })
+  // The type is spelled out: a TS enum reaches Mongoose as an ambiguous
+  // union through decorator metadata, which fails to map without it.
+  @Prop({ type: String, required: true, enum: BlogPostLocale, unique: true })
   locale: BlogPostLocale;
 
   @Prop({ default: "" })

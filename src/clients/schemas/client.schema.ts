@@ -16,7 +16,7 @@ export class Client {
   @Prop({ ref: "User", required: true })
   createdByUserId: string;
 
-  @Prop({ enum: ClientType, default: ClientType.Company })
+  @Prop({ type: String, enum: ClientType, default: ClientType.Company })
   clientType: ClientType;
 
   @Prop({ default: "" })

@@ -196,7 +196,7 @@ export class Invoice {
   @Prop({ type: Number, default: null })
   creditOfNumber?: number | null;
 
-  @Prop({ enum: InvoiceStatus, default: InvoiceStatus.Draft })
+  @Prop({ type: String, enum: InvoiceStatus, default: InvoiceStatus.Draft })
   status: InvoiceStatus;
 
   @Prop({ type: Date, default: null })
