@@ -1,5 +1,6 @@
 import {
   Body,
+  Patch,
   Controller,
   Get,
   Param,
@@ -23,6 +24,7 @@ import { UserRole } from "../users/schemas/user.schema";
 import { CompleteShiftDto } from "./dto/complete-shift.dto";
 import { ExportShiftsDto } from "./dto/export-shifts.dto";
 import { ListShiftsDto } from "./dto/list-shifts.dto";
+import { DayReportDto } from "./dto/day-report.dto";
 import { SetManualHoursDto } from "./dto/set-manual-hours.dto";
 import { AddManualHoursDto } from "./dto/add-manual-hours.dto";
 import { PauseShiftDto } from "./dto/pause-shift.dto";
@@ -160,6 +162,21 @@ export class ShiftsController {
     @Body() dto: CompleteShiftDto,
   ) {
     return this.shiftsService.complete(req.user, id, dto);
+  }
+
+  @Patch(":id/report")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  saveDayReport(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() dto: DayReportDto,
+  ) {
+    return this.shiftsService.saveDayReport(req.user, id, dto);
   }
 
   @Post(":id/manual-hours")

@@ -29,6 +29,7 @@ import {
 import { CompleteShiftDto } from "./dto/complete-shift.dto";
 import { ExportShiftsDto, HoursSource } from "./dto/export-shifts.dto";
 import { ListShiftsDto } from "./dto/list-shifts.dto";
+import { DayReportDto } from "./dto/day-report.dto";
 import { SetManualHoursDto } from "./dto/set-manual-hours.dto";
 import { AddManualHoursDto } from "./dto/add-manual-hours.dto";
 import { PauseShiftDto } from "./dto/pause-shift.dto";
@@ -565,6 +566,32 @@ export class ShiftsService {
 
   // The worker records the hours they actually worked on their own completed
   // shift (the "Manual" hours source). Passing null clears the entry.
+  // Dagens rapport — the worker fills in the day's pay bucket, travel and a
+  // diary line on their own completed shift. Only the fields sent are touched,
+  // so the sheet can save one section at a time.
+  async saveDayReport(
+    user: AuthenticatedUser,
+    shiftId: string,
+    dto: DayReportDto,
+  ) {
+    const shift = await this.findOwnedShift(user.userId, shiftId);
+
+    if (dto.hourType !== undefined) shift.hourType = dto.hourType;
+    if (dto.travelKm !== undefined) {
+      shift.travelKm = Math.max(0, Number(dto.travelKm) || 0);
+    }
+    if (dto.travelMinutes !== undefined) {
+      shift.travelMinutes = Math.max(0, Math.round(dto.travelMinutes) || 0);
+    }
+    if (dto.perDiem !== undefined) shift.perDiem = dto.perDiem;
+    if (dto.dayNote !== undefined) shift.dayNote = dto.dayNote.trim();
+
+    shift.reportedAt = new Date();
+    await shift.save();
+
+    return shift;
+  }
+
   async setManualHours(
     user: AuthenticatedUser,
     shiftId: string,

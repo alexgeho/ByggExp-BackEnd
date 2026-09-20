@@ -87,6 +87,34 @@ export class Shift {
   @Prop({ type: Number, default: null })
   manualDurationMs?: number | null;
 
+  // --- Dagens rapport: what the worker adds to the day once the pass is done.
+  // Kept on the shift itself, because that IS the day's work record — a
+  // separate "time report" collection would just have to be joined back.
+
+  // Which pay bucket the hours belong to. Payroll already multiplies by hour
+  // type, so this closes the path from the worker's tap to the payslip.
+  @Prop({ default: "normal" }) // normal | overtime | ob
+  hourType?: string;
+
+  // Travel the worker is owed for: distance driven and time spent travelling,
+  // plus the per-diem bracket for the day.
+  @Prop({ type: Number, default: 0 })
+  travelKm?: number;
+
+  @Prop({ type: Number, default: 0 })
+  travelMinutes?: number;
+
+  @Prop({ default: "none" }) // none | half | full
+  perDiem?: string;
+
+  // One line of diary for the day, written where the hours are reported rather
+  // than on a separate screen.
+  @Prop({ default: "" })
+  dayNote?: string;
+
+  @Prop({ type: Date, default: null })
+  reportedAt?: Date | null;
+
   @Prop({ default: "" })
   completionReason?: string;
 
