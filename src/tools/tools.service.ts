@@ -55,10 +55,14 @@ export class ToolsService {
   }
 
   async create(createToolDto: CreateToolDto, user?: AuthUser): Promise<Tool> {
-    const payload: CreateToolDto & { qrId?: string } = {
+    const payload: CreateToolDto & {
+      qrId?: string;
+      createdByUserId?: string | null;
+    } = {
       ...createToolDto,
       workerIds: createToolDto.workerIds || [],
       projectIds: createToolDto.projectIds || [],
+      createdByUserId: user?.userId || null,
     };
 
     this.syncPhotoFields(payload);

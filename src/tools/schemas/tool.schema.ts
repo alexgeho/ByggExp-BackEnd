@@ -32,6 +32,11 @@ export class Tool {
   @Prop({ ref: "Company" })
   companyId?: string;
 
+  // Who registered the tool. Drives the "Lägg till verktyg" onboarding step:
+  // it must reflect what THIS user did, not what the company already owns.
+  @Prop({ type: String, ref: "User", default: null, index: true })
+  createdByUserId?: string | null;
+
   // Short code printed on the QR label stuck to the tool (e.g. "TL-4K9Q2X").
   @Prop({ type: String, default: null, index: true })
   qrId?: string | null;
