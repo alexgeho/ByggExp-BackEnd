@@ -38,4 +38,9 @@ export class DayReportDto {
   @MaxLength(2000)
   @IsOptional()
   dayNote?: string;
+
+  // null unlinks the day from its ÄTA.
+  @IsString()
+  @IsOptional()
+  ataId?: string | null;
 }

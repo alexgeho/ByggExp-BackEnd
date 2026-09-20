@@ -13,6 +13,7 @@ import { Model } from "mongoose";
 import { NotificationsService } from "../notifications/notifications.service";
 import PDFDocument from "pdfkit";
 import { Project, ProjectDocument } from "../projects/schemas/project.schema";
+import { Ata, AtaDocument } from "../ata/schemas/ata.schema";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import { launchForInvoicePdf } from "../invoices/puppeteer-launch";
 import {
@@ -132,6 +133,7 @@ export class ShiftsService {
     private readonly companyModel: Model<CompanyDocument>,
     @InjectModel(HourAdjustment.name)
     private readonly adjustmentModel: Model<HourAdjustmentDocument>,
+    @InjectModel(Ata.name) private readonly ataModel: Model<AtaDocument>,
     private readonly notificationsService: NotificationsService,
     private readonly usersService: UsersService,
   ) {}
@@ -566,6 +568,51 @@ export class ShiftsService {
 
   // The worker records the hours they actually worked on their own completed
   // shift (the "Manual" hours source). Passing null clears the entry.
+  // Attest — a manager confirms a day's hours. Reuses the same access filter the
+  // listing uses, so a manager can only attest a shift they are allowed to see
+  // in the first place. Attesting twice is a no-op; passing approved: false
+  // takes it back.
+  async setShiftApproval(
+    user: AuthenticatedUser,
+    shiftId: string,
+    approved: boolean,
+  ) {
+    const accessFilter = await this.buildAccessibleShiftFilter(user, {});
+    const shift = await this.shiftModel
+      .findOne({ ...accessFilter, _id: shiftId })
+      .exec();
+
+    if (!shift) {
+      throw new NotFoundException("Shift not found");
+    }
+
+    shift.approvedAt = approved ? new Date() : null;
+    shift.approvedByUserId = approved ? user.userId : null;
+    await shift.save();
+
+    return shift;
+  }
+
+  // The ÄTA options for the project of one of the worker's own shifts. The ÄTA
+  // list itself is management-only and carries amounts, so this returns just
+  // enough to tag the day — number and title — and only for a shift the caller
+  // owns.
+  async getAtaOptionsForShift(user: AuthenticatedUser, shiftId: string) {
+    const shift = await this.findOwnedShift(user.userId, shiftId);
+    const rows = await this.ataModel
+      .find({ projectId: shift.projectId })
+      .sort({ number: -1 })
+      .select("_id number title")
+      .lean()
+      .exec();
+
+    return rows.map((row) => ({
+      id: String(row._id),
+      number: row.number,
+      title: row.title,
+    }));
+  }
+
   // The worker's most recently reported day. Feeds "copy yesterday" in the app:
   // travel and pay bucket are usually identical day after day on the same site,
   // and retyping them is the part people stop doing.
@@ -606,6 +653,7 @@ export class ShiftsService {
     }
     if (dto.perDiem !== undefined) shift.perDiem = dto.perDiem;
     if (dto.dayNote !== undefined) shift.dayNote = dto.dayNote.trim();
+    if (dto.ataId !== undefined) shift.ataId = dto.ataId || null;
 
     shift.reportedAt = new Date();
     await shift.save();

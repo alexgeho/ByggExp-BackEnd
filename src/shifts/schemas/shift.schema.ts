@@ -112,8 +112,21 @@ export class Shift {
   @Prop({ default: "" })
   dayNote?: string;
 
+  // The ÄTA (variation order) the day's work belongs to, when it isn't plain
+  // contract work — that is what makes extra work billable later.
+  @Prop({ type: String, ref: "Ata", default: null })
+  ataId?: string | null;
+
   @Prop({ type: Date, default: null })
   reportedAt?: Date | null;
+
+  // Attest: a manager confirms the day's hours, which is what turns them into
+  // something payroll and the project economy can trust.
+  @Prop({ type: Date, default: null, index: true })
+  approvedAt?: Date | null;
+
+  @Prop({ type: String, ref: "User", default: null })
+  approvedByUserId?: string | null;
 
   @Prop({ default: "" })
   completionReason?: string;

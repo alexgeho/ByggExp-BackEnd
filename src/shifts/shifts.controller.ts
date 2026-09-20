@@ -175,6 +175,31 @@ export class ShiftsController {
     return this.shiftsService.getLastDayReport(req.user);
   }
 
+  @Patch(":id/approval")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  setApproval(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() body: { approved?: boolean },
+  ) {
+    return this.shiftsService.setShiftApproval(
+      req.user,
+      id,
+      body?.approved !== false,
+    );
+  }
+
+  @Get(":id/ata-options")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  getAtaOptions(@Request() req, @Param("id") id: string) {
+    return this.shiftsService.getAtaOptionsForShift(req.user, id);
+  }
+
   @Patch(":id/report")
   @Roles(
     UserRole.SuperAdmin,
