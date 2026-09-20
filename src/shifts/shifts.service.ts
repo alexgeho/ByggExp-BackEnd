@@ -83,6 +83,16 @@ type SerializedShiftRecord = {
   durationMs: number;
   storedDurationMs: number;
   manualDurationMs: number | null;
+  // Dagens rapport — sent back with the shift, otherwise the app reopens the
+  // report empty and the day looks unreported however often it is saved.
+  hourType?: string;
+  travelKm?: number;
+  travelMinutes?: number;
+  perDiem?: string;
+  dayNote?: string;
+  ataId?: string | null;
+  reportedAt?: Date | null;
+  approvedAt?: Date | null;
   completionReason?: string | null;
   completionSource?: string | null;
   completionNotifiedAt?: Date | null;
@@ -1671,10 +1681,17 @@ export class ShiftsService {
       { header: "Duration", key: "duration", width: 14 },
       { header: "Status", key: "status", width: 14 },
       { header: "Photos", key: "photos", width: 10 },
+      // Dagens rapport — the columns payroll actually needs out of the app.
+      { header: "Hour type", key: "hourType", width: 14 },
+      { header: "Travel km", key: "travelKm", width: 12 },
+      { header: "Travel h", key: "travelHours", width: 12 },
+      { header: "Per diem", key: "perDiem", width: 12 },
+      { header: "Approved", key: "approved", width: 12 },
+      { header: "Note", key: "note", width: 40 },
     ];
 
     worksheet.addRow(["Shift report"]);
-    worksheet.mergeCells("A1:I1");
+    worksheet.mergeCells("A1:O1");
     worksheet.getCell("A1").font = { size: 16, bold: true };
 
     worksheet.addRow(["Generated at", this.formatDateTimeValue(new Date())]);
@@ -1697,6 +1714,12 @@ export class ShiftsService {
       duration: "Duration",
       status: "Status",
       photos: "Photos",
+      hourType: "Hour type",
+      travelKm: "Travel km",
+      travelHours: "Travel h",
+      perDiem: "Per diem",
+      approved: "Approved",
+      note: "Note",
     });
 
     headerRow.font = { bold: true };
@@ -1731,6 +1754,14 @@ export class ShiftsService {
           end: this.formatDateTimeValue(shift.endedAt),
           duration: this.formatDurationLabel(shift.durationMs),
           status: shift.status,
+      hourType: shift.hourType || "normal",
+      travelKm: shift.travelKm || 0,
+      travelMinutes: shift.travelMinutes || 0,
+      perDiem: shift.perDiem || "none",
+      dayNote: shift.dayNote || "",
+      ataId: shift.ataId || null,
+      reportedAt: shift.reportedAt || null,
+      approvedAt: shift.approvedAt || null,
           photos: shift.photos?.length || 0,
         });
       }
