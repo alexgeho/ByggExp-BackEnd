@@ -78,6 +78,12 @@ export class Company {
   @Prop({ default: "" })
   orgNumber: string;
 
+  // Who last saved the company details form. The app's Kom igang checklist ticks
+  // "Fyll i företagsuppgifter" only for that person — details someone else
+  // filled in are not this user's step.
+  @Prop({ type: String, ref: "User", default: null })
+  detailsUpdatedByUserId?: string | null;
+
   @Prop({ default: "" })
   vatNumber: string;
 

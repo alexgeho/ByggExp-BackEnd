@@ -432,9 +432,16 @@ export class CompanyService {
   async update(
     id: string,
     updateCompanyDto: Partial<CreateCompanyDto>,
+    actorUserId?: string | null,
   ): Promise<Company> {
     const updatedCompany = await this.companyModel
-      .findByIdAndUpdate(id, updateCompanyDto, { new: true })
+      .findByIdAndUpdate(
+        id,
+        actorUserId
+          ? { ...updateCompanyDto, detailsUpdatedByUserId: actorUserId }
+          : updateCompanyDto,
+        { new: true },
+      )
       .exec();
     if (!updatedCompany) {
       throw new NotFoundException(`Company with ID "${id}" not found`);

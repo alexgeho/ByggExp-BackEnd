@@ -163,7 +163,7 @@ export class CompanyController {
     if (req.user.role === UserRole.CompanyAdmin && req.user.companyId !== id) {
       throw new Error("Access denied");
     }
-    return this.companyService.update(id, updateCompanyDto);
+    return this.companyService.update(id, updateCompanyDto, req.user?.userId);
   }
 
   @Post(":id/logo")
