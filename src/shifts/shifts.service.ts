@@ -241,23 +241,11 @@ export class ShiftsService {
 
     const project = await this.ensureProjectAccess(user, dto.projectId);
     this.assertCanStartShift(project);
-    // A person is in one place at a time, so a day is one timeline: an open
-    // shift — running OR paused — has to be finished before the next starts.
-    // A paused shift used to be allowed to sit open while another ran, which
-    // let two projects claim the same hours.
-    const openShift = await this.shiftModel
-      .findOne({
-        workerId: user.userId,
-        status: { $in: [ShiftStatus.Active, ShiftStatus.Paused] },
-      })
-      .exec();
-
-    if (openShift) {
-      throw new BadRequestException(
-        "Finish the current shift before starting a new one.",
-      );
-    }
-
+    // A person is in one place at a time, so a day is one timeline. Starting
+    // somewhere else closes what was open — running or paused — instead of
+    // leaving it to sit and claim the same hours as the new one. Refusing here
+    // would break the geofence switch, which pauses the old site and starts the
+    // new one on its own.
     const shiftDate = this.getDateKey(new Date());
     const existingShiftForProject = await this.shiftModel
       .findOne({
@@ -273,6 +261,22 @@ export class ShiftsService {
       throw new BadRequestException(
         "A shift for this project already exists today. Resume it instead.",
       );
+    }
+
+    // Work started somewhere else, so whatever is still open on ANOTHER
+    // project closes now — running or paused. Leaving it open let two sites
+    // claim the same hours. The same project is handled above: that one is
+    // resumed, never re-opened as a second shift.
+    const openElsewhere = await this.shiftModel
+      .findOne({
+        workerId: user.userId,
+        projectId: { $ne: dto.projectId },
+        status: { $in: [ShiftStatus.Active, ShiftStatus.Paused] },
+      })
+      .exec();
+
+    if (openElsewhere) {
+      await this.closeShiftForProjectSwitch(user, openElsewhere);
     }
 
     const now = new Date();
@@ -448,6 +452,42 @@ export class ShiftsService {
     }
 
     return this.serializeShift(shift);
+  }
+
+  // Closes whatever was open because work started somewhere else. Kept apart
+  // from complete() so the switch cannot be blocked by a project's
+  // completion window — the shift is ending because another one began.
+  private async closeShiftForProjectSwitch(
+    user: AuthenticatedUser,
+    shift: ShiftDocument,
+  ) {
+    const now = new Date();
+
+    if (shift.status === ShiftStatus.Active) {
+      this.closeOpenSegment(shift, now);
+      shift.durationMs = this.sumSegmentDurations(shift.segments);
+      shift.lastResumedAt = null;
+    }
+
+    shift.endedAt = shift.endedAt || now;
+    shift.status = ShiftStatus.Completed;
+    shift.completionReason = "switched_project";
+    shift.completionSource = "auto";
+    shift.completionNotifiedAt = null;
+    await shift.save();
+
+    this.recordEvent(
+      shift,
+      ShiftEventType.Completed,
+      ShiftEventSource.Manual,
+      {
+        reason: "switched_project",
+        byUserId: user.userId,
+        occurredAt: now,
+      },
+    );
+
+    return shift;
   }
 
   async complete(
