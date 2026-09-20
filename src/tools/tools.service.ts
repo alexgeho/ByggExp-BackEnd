@@ -213,10 +213,15 @@ export class ToolsService {
   }
 
   async findAccessible(user: AuthUser): Promise<Tool[]> {
-    // Superadmin is scoped to its own company like a company admin.
+    // Superadmin is scoped to its own company like a company admin. ProjectAdmin
+    // sees the whole company register too: it may create tools and attach them
+    // to any worker/project in the company (those endpoints only check
+    // companyId), and a storage tool it creates has no projectIds — filtering by
+    // project alone hid the tool the creator had just saved.
     if (
       (user.role === UserRole.CompanyAdmin ||
-        user.role === UserRole.SuperAdmin) &&
+        user.role === UserRole.SuperAdmin ||
+        user.role === UserRole.ProjectAdmin) &&
       user.companyId
     ) {
       const companyProjects = await this.projectModel
