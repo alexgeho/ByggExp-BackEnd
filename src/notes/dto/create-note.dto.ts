@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from "class-validator";
+import { IsDateString, IsOptional, IsString } from "class-validator";
 
 export class CreateNoteDto {
   @IsOptional()
@@ -8,4 +8,9 @@ export class CreateNoteDto {
   @IsOptional()
   @IsString()
   body?: string;
+
+  // ISO timestamp, or null to clear the bell.
+  @IsOptional()
+  @IsDateString()
+  remindAt?: string | null;
 }

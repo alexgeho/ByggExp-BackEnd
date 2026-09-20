@@ -53,6 +53,7 @@ import { GdprModule } from "./gdpr/gdpr.module";
 import { ModerationModule } from "./moderation/moderation.module";
 import { CertificateRemindersModule } from "./certificate-reminders/certificate-reminders.module";
 import { PaymentRemindersModule } from "./payment-reminders/payment-reminders.module";
+import { NoteRemindersModule } from "./note-reminders/note-reminders.module";
 import { ScanningModule } from "./scanning/scanning.module";
 import { SystemModule } from "./system/system.module";
 
@@ -100,6 +101,7 @@ import { SystemModule } from "./system/system.module";
     GdprModule,
     CertificateRemindersModule,
     PaymentRemindersModule,
+    NoteRemindersModule,
     ScanningModule,
     SystemModule,
     OffersModule,

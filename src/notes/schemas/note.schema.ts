@@ -20,6 +20,14 @@ export class Note {
 
   @Prop({ default: "" })
   body: string;
+
+  // Optional bell on a note: when set, the owner gets one push at that moment.
+  // Cleared once sent, so a note never nags twice.
+  @Prop({ type: Date, default: null, index: true })
+  remindAt?: Date | null;
+
+  @Prop({ type: Date, default: null })
+  remindedAt?: Date | null;
 }
 
 export const NoteSchema = SchemaFactory.createForClass(Note);

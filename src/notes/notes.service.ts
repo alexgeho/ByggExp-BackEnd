@@ -37,6 +37,7 @@ export class NotesService {
     const doc = new this.model({
       title: dto.title ?? "",
       body: dto.body ?? "",
+      remindAt: dto.remindAt ? new Date(dto.remindAt) : null,
       companyId,
       userId: this.userId(user),
     });
@@ -67,6 +68,12 @@ export class NotesService {
     const doc = await this.findOne(id, user);
     if (dto.title !== undefined) doc.title = dto.title;
     if (dto.body !== undefined) doc.body = dto.body;
+    if (dto.remindAt !== undefined) {
+      // Moving or clearing the bell re-arms it, so a note reminded once can be
+      // set again for a later time.
+      doc.remindAt = dto.remindAt ? new Date(dto.remindAt) : null;
+      doc.remindedAt = null;
+    }
     // Owner + tenant are immutable.
     await doc.save();
     return doc;
