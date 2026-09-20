@@ -241,13 +241,20 @@ export class ShiftsService {
 
     const project = await this.ensureProjectAccess(user, dto.projectId);
     this.assertCanStartShift(project);
-    const activeShift = await this.shiftModel
-      .findOne({ workerId: user.userId, status: ShiftStatus.Active })
+    // A person is in one place at a time, so a day is one timeline: an open
+    // shift — running OR paused — has to be finished before the next starts.
+    // A paused shift used to be allowed to sit open while another ran, which
+    // let two projects claim the same hours.
+    const openShift = await this.shiftModel
+      .findOne({
+        workerId: user.userId,
+        status: { $in: [ShiftStatus.Active, ShiftStatus.Paused] },
+      })
       .exec();
 
-    if (activeShift) {
+    if (openShift) {
       throw new BadRequestException(
-        "Pause the current shift before starting a new one.",
+        "Finish the current shift before starting a new one.",
       );
     }
 
@@ -758,6 +765,28 @@ export class ShiftsService {
     } else {
       const startedAt = new Date(`${dto.date}T08:00:00`);
       const endedAt = new Date(startedAt.getTime() + durationMs);
+
+      // Same rule for hours entered by hand: the new window may not run over a
+      // shift the worker already has that day, on any project.
+      const sameDayShifts = await this.shiftModel
+        .find({ workerId: dto.workerId, shiftDate: dto.date })
+        .select("startedAt endedAt projectNameSnapshot")
+        .lean()
+        .exec();
+
+      const overlaps = sameDayShifts.some((other) => {
+        const otherStart = new Date(other.startedAt).getTime();
+        const otherEnd = new Date(
+          other.endedAt || other.startedAt,
+        ).getTime();
+        return startedAt.getTime() < otherEnd && otherStart < endedAt.getTime();
+      });
+
+      if (overlaps) {
+        throw new BadRequestException(
+          "Those hours overlap another shift that day.",
+        );
+      }
       target = await new this.shiftModel({
         workerId: dto.workerId,
         projectId: dto.projectId,
