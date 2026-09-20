@@ -164,6 +164,17 @@ export class ShiftsController {
     return this.shiftsService.complete(req.user, id, dto);
   }
 
+  @Get("last-report")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  getLastDayReport(@Request() req) {
+    return this.shiftsService.getLastDayReport(req.user);
+  }
+
   @Patch(":id/report")
   @Roles(
     UserRole.SuperAdmin,

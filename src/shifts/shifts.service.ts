@@ -566,6 +566,27 @@ export class ShiftsService {
 
   // The worker records the hours they actually worked on their own completed
   // shift (the "Manual" hours source). Passing null clears the entry.
+  // The worker's most recently reported day. Feeds "copy yesterday" in the app:
+  // travel and pay bucket are usually identical day after day on the same site,
+  // and retyping them is the part people stop doing.
+  async getLastDayReport(user: AuthenticatedUser) {
+    const shift = await this.shiftModel
+      .findOne({ workerId: user.userId, reportedAt: { $ne: null } })
+      .sort({ reportedAt: -1 })
+      .exec();
+
+    if (!shift) return null;
+
+    return {
+      shiftDate: shift.shiftDate,
+      projectNameSnapshot: shift.projectNameSnapshot,
+      hourType: shift.hourType || "normal",
+      travelKm: shift.travelKm || 0,
+      travelMinutes: shift.travelMinutes || 0,
+      perDiem: shift.perDiem || "none",
+    };
+  }
+
   // Dagens rapport — the worker fills in the day's pay bucket, travel and a
   // diary line on their own completed shift. Only the fields sent are touched,
   // so the sheet can save one section at a time.
