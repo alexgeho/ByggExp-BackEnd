@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -32,6 +33,12 @@ export class ToolsService {
     @InjectModel(ToolEvent.name)
     private eventModel: Model<ToolEventDocument>,
   ) {}
+
+  // Codes are stored upper-case and trimmed so a scan and a typed-in code of
+  // the same label resolve to one tool.
+  private normalizeQrId(value?: string | null): string {
+    return (value || "").trim().toUpperCase();
+  }
 
   // Short, human-typeable label code (avoids ambiguous chars).
   private async generateQrId(): Promise<string> {
@@ -67,7 +74,21 @@ export class ToolsService {
       payload.companyId = user.companyId;
     }
 
-    payload.qrId = await this.generateQrId();
+    // A code scanned off a label already on the tool wins; otherwise generate
+    // one. Codes are unique across tools — scanning a code that is already in
+    // use would make the register ambiguous.
+    const scannedQrId = this.normalizeQrId(createToolDto.qrId);
+    if (scannedQrId) {
+      const clash = await this.toolModel.exists({ qrId: scannedQrId });
+      if (clash) {
+        throw new ConflictException(
+          `Code "${scannedQrId}" already belongs to another tool`,
+        );
+      }
+      payload.qrId = scannedQrId;
+    } else {
+      payload.qrId = await this.generateQrId();
+    }
 
     const tool = await new this.toolModel(payload).save();
     if (tool.companyId) {

@@ -77,4 +77,10 @@ export class CreateToolDto {
   @IsString()
   @IsOptional()
   nextInspectionDate?: string;
+
+  // Code scanned off a label already stuck to the tool. Left out, the server
+  // generates one (TL-XXXXXX).
+  @IsString()
+  @IsOptional()
+  qrId?: string;
 }
