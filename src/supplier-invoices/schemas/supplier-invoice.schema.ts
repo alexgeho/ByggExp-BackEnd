@@ -33,6 +33,17 @@ export class SupplierInvoice {
   @Prop({ default: "" })
   dueDate: string;
 
+  // Which reminder milestone was last sent for this bill (7 / 1 / 0 days left,
+  // -1 = already overdue). Keeps the daily sweep from nagging twice for the same
+  // milestone; reset when the due date moves or the bill is re-opened.
+  @Prop({ type: Number, default: null })
+  lastReminderBucket?: number | null;
+
+  // Start-of-day timestamp of the last reminder, so an overdue bill nags once a
+  // day rather than on every sweep.
+  @Prop({ type: Number, default: null })
+  lastReminderDay?: number | null;
+
   @Prop({ default: "" })
   category: string;
 

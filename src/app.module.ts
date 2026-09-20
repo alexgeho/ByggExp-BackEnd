@@ -52,6 +52,7 @@ import { TeamsModule } from "./teams/teams.module";
 import { GdprModule } from "./gdpr/gdpr.module";
 import { ModerationModule } from "./moderation/moderation.module";
 import { CertificateRemindersModule } from "./certificate-reminders/certificate-reminders.module";
+import { PaymentRemindersModule } from "./payment-reminders/payment-reminders.module";
 import { ScanningModule } from "./scanning/scanning.module";
 import { SystemModule } from "./system/system.module";
 
@@ -98,6 +99,7 @@ import { SystemModule } from "./system/system.module";
     TeamsModule,
     GdprModule,
     CertificateRemindersModule,
+    PaymentRemindersModule,
     ScanningModule,
     SystemModule,
     OffersModule,

@@ -307,6 +307,9 @@ export class SupplierInvoicesService {
       doc.approvedAt = null;
       doc.paidAt = null;
     }
+    // Re-opening a bill re-arms the payment reminders; paying it stops them.
+    doc.lastReminderBucket = null;
+    doc.lastReminderDay = null;
     await doc.save();
     return doc;
   }
