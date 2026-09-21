@@ -86,6 +86,14 @@ export class CreateSupplierInvoiceDto {
   attachments?: string[];
 
   @IsOptional()
+  @IsString()
+  creditOfId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  creditOfNumber?: string;
+
+  @IsOptional()
   @IsIn(Object.values(SupplierInvoiceStatus))
   status?: SupplierInvoiceStatus;
 }

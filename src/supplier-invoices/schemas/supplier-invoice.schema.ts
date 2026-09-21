@@ -108,6 +108,15 @@ export class SupplierInvoice {
   })
   status: SupplierInvoiceStatus;
 
+  // A credit note (kreditfaktura) received from the supplier: it reverses an
+  // earlier bill, in full or in part, and carries negative amounts. These two
+  // point back at the bill it settles.
+  @Prop({ type: String, default: null, index: true })
+  creditOfId?: string | null;
+
+  @Prop({ default: "" })
+  creditOfNumber?: string;
+
   @Prop({ type: String, ref: "User", default: null })
   createdByUserId?: string | null;
 

@@ -64,6 +64,16 @@ export class SupplierInvoicesController {
     return this.service.create(dto, req.user);
   }
 
+  // Credit a received bill: full by default, partial when an amount is given.
+  @Post(":id/credit")
+  credit(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() body: { amountExclVat?: number },
+  ) {
+    return this.service.credit(id, req.user, body?.amountExclVat);
+  }
+
   // Download the attached originals for several invoices as one zip.
   @Post("attachments/zip")
   downloadAttachmentsZip(

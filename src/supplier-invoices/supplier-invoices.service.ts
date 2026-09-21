@@ -138,6 +138,67 @@ export class SupplierInvoicesService {
     return doc.save();
   }
 
+  // Credit a bill we have received: a negated copy that settles it, in full or
+  // — when an amount is given — in part. A returned half of a 50 000 delivery
+  // becomes a -25 000 entry against the original, which is how the accountant
+  // expects to see it; deleting the bill is not an option once it is booked.
+  async credit(
+    id: string,
+    user: AuthUser,
+    amountExclVat?: number,
+  ): Promise<SupplierInvoiceDocument> {
+    const source = await this.findOne(id, user);
+
+    if (source.creditOfId) {
+      throw new BadRequestException(
+        "A credit note cannot itself be credited",
+      );
+    }
+
+    const sourceExcl = Number(source.amountExclVat) || 0;
+    const sourceVat = Number(source.vat) || 0;
+    const partial =
+      typeof amountExclVat === "number" && Number.isFinite(amountExclVat)
+        ? Math.min(Math.abs(amountExclVat), Math.abs(sourceExcl))
+        : null;
+
+    // A partial credit keeps the original VAT rate rather than a flat share, so
+    // the reversed VAT matches what was booked.
+    const excl = partial === null ? sourceExcl : partial;
+    const vatShare =
+      sourceExcl !== 0 ? (sourceVat / sourceExcl) * excl : sourceVat;
+
+    const credit = new this.model({
+      companyId: source.companyId,
+      projectId: source.projectId || null,
+      supplierName: source.supplierName,
+      supplierOrgNumber: source.supplierOrgNumber,
+      invoiceNumber: source.invoiceNumber
+        ? `${source.invoiceNumber}-K`
+        : "",
+      invoiceDate: new Date().toISOString().slice(0, 10),
+      dueDate: source.dueDate,
+      category: source.category,
+      ocr: source.ocr,
+      bankgiro: source.bankgiro,
+      plusgiro: source.plusgiro,
+      iban: source.iban,
+      bic: source.bic,
+      currency: source.currency,
+      amountExclVat: round2(-excl),
+      vat: round2(-vatShare),
+      total: round2(-(excl + vatShare)),
+      notes: source.notes,
+      source: "manual",
+      creditOfId: String(source._id),
+      creditOfNumber: source.invoiceNumber || "",
+      status: SupplierInvoiceStatus.Registered,
+      createdByUserId: user.userId || null,
+    });
+
+    return credit.save();
+  }
+
   async findAll(user: AuthUser, projectId?: string) {
     if (!user.companyId) {
       return [];
