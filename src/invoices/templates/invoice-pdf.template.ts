@@ -106,13 +106,13 @@ body {
 .invoice-header__top {
   display: grid;
   grid-template-columns: 1.1fr 1fr 1fr;
-  gap: 20px;
+  gap: 32px;
   align-items: start;
 }
-.invoice-header__logo img { max-height: 130px; max-width: 100%; object-fit: contain; display: block; }
+.invoice-header__logo img { max-height: 96px; max-width: 100%; object-fit: contain; display: block; }
 .invoice-header__sida { text-align: right; font-size: 12px; color: #333; margin-bottom: 8px; }
-.invoice-header__title { font-size: 30px; font-weight: bold; margin: 0 0 18px; }
-.invoice-header__recipient { font-weight: bold; font-size: 14px; line-height: 1.5; margin-top: 0; }
+.invoice-header__title { font-size: 24px; font-weight: bold; margin: 0 0 14px; }
+.invoice-header__recipient { font-weight: bold; font-size: 12.5px; line-height: 1.5; margin-top: 0; }
 .invoice-header__meta {
   display: grid;
   grid-template-columns: max-content max-content;
@@ -190,7 +190,7 @@ body {
 .invoice-summary__totals .lbl { font-size: 13px; font-weight: bold; padding-bottom: 2px; }
 .invoice-summary__totals .val { font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .invoice-summary__totals .att-lbl { text-align: right; }
-.invoice-summary__totals .att-val { text-align: right; font-size: 18px; font-weight: bold; }
+.invoice-summary__totals .att-val { text-align: right; font-size: 15px; font-weight: bold; }
 .invoice-summary__vat {
   display: grid;
   grid-template-columns: 1fr auto;
