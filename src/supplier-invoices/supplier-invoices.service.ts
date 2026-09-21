@@ -66,6 +66,10 @@ export class SupplierInvoicesService {
       .find({
         status: { $ne: SupplierInvoiceStatus.Paid },
         dueDate: { $in: [today, leadDay] },
+        // A credit note carries the original's due date and a negative total.
+        // It is money coming back, not a bill to pay — reminding about it would
+        // tell the admin to pay minus twenty-five thousand.
+        $or: [{ creditOfId: null }, { creditOfId: { $exists: false } }],
       })
       .lean()
       .exec();
