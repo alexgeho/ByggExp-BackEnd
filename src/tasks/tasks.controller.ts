@@ -123,6 +123,35 @@ export class TasksController {
     return this.tasksService.update(id, updateTaskDto, req.user);
   }
 
+  // Attach files to a task that already exists. Creating a task could carry
+  // its documents from the start, but there was no way to add one afterwards —
+  // the app asked for this route and got "Cannot POST /tasks/:id/documents".
+  @Post(":id/documents")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  @UseInterceptors(
+    FilesInterceptor("documents", 10, { storage: taskDocumentsStorage }),
+  )
+  async uploadDocuments(
+    @Request() req,
+    @Param("id") id: string,
+    @UploadedFiles() files: UploadedDocumentFile[],
+  ) {
+    await this.tasksService.assertTaskAccessById(id, req.user);
+
+    const documents = (files || []).map((file) => ({
+      name: file.originalname,
+      url: `/uploads/task-documents/${file.filename}`,
+      mimeType: file.mimetype,
+    }));
+
+    return this.tasksService.addDocuments(id, documents);
+  }
+
   @Patch(":id/complete")
   @Roles(
     UserRole.SuperAdmin,

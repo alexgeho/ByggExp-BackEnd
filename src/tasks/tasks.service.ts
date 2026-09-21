@@ -479,6 +479,31 @@ export class TasksService {
     return existingTask;
   }
 
+  // Append attachments to a task, keeping whatever it already carries.
+  async addDocuments(
+    id: string,
+    documents: Array<{ name: string; url: string; mimeType?: string }>,
+  ): Promise<Task> {
+    const task = await this.taskModel.findById(id).exec();
+    if (!task) {
+      throw new NotFoundException(`Task with ID "${id}" not found`);
+    }
+
+    const updated = await this.taskModel
+      .findByIdAndUpdate(
+        id,
+        { documents: [...(task.documents || []), ...(documents || [])] },
+        { new: true },
+      )
+      .exec();
+
+    if (!updated) {
+      throw new NotFoundException(`Task with ID "${id}" not found`);
+    }
+
+    return updated;
+  }
+
   async remove(id: string): Promise<Task> {
     const task = await this.taskModel.findById(id).exec();
 
