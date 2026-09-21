@@ -173,6 +173,7 @@ export class ProjektkalkylService {
   async findByShareToken(token: string): Promise<{
     name: string;
     note?: string;
+    currency?: string;
     tables: Record<string, unknown>[];
     comments: Record<string, unknown>[];
     expiresAt: Date;
@@ -186,6 +187,9 @@ export class ProjektkalkylService {
     return {
       name: doc.name,
       note: doc.note,
+      // Include the calc's currency so the public read-only view renders NOK/EUR
+      // etc. instead of a hardcoded SEK.
+      currency: doc.currency,
       tables: doc.tables || [],
       comments: doc.comments || [],
       expiresAt: doc.shareExpiresAt,
