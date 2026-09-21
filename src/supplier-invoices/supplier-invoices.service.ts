@@ -102,7 +102,13 @@ export class SupplierInvoicesService {
               n === 1
                 ? `Leverantörsfaktura till ${invoices[0].supplierName || "leverantör"} förfaller (${Math.round(total)} kr).`
                 : `${n} leverantörsfakturor förfaller snart (${Math.round(total)} kr).`,
-            data: { type: "payment_due", screen: "SupplierInvoices" },
+            // With one bill the tap should land on that bill, like the
+            // per-invoice reminder does — not on the bare list.
+            data: {
+              type: "payment_due",
+              screen: "SupplierInvoices",
+              ...(n === 1 ? { entityId: String(invoices[0]._id) } : {}),
+            },
           },
         );
       } catch (error) {
