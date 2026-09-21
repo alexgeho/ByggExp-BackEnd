@@ -18,6 +18,8 @@ import { CreateInvoiceDto, InvoiceItemDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { generateOCR } from './generate-ocr';
 import { calculateInvoiceTotals, deriveInvoiceSettlement } from './invoice-math';
+
+const round2 = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
 import {
   computeReminder,
   DEFAULT_REFERENCE_RATE_PERCENT,
@@ -187,6 +189,26 @@ export class InvoicesService {
   }
 
   // ROT-avdrag + öresavrundning; the pure math lives in ./invoice-math.
+  // How much of this invoice is already covered by earlier credit notes, in
+  // subtotal (excl. VAT) terms. Two half credits must not add up to more than
+  // the invoice.
+  private async creditedSubtotal(
+    source: InvoiceDocument,
+    user: AuthUser,
+  ): Promise<number> {
+    const existing = await this.invoiceModel
+      .find({
+        companyId: source.companyId,
+        creditOfId: String(source._id),
+      })
+      .select('subtotal')
+      .lean()
+      .exec();
+    return round2(
+      existing.reduce((sum, note) => sum + Math.abs(Number(note.subtotal) || 0), 0),
+    );
+  }
+
   private deriveSettlement(
     total: number,
     dto: { rotEnabled?: boolean; rotLaborAmount?: number },
@@ -328,7 +350,11 @@ export class InvoicesService {
 
   // A credit note (kreditfaktura) reverses a booked invoice with negated
   // amounts instead of editing/deleting it. It starts as a draft you can send.
-  async createCreditNote(id: string, user: AuthUser): Promise<Invoice> {
+  async createCreditNote(
+    id: string,
+    user: AuthUser,
+    amountExclVat?: number,
+  ): Promise<Invoice> {
     const source = await this.findOne(id, user);
     if (source.status === InvoiceStatus.Draft) {
       throw new BadRequestException(
@@ -338,6 +364,32 @@ export class InvoicesService {
     if (source.creditOfNumber) {
       throw new BadRequestException('A credit note cannot itself be credited');
     }
+
+    // A partial credit reverses part of the invoice: the customer keeps half
+    // the delivery and gets the other half back. The rows are scaled by that
+    // share so the credit note still shows what it credits, and the share can
+    // never exceed what is left uncredited on the original.
+    const sourceSubtotal = Number(source.subtotal) || 0;
+    const alreadyCredited = await this.creditedSubtotal(source, user);
+    const remaining = Math.max(0, Math.abs(sourceSubtotal) - alreadyCredited);
+    const requested =
+      typeof amountExclVat === "number" && Number.isFinite(amountExclVat)
+        ? Math.abs(amountExclVat)
+        : null;
+
+    if (requested !== null && requested <= 0) {
+      throw new BadRequestException("The credited amount must be above zero");
+    }
+    if (requested !== null && requested > remaining + 0.005) {
+      throw new BadRequestException(
+        `Only ${round2(remaining)} remains uncredited on invoice ${source.invoiceNumber}`,
+      );
+    }
+
+    const share =
+      requested === null || sourceSubtotal === 0
+        ? 1
+        : requested / Math.abs(sourceSubtotal);
 
     const raw = (source as InvoiceDocument).toObject() as Record<string, unknown>;
     const invoiceNumber = await this.getNextInvoiceNumber(source.companyId);
@@ -350,8 +402,8 @@ export class InvoicesService {
     // Everything is negated (it reverses the original). ROT settlement is
     // recomputed from the negated total + negated labour so the deduction,
     // rounding and "Att betala" all carry the right sign consistently.
-    const negTotal = neg(source.total);
-    const rotLaborAmount = neg(source.rotLaborAmount);
+    const negTotal = neg(source.total) * share;
+    const rotLaborAmount = neg(source.rotLaborAmount) * share;
     const settlement = this.deriveSettlement(negTotal, {
       rotEnabled: source.rotEnabled,
       rotLaborAmount,
@@ -368,11 +420,11 @@ export class InvoicesService {
       date: new Date().toISOString().slice(0, 10),
       items: (source.items || []).map((it) => ({
         ...(it as Record<string, unknown>),
-        quantity: neg((it as { quantity?: number }).quantity),
+        quantity: round2(neg((it as { quantity?: number }).quantity) * share),
       })),
-      subtotal: neg(source.subtotal),
-      vat: neg(source.vat),
-      total: negTotal,
+      subtotal: round2(neg(source.subtotal) * share),
+      vat: round2(neg(source.vat) * share),
+      total: round2(negTotal),
       rotLaborAmount,
       rotDeduction: settlement.rotDeduction,
       rounding: settlement.rounding,

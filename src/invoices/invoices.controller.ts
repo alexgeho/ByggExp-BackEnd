@@ -56,10 +56,19 @@ export class InvoicesController {
     return this.invoicesService.copy(id, req.user);
   }
 
+  // Full credit by default; pass amountExclVat to credit part of the invoice.
   @Post(":id/credit")
   @Permissions(PERMISSIONS.FINANCE_MANAGE)
-  creditNote(@Request() req, @Param("id") id: string) {
-    return this.invoicesService.createCreditNote(id, req.user);
+  creditNote(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() body: { amountExclVat?: number },
+  ) {
+    return this.invoicesService.createCreditNote(
+      id,
+      req.user,
+      body?.amountExclVat,
+    );
   }
 
   @Get(":id/html")
