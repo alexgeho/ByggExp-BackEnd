@@ -274,8 +274,18 @@ export class TasksService {
           ],
         }
       : null;
+    // A worker sees the project tasks meant for them — not every task on the
+    // site. A task given to Roger showed on a new colleague's home screen and
+    // then led nowhere when he opened it.
+    const projectTaskFilter =
+      user.role === UserRole.Worker && user.userId
+        ? {
+            projectId: { $in: projectIds },
+            ...this.workerTaskVisibility(user.userId),
+          }
+        : { projectId: { $in: projectIds } };
     const taskFilters = [
-      ...(projectIds.length ? [{ projectId: { $in: projectIds } }] : []),
+      ...(projectIds.length ? [projectTaskFilter] : []),
       ...(personalTaskFilter ? [personalTaskFilter] : []),
     ];
 
@@ -384,10 +394,42 @@ export class TasksService {
     if (user) {
       await this.assertProjectAccessForTasks(projectId, user);
     }
+    // Managers see the whole project's tasks; a worker only the ones meant for
+    // them (same rule as their own task list).
+    const visibility =
+      user?.role === UserRole.Worker && user.userId
+        ? this.workerTaskVisibility(user.userId)
+        : {};
     return this.taskModel
-      .find({ projectId })
+      .find({ projectId, ...visibility })
       .sort({ dueDate: 1, createdAt: -1 })
       .exec();
+  }
+
+  // Which project tasks a worker should see: the ones given to them, and the
+  // ones for the whole team — i.e. no single assignee, and either no chosen
+  // subset of recipients or a subset that includes them.
+  private workerTaskVisibility(userId: string): Record<string, unknown> {
+    return {
+      $and: [
+        {
+          $or: [
+            { assigneeUserId: null },
+            { assigneeUserId: { $exists: false } },
+            { assigneeUserId: "" },
+            { assigneeUserId: userId },
+          ],
+        },
+        {
+          $or: [
+            { "notificationSettings.assignees": { $exists: false } },
+            { "notificationSettings.assignees": { $size: 0 } },
+            { "notificationSettings.assignees.id": userId },
+            { assigneeUserId: userId },
+          ],
+        },
+      ],
+    };
   }
 
   async update(
