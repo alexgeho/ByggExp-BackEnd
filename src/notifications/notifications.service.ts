@@ -100,6 +100,19 @@ export class NotificationsService {
       )
       .exec();
 
+    // The same token under an older installation is the same phone: retire
+    // those records so the phone is registered exactly once.
+    await this.deviceTokenModel
+      .updateMany(
+        {
+          expoPushToken: dto.expoPushToken,
+          installationId: { $ne: dto.installationId },
+          enabled: true,
+        },
+        { enabled: false },
+      )
+      .exec();
+
     return {
       id: token._id.toString(),
       installationId: token.installationId,
@@ -208,8 +221,18 @@ export class NotificationsService {
       await this.disablePushTokens(invalidTokenValues);
     }
 
+    // One push per token, not per record. Tokens are stored per app
+    // installation, and a reinstall, a TestFlight build or a dev build on the
+    // same phone registers a new installation that often carries the SAME
+    // Expo token — so one reminder arrived four times on one phone.
+    const seenTokens = new Set<string>();
     const messages: ExpoPushMessage[] = deviceTokens
       .filter((token) => Expo.isExpoPushToken(token.expoPushToken))
+      .filter((token) => {
+        if (seenTokens.has(token.expoPushToken)) return false;
+        seenTokens.add(token.expoPushToken);
+        return true;
+      })
       .map((token) => ({
         to: token.expoPushToken,
         sound: "default",
