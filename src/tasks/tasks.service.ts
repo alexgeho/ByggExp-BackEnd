@@ -928,18 +928,22 @@ export class TasksService {
     return currentTime !== nextTime;
   }
 
+  // Who hears about a project's tasks: the people working on it — its workers
+  // and the admins added to its team. Not the owner and project manager as
+  // such: when a project is created, both fall back to the company's primary
+  // admin, so the account owner was pinged for every task on every project,
+  // including ones he had nothing to do with. (Overdue escalation to the
+  // "boss" still goes to owner + manager on purpose — see bossByProject.)
   private getProjectNotificationRecipients(
     project: ProjectNotificationSource,
     actorUserId?: string,
   ) {
     return [
       ...new Set(
-        [
-          project.ownerId,
-          project.projectManagerId,
-          ...(project.projectAdmins || []),
-          ...(project.workers || []),
-        ].filter((userId) => userId && userId !== actorUserId),
+        [...(project.projectAdmins || []), ...(project.workers || [])]
+          .filter(Boolean)
+          .map((value) => value.toString())
+          .filter((userId) => userId !== actorUserId),
       ),
     ];
   }
@@ -947,12 +951,7 @@ export class TasksService {
   private getProjectMemberIds(project: ProjectDocument) {
     return [
       ...new Set(
-        [
-          project.ownerId,
-          project.projectManagerId,
-          ...(project.projectAdmins || []),
-          ...(project.workers || []),
-        ]
+        [...(project.projectAdmins || []), ...(project.workers || [])]
           .filter(Boolean)
           .map((value) => value.toString()),
       ),
