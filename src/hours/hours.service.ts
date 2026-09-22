@@ -61,10 +61,15 @@ export class HoursService {
   ): number | null {
     const schedule = project.shiftSchedule;
     if (!schedule?.enabled) return null;
-    const minutes =
+    const window =
       parseTimeToMinutes(schedule.workDayEndTime || "16:00") -
       parseTimeToMinutes(schedule.workDayStartTime || "07:00");
-    if (!(minutes > 0)) return null;
+    if (!(window > 0)) return null;
+    // Planned = the working window minus the project's own lunch break:
+    // 07:00–16:00 with an hour's lunch is an 8-hour day, not 9. The schema
+    // defaults lunch to 60; a lean read of an older project may not carry it.
+    const lunch = Math.max(0, Number(schedule.lunchMinutes ?? 60) || 0);
+    const minutes = window > lunch ? window - lunch : window;
     return round(minutes / 60);
   }
 

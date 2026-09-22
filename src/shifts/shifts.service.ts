@@ -1977,10 +1977,14 @@ export class ShiftsService {
     if (!schedule?.enabled) {
       return null;
     }
-    const minutes =
+    const window =
       parseTimeToMinutes(schedule.workDayEndTime || "16:00") -
       parseTimeToMinutes(schedule.workDayStartTime || "07:00");
-    return minutes > 0 ? minutes / 60 : null;
+    if (!(window > 0)) return null;
+    // Same rule as the Hours grid: the window minus the project's lunch.
+    const lunch = Math.max(0, Number(schedule.lunchMinutes ?? 60) || 0);
+    const minutes = window > lunch ? window - lunch : window;
+    return minutes / 60;
   }
 
   /**
