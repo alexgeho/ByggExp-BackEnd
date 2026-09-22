@@ -1973,8 +1973,10 @@ export class ShiftsService {
   private schedulePlannedHours(
     project?: { shiftSchedule?: Project["shiftSchedule"] } | null,
   ): number | null {
+    // Same rule as the Hours grid: the window is the plan even when the
+    // project doesn't enforce it at check-in.
     const schedule = project?.shiftSchedule;
-    if (!schedule?.enabled) {
+    if (!schedule) {
       return null;
     }
     const window =

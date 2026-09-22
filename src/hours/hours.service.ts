@@ -59,8 +59,12 @@ export class HoursService {
   private schedulePlanned(
     project: Pick<Project, "shiftSchedule">,
   ): number | null {
+    // The work-day window is the plan whether or not the project ENFORCES it
+    // at check-in (`enabled` only decides whether a shift may start outside
+    // the window). A project created with 07:00–16:00 and enforcement off used
+    // to plan nothing at all.
     const schedule = project.shiftSchedule;
-    if (!schedule?.enabled) return null;
+    if (!schedule) return null;
     const window =
       parseTimeToMinutes(schedule.workDayEndTime || "16:00") -
       parseTimeToMinutes(schedule.workDayStartTime || "07:00");
@@ -286,10 +290,14 @@ export class HoursService {
         if (!byWorker.has(workerId)) byWorker.set(workerId, new Map());
       }
 
-      // Planned prefill needs an enabled schedule and a bounded date range.
+      // Planned prefill needs a work-day window and a range to fill. A project
+      // without an end date (open-ended, the common case for a new site) or
+      // without a start date plans across the period being viewed instead of
+      // planning nothing.
       if (this.schedulePlanned(project) == null) continue;
-      const projStart = this.toDateKey(project.beginningDate);
-      const projEnd = this.toDateKey(project.endDate);
+      const projStart =
+        this.toDateKey(project.beginningDate) || query.from || null;
+      const projEnd = this.toDateKey(project.endDate) || query.to || null;
       if (!projStart || !projEnd) continue;
       const rangeStart =
         query.from && query.from > projStart ? query.from : projStart;
