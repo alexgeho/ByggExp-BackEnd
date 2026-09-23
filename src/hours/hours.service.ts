@@ -86,6 +86,23 @@ export class HoursService {
     return date.toISOString().slice(0, 10);
   }
 
+  // A project's start/end date is picked as a calendar day in the admin and
+  // saved as local midnight, i.e. the evening before in UTC: 23.09 arrives as
+  // 2026-09-22T22:00Z. Read it back in the project's own timezone, or the plan
+  // starts (and ends) a day early.
+  private projectDateKey(value: unknown, timeZone?: string): string | null {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value as string);
+    if (Number.isNaN(date.getTime())) return null;
+    try {
+      return date.toLocaleDateString("en-CA", {
+        timeZone: timeZone || "Europe/Stockholm",
+      });
+    } catch {
+      return date.toISOString().slice(0, 10);
+    }
+  }
+
   // Working days (Mon–Fri) between two YYYY-MM-DD keys, inclusive.
   private eachWorkingDate(start: string, end: string): string[] {
     const out: string[] = [];
@@ -312,9 +329,11 @@ export class HoursService {
       // without a start date plans across the period being viewed instead of
       // planning nothing.
       if (this.schedulePlanned(project) == null) continue;
+      const tz = project.shiftSchedule?.timezone;
       const projStart =
-        this.toDateKey(project.beginningDate) || query.from || null;
-      const projEnd = this.toDateKey(project.endDate) || query.to || null;
+        this.projectDateKey(project.beginningDate, tz) || query.from || null;
+      const projEnd =
+        this.projectDateKey(project.endDate, tz) || query.to || null;
       if (!projStart || !projEnd) continue;
       const rangeStart =
         query.from && query.from > projStart ? query.from : projStart;

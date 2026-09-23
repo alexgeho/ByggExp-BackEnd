@@ -146,4 +146,32 @@ describe("Hours grid: planned hours (e2e)", () => {
     expect(cells["2026-09-24"]?.planned).toBe(8);
     expect(cells["2026-09-29"]?.planned).toBe(8);
   });
+
+  it("starts the plan on the picked day, not the UTC evening before", async () => {
+    const res = await request(http)
+      .post("/projects")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "Byggmästarvägen 50",
+        status: "planning",
+        // 23.09 picked in Stockholm = 22.09 22:00 UTC.
+        beginningDate: "2026-09-22T22:00:00.000Z",
+        endDate: "2026-10-27T23:00:00.000Z",
+        shiftSchedule: { enabled: false, workDayStartTime: "07:00", workDayEndTime: "16:00", lunchMinutes: 60 },
+      });
+    const pid = res.body._id || res.body.id;
+    await request(http)
+      .post(`/projects/${pid}/workers`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ workerIds: [workerId] });
+    const grid2 = await request(http)
+      .get("/hours")
+      .query({ projectId: pid, from: "2026-09-01", to: "2026-10-31" })
+      .set("Authorization", `Bearer ${token}`);
+    const cells = grid2.body.workers.find((w: { workerId: string }) => w.workerId === workerId).cells;
+    expect(cells["2026-09-22"]?.planned ?? null).toBeNull();
+    expect(cells["2026-09-23"]?.planned).toBe(8);
+    expect(cells["2026-10-28"]?.planned).toBe(8);
+    expect(cells["2026-10-29"]?.planned ?? null).toBeNull();
+  });
 });
