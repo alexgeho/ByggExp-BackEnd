@@ -105,6 +105,7 @@ export class HoursService {
   private async accessibleProjects(
     user: AuthenticatedUser,
     projectId?: string,
+    includeOwnAsWorker = false,
   ): Promise<ProjectDocument[]> {
     const filter: Record<string, unknown> = {};
 
@@ -124,6 +125,13 @@ export class HoursService {
         { projectAdmins: user.userId },
       ];
       if (projectId) filter._id = projectId;
+    } else if (includeOwnAsWorker && user.role === UserRole.Worker) {
+      // A worker reads only the sites they are on — their own row is cut out
+      // of the grid in getGrid, so they never see a colleague's hours.
+      if (!user.companyId) return [];
+      filter.companyId = user.companyId;
+      filter.workers = user.userId;
+      if (projectId) filter._id = projectId;
     } else {
       return [];
     }
@@ -132,7 +140,15 @@ export class HoursService {
   }
 
   async getGrid(user: AuthenticatedUser, query: HoursQueryDto) {
-    const projects = await this.accessibleProjects(user, query.projectId);
+    // A worker gets the same grid as the admin, narrowed to their own row: the
+    // app's "План" reads it, so the phone plans every working day of the site
+    // (07:00–16:00 minus lunch) and not only the days a shift was logged.
+    const selfOnly = user.role === UserRole.Worker;
+    const projects = await this.accessibleProjects(
+      user,
+      query.projectId,
+      true,
+    );
     const projectById = new Map(projects.map((p) => [this.getEntityId(p), p]));
     const projectIds = [...projectById.keys()];
 
@@ -148,6 +164,7 @@ export class HoursService {
     const shiftFilter: Record<string, unknown> = {
       projectId: { $in: projectIds },
     };
+    if (selfOnly) shiftFilter.workerId = user.userId;
     if (query.from || query.to) {
       const range: Record<string, string> = {};
       if (query.from) range.$gte = query.from;
@@ -340,7 +357,9 @@ export class HoursService {
       }
     }
 
-    const workerIds = [...byWorker.keys()];
+    const workerIds = [...byWorker.keys()].filter(
+      (id) => !selfOnly || id === String(user.userId),
+    );
     const users = await this.userModel
       .find({ _id: { $in: workerIds } })
       .select("name role profession avatarUrl")

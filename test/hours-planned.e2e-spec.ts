@@ -129,4 +129,21 @@ describe("Hours grid: planned hours (e2e)", () => {
     expect(cells["2026-09-30"]?.planned).toBe(6);
     expect(cells["2026-09-30"]?.edited).toBe(true);
   });
+
+  it("gives a worker their own plan, and only their own row", async () => {
+    const workerToken = (
+      await request(http)
+        .post("/auth/login")
+        .send({ email: `adam-${uniq}@e2e.local`, password: PASS })
+    ).body.access_token;
+    const res = await request(http)
+      .get("/hours")
+      .query({ from: "2026-09-01", to: "2026-09-30" })
+      .set("Authorization", `Bearer ${workerToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.workers.map((w: { workerId: string }) => w.workerId)).toEqual([workerId]);
+    const cells = res.body.workers[0].cells;
+    expect(cells["2026-09-24"]?.planned).toBe(8);
+    expect(cells["2026-09-29"]?.planned).toBe(8);
+  });
 });

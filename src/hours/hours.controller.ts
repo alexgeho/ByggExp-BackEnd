@@ -22,8 +22,14 @@ export class HoursController {
   constructor(private readonly hoursService: HoursService) {}
 
   // Aggregated hours grid: workers × days, planned (schedule + corrections) vs actual.
+  // Workers get their own row only (the app's planned hours).
   @Get()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
   getGrid(@Request() req, @Query() query: HoursQueryDto) {
     return this.hoursService.getGrid(req.user, query);
   }
