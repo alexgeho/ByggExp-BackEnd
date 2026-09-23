@@ -92,14 +92,12 @@ export class BillingService {
       billing_address_collection: "required",
       // Let Swedish/EU B2B customers enter their VAT number (reverse charge).
       tax_id_collection: { enabled: true },
+      // Required with an existing customer: tax-ID collection must be allowed
+      // to write the business name (and address) back, or Stripe rejects it.
+      customer_update: { address: "auto", name: "auto" },
       // Stripe Tax computes moms automatically — only when enabled in the
       // dashboard, otherwise checkout would error, so it is behind a flag.
-      ...(taxEnabled
-        ? {
-            automatic_tax: { enabled: true },
-            customer_update: { address: "auto", name: "auto" },
-          }
-        : {}),
+      ...(taxEnabled ? { automatic_tax: { enabled: true } } : {}),
       success_url: `${appBaseUrl}/company/billing?checkout=success`,
       cancel_url: `${appBaseUrl}/company/billing?checkout=cancel`,
     });
