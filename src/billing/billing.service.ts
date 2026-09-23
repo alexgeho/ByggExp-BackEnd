@@ -187,7 +187,11 @@ export class BillingService {
     if (!secret) {
       throw new ServiceUnavailableException("Webhook secret not configured");
     }
-    return this.client().webhooks.constructEvent(rawBody, signature, secret);
+    try {
+      return this.client().webhooks.constructEvent(rawBody, signature, secret);
+    } catch {
+      throw new BadRequestException("Invalid Stripe signature");
+    }
   }
 
   async handleEvent(event: Stripe.Event): Promise<void> {
