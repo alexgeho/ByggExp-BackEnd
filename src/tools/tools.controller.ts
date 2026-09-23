@@ -97,6 +97,20 @@ export class ToolsController {
     return this.toolsService.findAccessible(req.user);
   }
 
+  // The company's whole tool register — what the "attach tools to project"
+  // picker offers. A worker's own list (GET /tools) holds only the tools of
+  // their projects, so they had nothing to attach.
+  @Get("register")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  findCompanyRegister(@Request() req) {
+    return this.toolsService.findCompanyRegister(req.user);
+  }
+
   @Post("attach-to-worker")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   async attachToWorker(@Body() dto: AttachToolsToWorkerDto, @Request() req) {
@@ -115,10 +129,17 @@ export class ToolsController {
     return this.toolsService.replaceWorkerAssignments(workerId, dto.toolIds, req.user.companyId);
   }
 
+  // A worker may attach tools to a project they work on (not any project).
   @Post("attach-to-project")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
   async attachToProject(@Body() dto: AttachToolsToProjectDto, @Request() req) {
     await this.toolsService.assertToolsInCompany(dto.toolIds, req.user);
+    await this.toolsService.assertWorkerOnProject(dto.projectId, req.user);
     return this.toolsService.attachToProject(dto.projectId, dto.toolIds, req.user.companyId);
   }
 

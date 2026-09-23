@@ -282,8 +282,15 @@ export class ProjectsController {
     return this.projectsService.addProjectAdmin(id, userId);
   }
 
+  // Workers on the project may add documents and photos too (Alexander,
+  // 2026-09-23); assertProjectAccessById keeps them to their own projects.
   @Post(":id/documents")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
   @UseInterceptors(
     FilesInterceptor("documents", 10, { storage: documentsStorage }),
   )

@@ -237,6 +237,28 @@ export class ToolsService {
     }
   }
 
+  async findCompanyRegister(user: AuthUser): Promise<Tool[]> {
+    if (!user.companyId) return [];
+    return this.toolModel
+      .find({ companyId: user.companyId })
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
+  // Admins may attach tools to any project of their company (companyId is
+  // checked on the tools); a worker only to a project they are on.
+  async assertWorkerOnProject(projectId: string, user: AuthUser): Promise<void> {
+    if (user.role !== UserRole.Worker) return;
+    const project = await this.projectModel
+      .findOne({ _id: projectId, companyId: user.companyId, workers: user.userId })
+      .select("_id")
+      .lean()
+      .exec();
+    if (!project) {
+      throw new ForbiddenException("You do not have access to this project");
+    }
+  }
+
   async findAccessible(user: AuthUser): Promise<Tool[]> {
     // Superadmin is scoped to its own company like a company admin. ProjectAdmin
     // sees the whole company register too: it may create tools and attach them
