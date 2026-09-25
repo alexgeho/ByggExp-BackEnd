@@ -43,6 +43,32 @@ export const TOGGLEABLE_MODULES = [
 ];
 
 // What each plan tier includes by default. Tiers match billing/plans.ts.
+
+// "Faktura": offers and invoices only — for firms that just need to quote and bill.
+const FAKTURA = ["offers", "invoices", "clients", "articles", "users"];
+
+// "Projekt": project and crew management — projects, hours, tasks, photos,
+// diary, self-inspections, planning, staffing, tools. No invoicing/economy.
+const PROJEKT = [
+  "projects",
+  "map",
+  "tasks",
+  "dagbok",
+  "kma",
+  "shifts",
+  "schedule",
+  "bemanning",
+  "leave",
+  "users",
+  "clients",
+  "tools",
+];
+
+// "Komplett": everything, incl. offers, invoices, expenses, payroll, profitability.
+const KOMPLETT = [...TOGGLEABLE_MODULES];
+
+// Legacy presets (plans sold before 2026-09-25), kept so companies that still
+// carry one see exactly what they had.
 const START = [
   "projects",
   "map",
@@ -71,6 +97,9 @@ const TILLVAXT = [
 const PROFESSIONELL = [...TOGGLEABLE_MODULES];
 
 export const PLAN_MODULES: Record<string, string[]> = {
+  faktura: FAKTURA,
+  projekt: PROJEKT,
+  komplett: KOMPLETT,
   start: START,
   tillvaxt: TILLVAXT,
   professionell: PROFESSIONELL,

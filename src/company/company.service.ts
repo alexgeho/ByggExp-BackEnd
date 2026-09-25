@@ -32,7 +32,7 @@ import {
   sanitizeOverrides,
   TOGGLEABLE_MODULES,
 } from "./modules";
-import { isPlanTier, maxUsersForPlan } from "../billing/plans";
+import { isKnownPlan, maxUsersForPlan } from "../billing/plans";
 import { computeStorageUsage, StorageUsageReport } from "./storage-usage";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -279,7 +279,7 @@ export class CompanyService {
     plan: string | null,
     maxUsers?: number | null,
   ): Promise<ModuleResolution> {
-    const value = plan && isPlanTier(plan) ? plan : null;
+    const value = plan && isKnownPlan(plan) ? plan : null;
     // Explicit maxUsers wins; otherwise assigning a plan applies its default
     // seat count and clearing the plan lifts the cap (unlimited). A number
     // clamps to a positive integer; null/0 means unlimited.
