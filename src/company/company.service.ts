@@ -78,8 +78,11 @@ export class CompanyService {
       throw new ConflictException("A user with this email already exists");
     }
 
+    const { language, ...companyData } = createCompanyDto;
+    const inviteLang = language?.trim() || "sv";
+
     const company = await this.create({
-      ...createCompanyDto,
+      ...companyData,
       email,
       companyAdmins: [],
       projects: [],
@@ -92,6 +95,7 @@ export class CompanyService {
       email,
       name: createCompanyDto.name?.trim() || "",
       role: UserRole.CompanyAdmin,
+      language: inviteLang,
       token,
       expiresAt: new Date(Date.now() + INVITE_TTL_MS),
     });
@@ -101,7 +105,7 @@ export class CompanyService {
         email,
         createCompanyDto.name?.trim() || "",
         token,
-        company.country,
+        inviteLang,
       );
     } catch (error) {
       this.logger.error(
@@ -137,6 +141,7 @@ export class CompanyService {
       role: invite.role,
       companyId: invite.companyId,
       companyName: company?.name || "",
+      language: invite.language || "sv",
     };
   }
 
@@ -161,6 +166,8 @@ export class CompanyService {
       companyId: invite.companyId,
       projectIds: [],
       accountStatus: UserAccountStatus.Active,
+      // Legacy { code: name } shape — only the key is read (languageCode()).
+      language: { [invite.language || "sv"]: invite.language || "sv" },
     } as never);
 
     await this.companyModel.findByIdAndUpdate(invite.companyId, {

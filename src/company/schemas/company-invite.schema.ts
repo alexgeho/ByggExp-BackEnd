@@ -18,6 +18,10 @@ export class CompanyInvite {
   @Prop({ default: "" })
   name: string;
 
+  // Language chosen for the invited admin; applied to their user on acceptance.
+  @Prop({ default: "sv" })
+  language: string;
+
   @Prop({ type: String, enum: UserRole, default: UserRole.CompanyAdmin })
   role: UserRole;
 

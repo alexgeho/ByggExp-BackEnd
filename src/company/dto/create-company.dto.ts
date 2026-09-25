@@ -60,6 +60,13 @@ export class CreateCompanyDto {
   @IsOptional()
   country?: string;
 
+  // Language of the invited admin (e.g. "sv", "no", "en"). Drives the invite
+  // email and becomes the admin's own language on acceptance. Not stored on the
+  // company itself.
+  @IsString()
+  @IsOptional()
+  language?: string;
+
   // ISO 4217 currency the company invoices in (e.g. "SEK", "NOK").
   @IsString()
   @IsOptional()
