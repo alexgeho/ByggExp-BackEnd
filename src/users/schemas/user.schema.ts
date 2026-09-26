@@ -141,7 +141,10 @@ export const normalizeManagerReminderSettings = (
     weekday,
     overdueTasks: bool(value?.overdueTasks, d.overdueTasks),
     unpaidInvoices: bool(value?.unpaidInvoices, d.unpaidInvoices),
-    purchaseInvoicesDue: bool(value?.purchaseInvoicesDue, d.purchaseInvoicesDue),
+    purchaseInvoicesDue: bool(
+      value?.purchaseInvoicesDue,
+      d.purchaseInvoicesDue,
+    ),
     expensesToApprove: bool(value?.expensesToApprove, d.expensesToApprove),
     lastSentAt:
       lastSentAt && !Number.isNaN(lastSentAt.getTime()) ? lastSentAt : null,
@@ -206,7 +209,12 @@ export class User {
   @Prop({ type: [String], default: [] })
   additionalDocuments: string[];
 
-  @Prop({ type: String, required: true, enum: UserRole, default: UserRole.Worker })
+  @Prop({
+    type: String,
+    required: true,
+    enum: UserRole,
+    default: UserRole.Worker,
+  })
   role: UserRole;
 
   // Capability overrides on top of the role's default permission set.
@@ -311,6 +319,29 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+
+// Credentials and one-time codes are `select: false`, but a freshly created or
+// saved document still carries them in memory — and Nest serialises returned
+// documents with toJSON. Strip them here so no endpoint can ever leak a
+// password hash or token hash (e.g. POST /users returned the invite's hash).
+const SECRET_USER_FIELDS = [
+  "password",
+  "emailVerificationToken",
+  "emailVerificationExpiresAt",
+  "magicLoginCode",
+  "magicLoginExpiresAt",
+  "shortLoginCode",
+  "shortLoginExpiresAt",
+  "passwordResetToken",
+  "passwordResetExpiresAt",
+] as const;
+UserSchema.set("toJSON", {
+  transform: (_doc, ret) => {
+    const out = ret as unknown as Record<string, unknown>;
+    for (const field of SECRET_USER_FIELDS) delete out[field];
+    return out;
+  },
+});
 
 // Email is unique PER COMPANY, not globally: the same person can hold separate
 // accounts at different companies (e.g. after changing employer, where the
