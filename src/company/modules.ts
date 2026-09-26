@@ -44,8 +44,24 @@ export const TOGGLEABLE_MODULES = [
 
 // What each plan tier includes by default. Tiers match billing/plans.ts.
 
-// "Faktura": offers and invoices only — for firms that just need to quote and bill.
-const FAKTURA = ["offers", "invoices", "clients", "articles", "users"];
+// "Faktura": the economy package — offers, invoices, payroll, project economy,
+// receipts/expenses. "projects" is included because budget, projektkalkyl and
+// profitability are per project.
+const FAKTURA = [
+  "projects",
+  "offers",
+  "invoices",
+  "clients",
+  "articles",
+  "supplier-invoices",
+  "expenses",
+  "payroll",
+  "planning",
+  "budget",
+  "profitability",
+  "projektkalkyl",
+  "users",
+];
 
 // "Projekt": project and crew management — projects, hours, tasks, photos,
 // diary, self-inspections, planning, staffing, tools. No invoicing/economy.

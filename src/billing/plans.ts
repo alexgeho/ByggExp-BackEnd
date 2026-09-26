@@ -3,14 +3,16 @@
 // Price ID, so plans can be reconfigured without code changes.
 //
 // Self-serve tiers (from 2026-09-25), split by what the company needs:
-//   faktura  — offers + invoices only, flat price, max 2 users.
+//   faktura  — the economy package (offers, invoices, payroll, project
+//              economy, receipts), flat price, max 2 users.
 //   projekt  — projects, crews, hours, tasks, photos, tools. Per-seat price:
-//              base fee incl. 5 users + a fee per extra user.
+//              base fee incl. 10 users + a fee per extra user.
 //   komplett — projekt + economy (offers, invoices, expenses, payroll,
 //              profitability). Per-seat like projekt.
-// Per-seat tiers use a Stripe *graduated tiered* price (tier 1: up to 5 units,
-// flat base fee, 0/unit; tier 2: per-unit fee), so the subscription quantity is
-// simply the company's number of active users.
+// Per-seat tiers use a Stripe *graduated tiered* price (tier 1: up to
+// INCLUDED_SEATS units, flat base fee, 0/unit; tier 2: per-unit fee), so the
+// subscription quantity is simply the company's number of billable users
+// (see BillingService.countBillableSeats).
 export type PlanTier = "faktura" | "projekt" | "komplett";
 export type BillingInterval = "monthly" | "yearly";
 
@@ -42,6 +44,29 @@ export const PRICE_ENV: Record<PlanTier, Record<BillingInterval, string>> = {
 };
 
 export const PLAN_TIERS: PlanTier[] = ["faktura", "projekt", "komplett"];
+
+// Users included in the base fee of a per-seat tier.
+export const INCLUDED_SEATS = 10;
+
+// A worker (app-only user) counts as a billable seat only if they clocked in
+// within this many days; office roles always count.
+export const ACTIVE_WORKER_WINDOW_DAYS = 30;
+
+// Optional add-ons, billed as an extra subscription line item.
+export type Addon = "integrations";
+export const ADDONS: Addon[] = ["integrations"];
+export const ADDON_PRICE_ENV: Record<Addon, Record<BillingInterval, string>> = {
+  integrations: {
+    monthly: "STRIPE_PRICE_INTEGRATIONS_MONTHLY",
+    yearly: "STRIPE_PRICE_INTEGRATIONS_YEARLY",
+  },
+};
+export const isAddon = (value: unknown): value is Addon =>
+  ADDONS.includes(value as Addon);
+export const addonPriceIdFor = (
+  addon: Addon,
+  interval: BillingInterval,
+): string | null => process.env[ADDON_PRICE_ENV[addon][interval]] || null;
 
 // Tiers billed per active user (subscription quantity = seat count).
 export const PER_SEAT_TIERS: PlanTier[] = ["projekt", "komplett"];

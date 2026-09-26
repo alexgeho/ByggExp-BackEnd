@@ -14,7 +14,7 @@ import { Roles } from "../common/decorators/roles.decorator";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../users/schemas/user.schema";
 import { BillingService } from "./billing.service";
-import { isInterval, isPlanTier } from "./plans";
+import { isAddon, isInterval, isPlanTier } from "./plans";
 
 const appBaseUrl = (): string =>
   process.env.APP_PUBLIC_URL || "https://admin.byggexp.se";
@@ -40,15 +40,23 @@ export class BillingController {
 
   @Post("checkout")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  checkout(@Request() req, @Body() body: { plan?: string; interval?: string }) {
+  checkout(
+    @Request() req,
+    @Body() body: { plan?: string; interval?: string; addons?: unknown },
+  ) {
     if (!isPlanTier(body.plan) || !isInterval(body.interval)) {
       throw new BadRequestException("Invalid plan or interval");
+    }
+    const addons = Array.isArray(body.addons) ? body.addons : [];
+    if (!addons.every(isAddon)) {
+      throw new BadRequestException("Invalid add-on");
     }
     return this.billing.createCheckout(
       req.user.companyId,
       body.plan,
       body.interval,
       appBaseUrl(),
+      [...new Set(addons)],
     );
   }
 
