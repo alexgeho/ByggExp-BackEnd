@@ -18,6 +18,7 @@ import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
 import { Offer, OfferDocument, OfferStatus } from './schemas/offer.schema';
 import { MailService } from '../mail/mail.service';
+import { reserveOutgoingEmail } from '../mail/outgoing-mail-quota';
 
 type AuthUser = {
   role: UserRole;
@@ -158,6 +159,7 @@ export class OffersService {
     }
     const footer = await this.resolveCompanyFooter(offer.companyId);
     const pdf = await this.buildOfferPdf(id, user);
+    await reserveOutgoingEmail(this.companyModel, String(offer.companyId));
     const result = await this.mailService.sendOfferEmail(to, {
       offerNumber: offer.offerNumber,
       senderName: footer.name,

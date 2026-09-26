@@ -33,6 +33,7 @@ import {
   buildInvoicePdfHtmlPuppeteer,
   InvoicePdfData,
 } from './templates/invoice-pdf.template';
+import { reserveOutgoingEmail } from '../mail/outgoing-mail-quota';
 
 type AuthUser = {
   role: UserRole;
@@ -85,6 +86,7 @@ export class InvoicesService {
       );
     }
     const pdf = await this.buildInvoicePdf(id, user);
+    await reserveOutgoingEmail(this.companyModel, String(invoice.companyId));
     const result = await this.mailService.sendInvoiceEmail(to, {
       invoiceNumber: invoice.invoiceNumber,
       senderName: invoice.companyFooter?.name,
@@ -145,6 +147,7 @@ export class InvoicesService {
       );
     }
 
+    await reserveOutgoingEmail(this.companyModel, String(invoice.companyId));
     const result = await this.mailService.sendReminderEmail(to, {
       invoiceNumber: invoice.invoiceNumber,
       senderName: invoice.companyFooter?.name,

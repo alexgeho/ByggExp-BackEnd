@@ -158,6 +158,10 @@ export class Company {
   @Prop({ type: Object, default: {} })
   moduleOverrides?: Record<string, boolean>;
 
+  // ---- Fair use: customer e-mails sent today (see mail/outgoing-mail-quota) ----
+  @Prop({ type: Object, default: null })
+  outgoingMail?: { day: string; count: number } | null;
+
   // ---- Hours reminder (daily "log your hours" nudge to workers) ----
   @Prop({ type: HoursReminderRuleSchema, default: () => ({}) })
   hoursReminderRule?: HoursReminderRule;
