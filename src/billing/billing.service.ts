@@ -296,6 +296,11 @@ export class BillingService {
       cancelAtPeriodEnd: Boolean(company.cancelAtPeriodEnd),
       hasCustomer: Boolean(company.stripeCustomerId),
       billableSeats: await this.countBillableSeats(String(company._id)),
+      // All (non-erased) users — what a flat plan's seat cap (faktura: 2) counts.
+      totalUsers: await this.userModel.countDocuments({
+        companyId: String(company._id),
+        erasedAt: null,
+      }),
     };
   }
 
