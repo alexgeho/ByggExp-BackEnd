@@ -25,8 +25,8 @@ export const LEGACY_PLAN_TIERS: LegacyPlanTier[] = [
   "professionell",
 ];
 
-// Public site promises "Första månaden gratis" — a 30-day free trial.
-export const TRIAL_DAYS = 30;
+// Free trial: 2 weeks with all features (same as self-signup in auth.service).
+export const TRIAL_DAYS = 14;
 
 export const PRICE_ENV: Record<PlanTier, Record<BillingInterval, string>> = {
   faktura: {

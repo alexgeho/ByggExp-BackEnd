@@ -77,7 +77,7 @@ describe("plans — tiers & seat limits", () => {
     });
   });
 
-  it("promises a 30-day trial", () => {
-    expect(TRIAL_DAYS).toBe(30);
+  it("gives a 2-week trial", () => {
+    expect(TRIAL_DAYS).toBe(14);
   });
 });
