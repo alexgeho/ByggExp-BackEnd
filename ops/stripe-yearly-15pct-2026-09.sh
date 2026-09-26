@@ -26,7 +26,7 @@ archive() { stripe "$API/prices/$1" -d active=false >/dev/null; }
 flat() { # <old lookup> <new lookup> <öre> <nickname>
   local old; old=$(old_price "$1"); local prod; prod=$(product_of "$old")
   local id; id=$(stripe "$API/prices" -d product="$prod" -d currency=sek -d tax_behavior=exclusive \
-    -d "recurring[interval]=year" -d unit_amount="$3" -d lookup_key="$2" -d nickname="$4" | json 'd["id"]')
+    -d "recurring[interval]=year" -d unit_amount="$3" -d lookup_key="$2" --data-urlencode nickname="$4" | json 'd["id"]')
   archive "$old"; echo "$id"
 }
 
@@ -37,7 +37,7 @@ seat() { # <old lookup> <new lookup> <base öre> <per extra öre> <nickname>
     -d billing_scheme=tiered -d tiers_mode=graduated \
     -d "tiers[0][up_to]=10" -d "tiers[0][flat_amount]=$3" -d "tiers[0][unit_amount]=0" \
     -d "tiers[1][up_to]=inf" -d "tiers[1][unit_amount]=$4" \
-    -d lookup_key="$2" -d nickname="$5" | json 'd["id"]')
+    -d lookup_key="$2" --data-urlencode nickname="$5" | json 'd["id"]')
   archive "$old"; echo "$id"
 }
 

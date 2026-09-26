@@ -31,7 +31,7 @@ flat_price() {
   stripe_post prices \
     -d product="$STRIPE_PRODUCT_ID" -d currency=sek -d tax_behavior=exclusive \
     -d "recurring[interval]=$2" -d unit_amount="$3" \
-    -d lookup_key="$1" -d nickname="$4" | price_id
+    -d lookup_key="$1" --data-urlencode nickname="$4" | price_id
 }
 
 # seat_price <lookup_key> <interval> <base öre> <per extra user öre> <nickname>
@@ -42,7 +42,7 @@ seat_price() {
     -d billing_scheme=tiered -d tiers_mode=graduated \
     -d "tiers[0][up_to]=10" -d "tiers[0][flat_amount]=$3" -d "tiers[0][unit_amount]=0" \
     -d "tiers[1][up_to]=inf" -d "tiers[1][unit_amount]=$4" \
-    -d lookup_key="$1" -d nickname="$5" | price_id
+    -d lookup_key="$1" --data-urlencode nickname="$5" | price_id
 }
 
 # Integrationer is its own product so it shows as a separate line on invoices.
