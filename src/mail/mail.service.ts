@@ -65,6 +65,26 @@ export class MailService {
     });
   }
 
+  // Send an already-rendered HTML mail (newsletter test sends). Throws if SMTP
+  // is not configured so the caller can surface the reason to the admin.
+  async sendHtmlEmail(params: {
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+  }): Promise<void> {
+    if (!this.transporter) {
+      throw new Error("SMTP is not configured");
+    }
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+      text: params.text,
+    });
+  }
+
   private getFromAddress(): string {
     const address =
       this.configService.get<string>("SMTP_FROM") ||
