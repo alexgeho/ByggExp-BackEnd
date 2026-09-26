@@ -38,10 +38,21 @@ Then, in the Cloudflare dashboard:
    records automatically).
 2. **Email Routing → Routes → Create address** → `faktura@byggexp.se` →
    Action **Send to a Worker** → pick **byggexp-invoice-mail**.
+3. **Email Routing → Settings → Subaddressing → Enable.** Then mail to
+   `faktura+<code>@byggexp.se` matches the `faktura@` rule and the worker sees
+   the `+<code>` part.
+
+## One address per company
+
+Each company has a private address `faktura+<code>@byggexp.se`, shown (with
+copy / "new address" buttons) in the admin under **Inköpsfakturor**. The worker
+sends `<code>` to the backend, which finds the company; an unknown or retired
+code gets a bounce. The backend builds the address from
+`INBOUND_ADDRESS_TEMPLATE` (default `faktura+{code}@byggexp.se`).
 
 ## Test
 
-E-mail (or forward) a PDF invoice to `faktura@byggexp.se`. Within a few seconds
+E-mail (or forward) a PDF invoice to the company's `faktura+<code>@byggexp.se`. Within a few seconds
 a draft appears in **Leverantörsfakturor** with the **Från e-post** tag and the
 supplier / amount / due date pre-filled from OCR. Check the run in
 `wrangler tail` if nothing shows up:
@@ -55,13 +66,14 @@ npx wrangler tail
 | Name                    | Where            | Purpose                                         |
 | ----------------------- | ---------------- | ----------------------------------------------- |
 | `INBOUND_WEBHOOK_URL`   | wrangler.toml var| Backend endpoint (default `https://api.byggexp.se/inbound/supplier-invoices`) |
-| `INBOUND_COMPANY_ID`    | wrangler.toml var| Company that owns the ingested invoices         |
+| `INBOUND_COMPANY_ID`    | wrangler.toml var| Optional: company for plain `faktura@` (no +code) |
 | `INBOUND_INVOICE_TOKEN` | wrangler secret  | Shared secret, must match the backend secret    |
 
 ## Security notes
 
 - The worker only forwards PDF/image attachments; other content is ignored.
 - The webhook is authenticated by the shared token and is disabled unless the
-  token is configured, so a leaked address alone cannot inject invoices.
+  token is configured. A leaked company address can only add drafts to that
+  company (capped at 20 e-mails a day) and is replaced with "new address".
 - Invoices arrive as **drafts (registered)** and must be reviewed/approved by a
   human before payment — nothing is paid automatically.

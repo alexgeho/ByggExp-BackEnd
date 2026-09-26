@@ -5,6 +5,8 @@ import { promises as fs } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import { ScanningService } from "../scanning/scanning.service";
+import { Company, CompanyDocument } from "../company/schemas/company.schema";
+import { isInboundCode } from "../company/inbound-address";
 import {
   SupplierInvoice,
   SupplierInvoiceDocument,
@@ -42,7 +44,24 @@ export class InboundInvoicesService {
     @InjectModel(SupplierInvoice.name)
     private readonly model: Model<SupplierInvoiceDocument>,
     private readonly scanning: ScanningService,
+    @InjectModel(Company.name)
+    private readonly companyModel: Model<CompanyDocument>,
   ) {}
+
+  // Company that owns a private inbound address code (faktura+<code>@…), or
+  // null for an unknown/retired code.
+  async companyIdForCode(code: string): Promise<string | null> {
+    const normalized = String(code || "")
+      .trim()
+      .toLowerCase();
+    if (!isInboundCode(normalized)) return null;
+    const company = await this.companyModel
+      .findOne({ inboundCode: normalized })
+      .select("_id")
+      .lean<{ _id: unknown }>()
+      .exec();
+    return company ? String(company._id) : null;
+  }
 
   // Turns the PDF/image attachments of a forwarded invoice e-mail into draft
   // supplier invoices. Each file is OCR'd (best-effort — a failed read still

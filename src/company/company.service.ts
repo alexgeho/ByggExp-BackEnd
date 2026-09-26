@@ -34,6 +34,7 @@ import {
 } from "./modules";
 import { isKnownPlan, maxUsersForPlan } from "../billing/plans";
 import { computeStorageUsage, StorageUsageReport } from "./storage-usage";
+import { inboundAddressFor, newInboundCode } from "./inbound-address";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -258,6 +259,37 @@ export class CompanyService {
   // Superadmin: how much uploaded-file storage each company occupies on disk.
   async storageUsage(): Promise<StorageUsageReport> {
     return computeStorageUsage(this.connection);
+  }
+
+  // The company's private address for e-mailed supplier invoices. The code is
+  // created on first use; `regenerate` replaces it (the old address stops
+  // working at once — for a leaked address that gets spam).
+  async getInboundAddress(
+    id: string,
+    opts: { regenerate?: boolean } = {},
+  ): Promise<{ address: string }> {
+    const company = await this.companyModel
+      .findById(id)
+      .select("+inboundCode")
+      .lean<{ inboundCode?: string }>()
+      .exec();
+    if (!company) throw new NotFoundException("Company not found");
+    if (company.inboundCode && !opts.regenerate) {
+      return { address: inboundAddressFor(company.inboundCode) };
+    }
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = newInboundCode();
+      try {
+        await this.companyModel.updateOne(
+          { _id: id },
+          { $set: { inboundCode: code } },
+        );
+        return { address: inboundAddressFor(code) };
+      } catch (error) {
+        if ((error as { code?: number })?.code !== 11000) throw error;
+      }
+    }
+    throw new Error("Could not allocate an inbound invoice address");
   }
 
   async findOne(id: string): Promise<Company> {

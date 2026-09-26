@@ -5,6 +5,7 @@ import {
   SupplierInvoice,
   SupplierInvoiceSchema,
 } from "../supplier-invoices/schemas/supplier-invoice.schema";
+import { Company, CompanySchema } from "../company/schemas/company.schema";
 import { InboundInvoicesController } from "./inbound-invoices.controller";
 import { InboundInvoicesService } from "./inbound-invoices.service";
 
@@ -13,6 +14,7 @@ import { InboundInvoicesService } from "./inbound-invoices.service";
     ScanningModule,
     MongooseModule.forFeature([
       { name: SupplierInvoice.name, schema: SupplierInvoiceSchema },
+      { name: Company.name, schema: CompanySchema },
     ]),
   ],
   controllers: [InboundInvoicesController],

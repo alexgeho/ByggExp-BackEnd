@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Controller,
+  NotFoundException,
   Post,
   Query,
   Req,
@@ -33,23 +34,38 @@ export class InboundInvoicesController {
   @UseInterceptors(AnyFilesInterceptor())
   async ingest(
     @Query("token") tokenQuery: string,
-    @Query("companyId") companyId: string,
+    @Query("companyId") companyIdQuery: string,
+    @Query("code") code: string,
     @UploadedFiles() files: UploadedInboundFile[],
     @Req() req: { headers: Record<string, string | string[] | undefined> },
   ) {
     const configured = process.env.INBOUND_INVOICE_TOKEN || "";
     if (!configured) {
-      throw new ServiceUnavailableException("Inbound invoice intake is not configured");
+      throw new ServiceUnavailableException(
+        "Inbound invoice intake is not configured",
+      );
     }
 
     const headerToken = req.headers["x-inbound-token"];
-    const provided = tokenQuery || (Array.isArray(headerToken) ? headerToken[0] : headerToken);
+    const provided =
+      tokenQuery || (Array.isArray(headerToken) ? headerToken[0] : headerToken);
     if (!provided || provided !== configured) {
       throw new UnauthorizedException("Invalid inbound token");
     }
 
+    // Per-company address (faktura+<code>@…) → the company owning that code.
+    // `companyId` is the older single-company setup, kept working.
+    let companyId = companyIdQuery;
+    if (code) {
+      companyId = (await this.service.companyIdForCode(code)) || "";
+      if (!companyId) {
+        throw new NotFoundException("Unknown invoice address");
+      }
+    }
     if (!companyId) {
-      throw new BadRequestException("companyId query parameter is required");
+      throw new BadRequestException(
+        "code or companyId query parameter is required",
+      );
     }
 
     return this.service.ingest(companyId, files || []);

@@ -2,8 +2,9 @@ name = "byggexp-invoice-mail"
 main = "src/worker.js"
 compatibility_date = "2024-11-01"
 
-# Public (non-secret) config. Set INBOUND_COMPANY_ID to the company that owns
-# the invoices before deploying.
+# Public (non-secret) config. Mail to faktura+<code>@byggexp.se is routed by
+# the code; INBOUND_COMPANY_ID is only the fallback for plain faktura@ (leave the
+# placeholder to reject mail without a code).
 [vars]
 INBOUND_WEBHOOK_URL = "https://api.byggexp.se/inbound/supplier-invoices"
 INBOUND_COMPANY_ID = "REPLACE_WITH_COMPANY_ID"

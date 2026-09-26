@@ -4,8 +4,13 @@ import PostalMime from 'postal-mime';
 // faktura@<domain>, extracts the PDF/image attachments, and POSTs them to the
 // ByggExp inbound webhook, which OCRs them into draft supplier invoices.
 //
+// Each company has its own address, faktura+<code>@<domain> (shown in the
+// admin under Inköpsfakturor). The worker passes <code> on and the backend
+// finds the company; an unknown code is rejected, so the sender gets a bounce.
+// Plain faktura@<domain> (no +code) still goes to INBOUND_COMPANY_ID, if set.
+//
 // Configure (see README.md):
-//   vars    : INBOUND_WEBHOOK_URL, INBOUND_COMPANY_ID
+//   vars    : INBOUND_WEBHOOK_URL, INBOUND_COMPANY_ID (optional fallback)
 //   secret  : INBOUND_INVOICE_TOKEN  (same value as the backend secret)
 const isInvoiceAttachment = (attachment) => {
   const type = (attachment.mimeType || '').toLowerCase();
@@ -18,11 +23,26 @@ const isInvoiceAttachment = (attachment) => {
   );
 };
 
+// "faktura+k7m2x9qa@byggexp.se" → "k7m2x9qa"; "" when there is no +code.
+export const codeFromAddress = (address) => {
+  const local = String(address || '').split('@')[0].toLowerCase();
+  const plus = local.indexOf('+');
+  return plus === -1 ? '' : local.slice(plus + 1).replace(/[^a-z0-9]/g, '');
+};
+
 export default {
   async email(message, env) {
-    if (!env.INBOUND_INVOICE_TOKEN || !env.INBOUND_WEBHOOK_URL || !env.INBOUND_COMPANY_ID) {
+    const code = codeFromAddress(message.to);
+    const fallbackCompany = env.INBOUND_COMPANY_ID && !/^REPLACE/.test(env.INBOUND_COMPANY_ID)
+      ? env.INBOUND_COMPANY_ID
+      : '';
+    if (!env.INBOUND_INVOICE_TOKEN || !env.INBOUND_WEBHOOK_URL) {
       console.error('Email worker is missing INBOUND_* configuration');
       message.setReject('Invoice intake is not configured');
+      return;
+    }
+    if (!code && !fallbackCompany) {
+      message.setReject('Unknown invoice address');
       return;
     }
 
@@ -47,9 +67,15 @@ export default {
 
     const url = new URL(env.INBOUND_WEBHOOK_URL);
     url.searchParams.set('token', env.INBOUND_INVOICE_TOKEN);
-    url.searchParams.set('companyId', env.INBOUND_COMPANY_ID);
+    if (code) url.searchParams.set('code', code);
+    else url.searchParams.set('companyId', fallbackCompany);
 
     const response = await fetch(url.toString(), { method: 'POST', body: form });
+
+    if (response.status === 404) {
+      message.setReject('Unknown invoice address');
+      return;
+    }
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');

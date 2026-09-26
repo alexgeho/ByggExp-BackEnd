@@ -158,6 +158,11 @@ export class Company {
   @Prop({ type: Object, default: {} })
   moduleOverrides?: Record<string, boolean>;
 
+  // ---- Private address for e-mailed supplier invoices (see inbound-address) ----
+  // Hidden from normal reads; only the inbound-address endpoints expose it.
+  @Prop({ type: String, select: false })
+  inboundCode?: string;
+
   // ---- Fair use: customer e-mails sent today (see mail/outgoing-mail-quota) ----
   @Prop({ type: Object, default: null })
   outgoingMail?: { day: string; count: number } | null;
@@ -172,3 +177,11 @@ export class Company {
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);
+
+CompanySchema.index(
+  { inboundCode: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { inboundCode: { $type: "string" } },
+  },
+);

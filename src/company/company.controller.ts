@@ -220,6 +220,21 @@ export class CompanyController {
 
   // Set the per-company override map. Superadmin: any company, no limits.
   // CompanyAdmin: own company only, and may only hide/show within the plan.
+  // Private e-mail address for supplier invoices (see inbound-address.ts).
+  @Get(":id/inbound-address")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  getInboundAddress(@Param("id") id: string, @Request() req) {
+    this.assertOwnCompany(id, req);
+    return this.companyService.getInboundAddress(id);
+  }
+
+  @Post(":id/inbound-address/regenerate")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  regenerateInboundAddress(@Param("id") id: string, @Request() req) {
+    this.assertOwnCompany(id, req);
+    return this.companyService.getInboundAddress(id, { regenerate: true });
+  }
+
   @Patch(":id/modules")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   async setModules(
