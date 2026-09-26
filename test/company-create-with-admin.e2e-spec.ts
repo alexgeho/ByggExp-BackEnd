@@ -1,6 +1,6 @@
 /**
- * Company onboarding e2e: creating a company provisions its first Company Admin
- * from the company email, with an auto-generated password (emailed, never typed).
+ * Company onboarding e2e: creating a company emails an invite to the company
+ * address; its first Company Admin is created only when the invite is accepted.
  *
  * Requires a reachable MongoDB. Uses a throwaway local database and NEVER
  * touches production data.
@@ -19,7 +19,7 @@ import { Connection } from "mongoose";
 import request from "supertest";
 import { AppModule } from "./../src/app.module";
 
-describe("Company create + auto admin (e2e)", () => {
+describe("Company create + admin invite (e2e)", () => {
   let app: INestApplication;
   let http: ReturnType<INestApplication["getHttpServer"]>;
   let connection: Connection;
@@ -61,7 +61,7 @@ describe("Company create + auto admin (e2e)", () => {
     await app.close();
   }, 60000);
 
-  it("creates a company with ONLY an email and provisions a Company Admin", async () => {
+  it("creates a company with ONLY an email and invites its admin (no user until acceptance)", async () => {
     const email = `acme-${uniq}@e2e.local`;
     const res = await request(http)
       .post("/company")
@@ -74,19 +74,22 @@ describe("Company create + auto admin (e2e)", () => {
     // company created with that email as login
     expect(res.body.company).toBeDefined();
     expect(res.body.company.email).toBe(email);
+    expect(res.body.invited).toBe(true);
+    // the admin account is created only when the invite is accepted
+    expect(res.body.admin).toBeUndefined();
 
-    // first admin auto-provisioned from the company email
-    expect(res.body.admin).toBeDefined();
-    expect(res.body.admin.email).toBe(email);
-    expect(res.body.admin.role).toBe("companyAdmin");
-    expect(String(res.body.admin.companyId)).toBe(
+    const users = await connection
+      .collection("users")
+      .countDocuments({ email });
+    expect(users).toBe(0);
+    const invite = await connection
+      .collection("companyinvites")
+      .findOne({ email });
+    expect(invite).toBeTruthy();
+    expect(invite?.role).toBe("companyAdmin");
+    expect(String(invite?.companyId)).toBe(
       String(res.body.company._id ?? res.body.company.id),
     );
-
-    // no plaintext password ever returned to the caller
-    expect(res.body.admin.password).toBeUndefined();
-    // account starts pending; first password login activates it
-    expect(res.body.admin.accountStatus).toBe("waiting_for_approval");
   });
 
   it("rejects a second company with the same email (409)", async () => {
@@ -119,37 +122,37 @@ describe("Company create + auto admin (e2e)", () => {
     expect(res.status).toBe(401);
   });
 
-  it("cascade-deletes the admin user when the company is deleted (recreate works)", async () => {
+  it("deleting a company frees its email again (recreate works)", async () => {
     const email = `cascade-${uniq}@e2e.local`;
 
-    // create → company + admin user
+    // create → company + pending admin invite
     const created = await request(http)
       .post("/company")
       .set("Authorization", `Bearer ${superToken}`)
       .send({ email });
     const companyId = created.body.company._id ?? created.body.company.id;
 
-    // the admin user must exist now (recreating the same email is blocked)
+    // the company now owns the email (recreating it is blocked)
     const dup = await request(http)
       .post("/company")
       .set("Authorization", `Bearer ${superToken}`)
       .send({ email });
     expect(dup.status).toBe(409);
 
-    // delete the company → must cascade-remove its admin user
+    // delete the company
     const del = await request(http)
       .delete(`/company/${companyId}`)
       .set("Authorization", `Bearer ${superToken}`);
     expect(del.status).toBeGreaterThanOrEqual(200);
     expect(del.status).toBeLessThan(300);
 
-    // now the same email is free again (no orphaned user left behind)
+    // now the same email is free again (nothing orphaned blocks it)
     const recreated = await request(http)
       .post("/company")
       .set("Authorization", `Bearer ${superToken}`)
       .send({ email });
     expect(recreated.status).toBeGreaterThanOrEqual(200);
     expect(recreated.status).toBeLessThan(300);
-    expect(recreated.body.admin.email).toBe(email);
+    expect(recreated.body.company.email).toBe(email);
   });
 });
