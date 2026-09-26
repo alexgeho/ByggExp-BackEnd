@@ -200,6 +200,17 @@ describe("Mailer (e2e)", () => {
       .query({ u: url, s: signLink(t, url) })
       .expect(302);
     expect(click.headers.location).toBe(url);
+    // Mail scanners (Outlook Safe Links) hit links and the pixel several
+    // times at once — still one open, one click, one log row per link.
+    await Promise.all([
+      ...[1, 2, 3].map(() =>
+        request(http)
+          .get(`/m/c/${t}`)
+          .query({ u: url, s: signLink(t, url) })
+          .expect(302),
+      ),
+      ...[1, 2].map(() => request(http).get(`/m/o/${t}.gif`).expect(200)),
+    ]);
 
     // GET only shows a confirmation page (link scanners must not unsubscribe).
     await request(http).get(`/m/u/${t}`).expect(200);

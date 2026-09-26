@@ -577,18 +577,25 @@ export class MailerCampaignsService {
     return this.recipients.findOne({ token });
   }
 
+  // Sets `field` only if it is still empty; true when this call set it.
+  // Atomic, so parallel hits (mail scanners fetch links several times at
+  // once) never count the same recipient twice.
+  private async markFirst(
+    id: Types.ObjectId,
+    field: "openedAt" | "clickedAt",
+  ): Promise<boolean> {
+    const res = await this.recipients.updateOne(
+      { _id: id, [field]: null },
+      { $set: { [field]: new Date() } },
+    );
+    return res.modifiedCount === 1;
+  }
+
   async trackOpen(token: string) {
     const r = await this.byToken(token);
     if (!r) return;
-    const first = !r.openedAt;
-    await this.recipients.updateOne(
-      { _id: r._id },
-      {
-        $inc: { opens: 1 },
-        ...(first ? { $set: { openedAt: new Date() } } : {}),
-      },
-    );
-    if (first) {
+    await this.recipients.updateOne({ _id: r._id }, { $inc: { opens: 1 } });
+    if (await this.markFirst(r._id, "openedAt")) {
       await this.campaigns.updateOne(
         { _id: r.campaignId },
         { $inc: { "stats.opened": 1 } },
@@ -606,24 +613,24 @@ export class MailerCampaignsService {
     if (!/^https?:\/\//i.test(url) || !verifyLink(token, url, sig)) return null;
     const r = await this.byToken(token);
     if (!r) return url;
-    const firstClick = !r.clickedAt;
-    const firstOpen = !r.openedAt; // clicked with images off → count as opened
-    const set: Record<string, Date> = {};
-    if (firstClick) set.clickedAt = new Date();
-    if (firstOpen) set.openedAt = new Date();
-    await this.recipients.updateOne(
-      { _id: r._id },
-      {
-        $inc: { clicks: 1 },
-        ...(Object.keys(set).length ? { $set: set } : {}),
-      },
-    );
+    await this.recipients.updateOne({ _id: r._id }, { $inc: { clicks: 1 } });
+    const firstClick = await this.markFirst(r._id, "clickedAt");
+    // Clicked with images off → count as opened too.
+    const firstOpen = await this.markFirst(r._id, "openedAt");
     const inc: Record<string, number> = {};
     if (firstClick) inc["stats.clicked"] = 1;
     if (firstOpen) inc["stats.opened"] = 1;
     if (Object.keys(inc).length)
       await this.campaigns.updateOne({ _id: r.campaignId }, { $inc: inc });
-    await this.log("click", r.campaignId, r.email, url);
+    // One log row per recipient and link: repeat hits (Outlook Safe Links,
+    // double clicks) only bump the counter above.
+    const seen = await this.events.exists({
+      type: "click",
+      campaignId: r.campaignId,
+      email: r.email,
+      detail: url.slice(0, 500),
+    });
+    if (!seen) await this.log("click", r.campaignId, r.email, url);
     return url;
   }
 

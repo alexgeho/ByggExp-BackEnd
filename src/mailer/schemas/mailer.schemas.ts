@@ -260,6 +260,7 @@ export class MailEvent {
 }
 export const MailEventSchema = SchemaFactory.createForClass(MailEvent);
 MailEventSchema.index({ createdAt: -1 });
+MailEventSchema.index({ campaignId: 1, email: 1, type: 1 });
 
 // ---------- settings (singleton) ----------
 
