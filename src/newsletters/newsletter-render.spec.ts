@@ -7,7 +7,10 @@ import {
   UNSUBSCRIBE_PLACEHOLDER,
   withUtm,
 } from "./newsletter-render";
-import { defaultNewsletterTemplate } from "./newsletter-template";
+import {
+  defaultNewsletterTemplate,
+  personalLetterTemplate,
+} from "./newsletter-template";
 
 describe("newsletter renderer", () => {
   it("renders the default template with every block and the footer", () => {
@@ -106,6 +109,24 @@ describe("newsletter renderer", () => {
     expect(text).toContain(
       "Boka demo: https://byggexp.se/sv/contact?utm_source=nyhetsbrev",
     );
+    expect(text).toContain(`Avregistrera: ${UNSUBSCRIBE_PLACEHOLDER}`);
+  });
+
+  it("renders the personal letter without logo, menu or images", () => {
+    const tpl = personalLetterTemplate();
+    const html = renderNewsletterHtml(tpl.settings, tpl.blocks, {
+      subject: tpl.subject,
+    });
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain(`class="nl-nav"`);
+    expect(html).toContain('align="left"');
+    expect(html).toContain("Med vänliga hälsningar,<br>Alexander Gerhard");
+    expect(html).toContain("Avregistrera");
+    expect(html).toContain(UNSUBSCRIBE_PLACEHOLDER);
+    const text = renderNewsletterText(tpl.settings, tpl.blocks, {
+      subject: tpl.subject,
+    });
+    expect(text).not.toContain(tpl.settings.footerAbout);
     expect(text).toContain(`Avregistrera: ${UNSUBSCRIBE_PLACEHOLDER}`);
   });
 });

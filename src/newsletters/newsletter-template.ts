@@ -132,3 +132,43 @@ export function defaultNewsletterTemplate(): {
     ],
   };
 }
+
+// "Personligt brev": a plain, left-aligned letter without logo, menu or
+// images — reads like a one-to-one email, which suits cold outreach.
+export function personalLetterTemplate(): {
+  subject: string;
+  settings: NewsletterSettings;
+  blocks: NewsletterBlock[];
+} {
+  return {
+    subject: "Tidrapporter hos {{företag|er}}?",
+    settings: {
+      ...DEFAULT_SETTINGS,
+      layout: "personal",
+      preheader: "",
+      utmCampaign: "personligt-brev",
+    },
+    blocks: [
+      {
+        id: "body",
+        type: "text",
+        muted: false,
+        text: "Hej {{namn|}},\n\nHur samlar ni in tidrapporterna idag – papperslappar, SMS eller Excel?\n\nVi hör ofta från byggfirmor att fredagen går åt till att jaga timmar, och att lönen och fakturan blir fel för att något saknas.\n\nVi har byggt ByggExp för just det: medarbetarna stämplar in med GPS i mobilen, timmarna hamnar på rätt projekt och blir löneunderlag och faktura direkt – utan att någon knappar in något.\n\nSka vi ta 15 minuter nästa vecka? Jag visar hur det skulle se ut för er, och passar det kan ni testa gratis i 14 dagar.",
+      },
+      {
+        id: "sign",
+        type: "text",
+        muted: false,
+        text: "Med vänliga hälsningar,\nAlexander Gerhard\nByggExp · 070-757 75 75",
+      },
+    ],
+  };
+}
+
+export type NewsletterTemplateKey = "newsletter" | "personal";
+
+export function newsletterTemplate(key: NewsletterTemplateKey) {
+  return key === "personal"
+    ? personalLetterTemplate()
+    : defaultNewsletterTemplate();
+}

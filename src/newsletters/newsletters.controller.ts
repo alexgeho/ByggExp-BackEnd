@@ -17,6 +17,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import {
   IsArray,
   IsBoolean,
+  IsIn,
   IsEmail,
   IsObject,
   IsOptional,
@@ -34,6 +35,9 @@ import { NewslettersService } from "./newsletters.service";
 class CreateNewsletterDto {
   @IsOptional() @IsString() @MaxLength(200) title?: string;
   @IsOptional() @IsBoolean() blank?: boolean;
+  @IsOptional() @IsIn(["newsletter", "personal"]) template?:
+    | "newsletter"
+    | "personal";
 }
 
 // Blocks/settings are free-form JSON here; the service normalises them
@@ -93,6 +97,7 @@ export class NewslettersController {
       dto.title || "",
       Boolean(dto.blank),
       userId(req),
+      dto.template,
     );
   }
 

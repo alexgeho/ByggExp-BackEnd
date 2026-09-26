@@ -6,6 +6,9 @@
 export const UNSUBSCRIBE_PLACEHOLDER = "{{unsubscribe_url}}";
 
 export type NewsletterSettings = {
+  // "newsletter" = designed mailing; "personal" = plain personal letter
+  // (no logo/menu, left-aligned) for cold outreach.
+  layout: "newsletter" | "personal";
   preheader: string;
   brandColor: string;
   accentColor: string;
@@ -63,6 +66,7 @@ export const BLOCK_TYPES: BlockType[] = [
 ];
 
 export const DEFAULT_SETTINGS: NewsletterSettings = {
+  layout: "newsletter",
   preheader: "",
   brandColor: "#0f2350",
   accentColor: "#1c6cf3",
@@ -140,6 +144,7 @@ export function normalizeSettings(raw: unknown): NewsletterSettings {
   const d = DEFAULT_SETTINGS;
   const nav = Array.isArray(r.navLinks) ? r.navLinks : d.navLinks;
   return {
+    layout: r.layout === "personal" ? "personal" : "newsletter",
     preheader: str(r.preheader ?? d.preheader, 300),
     brandColor: color(r.brandColor, d.brandColor),
     accentColor: color(r.accentColor, d.accentColor),
@@ -270,7 +275,17 @@ export function inlineFormat(
 const FONT = "Helvetica,Arial,sans-serif";
 const MUTED = "#8a94a6";
 
-type Ctx = { s: NewsletterSettings; href: (u: string) => string };
+type Ctx = {
+  s: NewsletterSettings;
+  href: (u: string) => string;
+  personal: boolean;
+};
+
+// Personal letters are left-aligned and full-width; newsletters centred.
+const al = (c: Ctx) => (c.personal ? "left" : "center");
+const hp = (c: Ctx, v: string) => (c.personal ? "0" : v);
+const textColor = (c: Ctx, fallback: string) =>
+  c.personal ? "#1f2937" : fallback;
 
 function renderButton(
   label: string,
@@ -284,9 +299,9 @@ function renderButton(
       ? `bgcolor="${accentColor}" style="border-radius:24px;"`
       : `style="border:2px solid ${brandColor};border-radius:24px;"`;
   const textColor = variant === "filled" ? "#ffffff" : brandColor;
-  return `<tr><td align="center" style="padding:8px 0 24px;">
+  return `<tr><td align="${al(ctx)}" style="padding:8px 0 24px;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-<td align="center" ${cell}><a href="${escapeHtml(ctx.href(href))}" style="display:inline-block;padding:13px 28px;font-family:${FONT};font-size:15px;font-weight:bold;color:${textColor};text-decoration:none;">${escapeHtml(label)}</a></td>
+<td align="${al(ctx)}" ${cell}><a href="${escapeHtml(ctx.href(href))}" style="display:inline-block;padding:13px 28px;font-family:${FONT};font-size:15px;font-weight:bold;color:${textColor};text-decoration:none;">${escapeHtml(label)}</a></td>
 </tr></table></td></tr>`;
 }
 
@@ -299,12 +314,12 @@ function renderImage(
 ) {
   if (!src) return "";
   const width = fullWidth ? 600 : 440;
-  const pad = fullWidth ? "0" : "0 80px";
+  const pad = fullWidth ? "0" : hp(ctx, "0 80px");
   const img = `<img src="${escapeHtml(safeUrl(src))}" width="${width}" alt="${escapeHtml(alt)}" class="${fullWidth ? "" : "nl-narrow"}" style="display:block;width:${width}px;max-width:100%;height:auto;border:0;">`;
   const link = href
     ? `<a href="${escapeHtml(ctx.href(href))}">${img}</a>`
     : img;
-  return `<tr><td align="center" class="${fullWidth ? "" : "nl-px"}" style="padding:${pad};">${link}</td></tr>`;
+  return `<tr><td align="${al(ctx)}" class="${fullWidth ? "" : "nl-px"}" style="padding:${pad};">${link}</td></tr>`;
 }
 
 function renderBlock(b: NewsletterBlock, ctx: Ctx): string {
@@ -314,25 +329,25 @@ function renderBlock(b: NewsletterBlock, ctx: Ctx): string {
       return renderImage(b.src, b.alt, b.href, b.fullWidth, ctx);
     case "heading": {
       const size = b.level === "h1" ? 28 : 24;
-      return `<tr><td align="center" class="nl-px" style="padding:24px 60px 6px;">
+      return `<tr><td align="${al(ctx)}" class="nl-px" style="padding:24px ${hp(ctx, "60px")} 6px;">
 <${b.level} class="nl-h" style="margin:0;font-family:${FONT};font-size:${size}px;line-height:${size + 6}px;font-weight:bold;color:${brandColor};">${escapeHtml(b.text)}</${b.level}>
 </td></tr>`;
     }
     case "text":
-      return `<tr><td align="center" class="nl-px" style="padding:12px 80px 20px;font-family:${FONT};font-size:15px;line-height:22px;color:${b.muted ? MUTED : brandColor};">${inlineFormat(b.text, ctx.s.accentColor, utmCampaign)}</td></tr>`;
+      return `<tr><td align="${al(ctx)}" class="nl-px" style="padding:12px ${hp(ctx, "80px")} 20px;font-family:${FONT};font-size:15px;line-height:22px;color:${b.muted ? MUTED : textColor(ctx, brandColor)};">${inlineFormat(b.text, ctx.s.accentColor, utmCampaign)}</td></tr>`;
     case "button":
       return b.label ? renderButton(b.label, b.href, b.variant, ctx) : "";
     case "card": {
       const parts = [
         b.title
-          ? `<tr><td align="center" class="nl-px" style="padding:24px 60px 6px;"><h2 class="nl-h" style="margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:bold;color:${brandColor};">${escapeHtml(b.title)}</h2></td></tr>`
+          ? `<tr><td align="${al(ctx)}" class="nl-px" style="padding:24px ${hp(ctx, "60px")} 6px;"><h2 class="nl-h" style="margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:bold;color:${brandColor};">${escapeHtml(b.title)}</h2></td></tr>`
           : "",
         b.text
-          ? `<tr><td align="center" class="nl-px" style="padding:12px 80px 22px;font-family:${FONT};font-size:15px;line-height:22px;color:${brandColor};">${inlineFormat(b.text, ctx.s.accentColor, utmCampaign)}</td></tr>`
+          ? `<tr><td align="${al(ctx)}" class="nl-px" style="padding:12px ${hp(ctx, "80px")} 22px;font-family:${FONT};font-size:15px;line-height:22px;color:${brandColor};">${inlineFormat(b.text, ctx.s.accentColor, utmCampaign)}</td></tr>`
           : "",
         renderImage(b.image, b.imageAlt || b.title, b.href, false, ctx),
         b.linkLabel && b.href
-          ? `<tr><td align="center" style="padding:18px 20px 8px;font-family:${FONT};font-size:13px;"><a href="${escapeHtml(ctx.href(b.href))}" style="color:${MUTED};font-weight:bold;text-decoration:none;">${escapeHtml(b.linkLabel)}</a></td></tr>`
+          ? `<tr><td align="${al(ctx)}" style="padding:18px 20px 8px;font-family:${FONT};font-size:13px;"><a href="${escapeHtml(ctx.href(b.href))}" style="color:${MUTED};font-weight:bold;text-decoration:none;">${escapeHtml(b.linkLabel)}</a></td></tr>`
           : "",
       ];
       return parts.join("\n");
@@ -340,7 +355,7 @@ function renderBlock(b: NewsletterBlock, ctx: Ctx): string {
     case "spacer":
       return `<tr><td style="height:${b.height}px;line-height:${b.height}px;font-size:0;">&nbsp;</td></tr>`;
     case "divider":
-      return `<tr><td class="nl-px" style="padding:16px 80px;"><div style="border-top:1px solid #e3e8f0;font-size:0;line-height:0;">&nbsp;</div></td></tr>`;
+      return `<tr><td class="nl-px" style="padding:16px ${hp(ctx, "80px")};"><div style="border-top:1px solid #e3e8f0;font-size:0;line-height:0;">&nbsp;</div></td></tr>`;
   }
 }
 
@@ -358,7 +373,11 @@ export function renderNewsletterHtml(
 ): string {
   const s = normalizeSettings(rawSettings);
   const blocks = normalizeBlocks(rawBlocks);
-  const ctx: Ctx = { s, href: (u) => withUtm(safeUrl(u), s.utmCampaign) };
+  const ctx: Ctx = {
+    s,
+    href: (u) => withUtm(safeUrl(u), s.utmCampaign),
+    personal: s.layout === "personal",
+  };
   const unsubscribe = opts.unsubscribeUrl || UNSUBSCRIBE_PLACEHOLDER;
 
   const logo = s.logoUrl
@@ -393,6 +412,20 @@ ${contact ? `<tr><td align="center" style="padding:0 20px 12px;font-family:${FON
 ${s.footerAddress ? `<tr><td align="center" style="padding:0 20px 12px;font-family:${FONT};font-size:13px;color:${MUTED};">${escapeHtml(s.footerAddress)}</td></tr>` : ""}
 <tr><td align="center" style="padding:8px 20px 50px;font-family:${FONT};font-size:12px;"><a href="${escapeHtml(unsubscribe)}" style="color:${s.brandColor};">Vill du inte längre få våra nyhetsbrev? Avregistrera</a></td></tr>`;
 
+  const blockRows = blocks.map((b) => renderBlock(b, ctx)).join("\n");
+
+  // Personal letter: just the text, then a small grey footer with the
+  // legally required sender details and unsubscribe link.
+  const personalFooter = [s.footerAddress, s.footerEmail]
+    .filter(Boolean)
+    .map(escapeHtml)
+    .join(" · ");
+  const personalBody = `<tr><td class="nl-px" style="padding:28px 24px 0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+${blockRows}
+</table></td></tr>
+<tr><td class="nl-px" style="padding:28px 24px 40px;font-family:${FONT};font-size:12px;line-height:18px;color:${MUTED};">${personalFooter ? `${personalFooter}<br>` : ""}<a href="${escapeHtml(unsubscribe)}" style="color:${MUTED};">Vill du inte få fler mejl från oss? Avregistrera</a></td></tr>`;
+
   const preheader = s.preheader
     ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${escapeHtml(s.preheader)}${"&#8199;&#847;".repeat(40)}</div>`
     : "";
@@ -420,10 +453,7 @@ ${preheader}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;">
 <tr><td align="center">
 <table role="presentation" class="nl-w" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">
-${logo}
-${nav}
-${blocks.map((b) => renderBlock(b, ctx)).join("\n")}
-${footer}
+${ctx.personal ? personalBody : `${logo}\n${nav}\n${blockRows}\n${footer}`}
 </table>
 </td></tr>
 </table>
@@ -461,10 +491,16 @@ export function renderNewsletterText(
       lines.push("");
     }
   }
-  lines.push("--", s.footerAbout);
-  if (s.footerEmail || s.footerPhone)
-    lines.push([s.footerEmail, s.footerPhone].filter(Boolean).join(" | "));
-  if (s.footerAddress) lines.push(s.footerAddress);
+  if (s.layout === "personal") {
+    const sender = [s.footerAddress, s.footerEmail].filter(Boolean).join(" · ");
+    lines.push("--");
+    if (sender) lines.push(sender);
+  } else {
+    lines.push("--", s.footerAbout);
+    if (s.footerEmail || s.footerPhone)
+      lines.push([s.footerEmail, s.footerPhone].filter(Boolean).join(" | "));
+    if (s.footerAddress) lines.push(s.footerAddress);
+  }
   lines.push(
     "",
     `Avregistrera: ${opts.unsubscribeUrl || UNSUBSCRIBE_PLACEHOLDER}`,

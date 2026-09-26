@@ -8,7 +8,10 @@ import {
   renderNewsletterHtml,
   renderNewsletterText,
 } from "./newsletter-render";
-import { defaultNewsletterTemplate } from "./newsletter-template";
+import {
+  newsletterTemplate,
+  NewsletterTemplateKey,
+} from "./newsletter-template";
 import { Newsletter, NewsletterDocument } from "./schemas/newsletter.schema";
 
 export type NewsletterContent = {
@@ -41,9 +44,15 @@ export class NewslettersService {
     return doc;
   }
 
-  // New drafts start from the default template unless `blank` is requested.
-  create(title: string, blank: boolean, userId: string | null) {
-    const tpl = defaultNewsletterTemplate();
+  // New drafts start from a template (designed newsletter or personal
+  // letter) unless `blank` is requested.
+  create(
+    title: string,
+    blank: boolean,
+    userId: string | null,
+    template: NewsletterTemplateKey = "newsletter",
+  ) {
+    const tpl = newsletterTemplate(template);
     return this.model.create({
       title: title || tpl.subject,
       subject: blank ? "" : tpl.subject,
