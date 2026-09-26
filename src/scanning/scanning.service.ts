@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import convert from "heic-convert";
+import { PDFDocument } from "pdf-lib";
 
 export type ScannedDocument = {
   supplierName: string;
@@ -33,6 +34,11 @@ export type ScannedCertificate = {
   issuedAt: string; // YYYY-MM-DD
   expiresAt: string; // YYYY-MM-DD
 };
+
+// Only the first pages of a PDF are sent to the model: supplier, amounts, VAT,
+// due date and OCR are always at the start, and every page is billed. The
+// stored file itself is never cut.
+export const MAX_SCAN_PDF_PAGES = 5;
 
 // Extracts structured fields from a photographed/scanned receipt or supplier
 // invoice using Claude vision. Gated on ANTHROPIC_API_KEY — when unset the
@@ -154,6 +160,32 @@ Rules:
     }
   }
 
+  // Returns a copy of the PDF holding only its first MAX_SCAN_PDF_PAGES pages.
+  // Anything unreadable (encrypted, damaged) is sent as-is.
+  async firstPdfPages(
+    buffer: Buffer,
+    maxPages = MAX_SCAN_PDF_PAGES,
+  ): Promise<Buffer> {
+    try {
+      const src = await PDFDocument.load(buffer, { ignoreEncryption: true });
+      const count = src.getPageCount();
+      if (count <= maxPages) return buffer;
+      const out = await PDFDocument.create();
+      const pages = await out.copyPages(
+        src,
+        Array.from({ length: maxPages }, (_, i) => i),
+      );
+      pages.forEach((page) => out.addPage(page));
+      this.logger.log(`PDF has ${count} pages; scanning the first ${maxPages}`);
+      return Buffer.from(await out.save());
+    } catch (error) {
+      this.logger.warn(
+        `Could not trim PDF, scanning it whole: ${(error as Error)?.message || error}`,
+      );
+      return buffer;
+    }
+  }
+
   async extract(buffer: Buffer, mimetype: string): Promise<ScannedDocument> {
     if (!this.enabled) {
       throw new ServiceUnavailableException(
@@ -162,6 +194,9 @@ Rules:
     }
 
     ({ buffer, mimetype } = await this.normalizeHeic(buffer, mimetype));
+    if (mimetype === "application/pdf") {
+      buffer = await this.firstPdfPages(buffer);
+    }
 
     const res = await fetch(this.apiUrl, {
       method: "POST",

@@ -91,6 +91,11 @@ export class SupplierInvoice {
   @Prop({ default: "manual" })
   source: string;
 
+  // For e-mailed invoices: one id per received e-mail (shared by all of its
+  // attachments), so the daily inbound e-mail limit can count e-mails.
+  @Prop({ type: String, default: null })
+  inboundBatch?: string | null;
+
   // Uploaded scan/PDF of the supplier's invoice (the primary/original document).
   @Prop({ type: String, default: null })
   attachmentUrl?: string | null;
