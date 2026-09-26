@@ -371,7 +371,7 @@ export function renderNewsletterHtml(
     ? `<tr><td align="center" style="padding:0 10px 18px;font-family:${FONT};font-size:12px;letter-spacing:.5px;">${s.navLinks
         .map(
           (l) =>
-            `<a href="${escapeHtml(ctx.href(l.href))}" style="color:${s.brandColor};text-decoration:none;padding:0 12px;">${escapeHtml(l.label)}</a>`,
+            `<a href="${escapeHtml(ctx.href(l.href))}" class="nl-nav" style="display:inline-block;white-space:nowrap;color:${s.brandColor};text-decoration:none;padding:4px 10px;">${escapeHtml(l.label)}</a>`,
         )
         .join("")}</td></tr>`
     : "";
@@ -411,6 +411,7 @@ body{margin:0;padding:0;background:#ffffff;}
   .nl-px{padding-left:20px!important;padding-right:20px!important;}
   .nl-narrow{width:100%!important;}
   .nl-h{font-size:22px!important;line-height:28px!important;}
+  .nl-nav{padding:4px 6px!important;font-size:11px!important;letter-spacing:0!important;}
 }
 </style>
 </head>
