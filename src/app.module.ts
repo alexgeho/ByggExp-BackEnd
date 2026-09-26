@@ -40,6 +40,7 @@ import { MailModule } from "./mail/mail.module";
 import { BlogPostsModule } from "./blog-posts/blog-posts.module";
 import { SiteSeoModule } from "./site-seo/site-seo.module";
 import { NewslettersModule } from "./newsletters/newsletters.module";
+import { MailerModule } from "./mailer/mailer.module";
 import { AtaModule } from "./ata/ata.module";
 import { ExpensesModule } from "./expenses/expenses.module";
 import { NotesModule } from "./notes/notes.module";
@@ -113,6 +114,7 @@ import { SystemModule } from "./system/system.module";
     BlogPostsModule,
     SiteSeoModule,
     NewslettersModule,
+    MailerModule,
     BugReportsModule,
     AnalyticsModule,
     MailModule,
