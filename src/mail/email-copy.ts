@@ -350,6 +350,9 @@ export type AuthPageCopy = {
   okBody: string;
   okOpenApp: string;
   okWebAdmin: string;
+  // Shown on a computer, where the mobile app can't be opened.
+  okBodyDesktop: string;
+  okSignIn: string;
   destTitle: string;
   destQuestion: string;
   destOpenApp: string;
@@ -380,17 +383,21 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
       "Ditt lösenord har ändrats. Öppna appen och logga in med ditt nya lösenord.",
     okOpenApp: "Öppna appen",
     okWebAdmin: "eller logga in i webbadmin",
+    okBodyDesktop: "Ditt lösenord har ändrats. Logga in med ditt nya lösenord.",
+    okSignIn: "Logga in i ByggExp",
     destTitle: "Konto klart",
     destQuestion: "Var vill du fortsätta?",
     destOpenApp: "Öppna appen",
     destOpenWebAdmin: "Öppna webbadmin",
     confirmedTitle: "E-post bekräftad",
-    confirmedMessage: "Kontot är aktiverat. Öppnar ByggExp för att logga in dig.",
+    confirmedMessage:
+      "Kontot är aktiverat. Öppnar ByggExp för att logga in dig.",
     confirmedOpenApp: "Öppna ByggExp",
     confirmedHint:
       "Tryck på knappen för att öppna appen och logga in. Har du inte appen? Installera ByggExp, öppna den och logga in med din e-post och ditt lösenord.",
     fallbackTitle: "Öppna ByggExp",
-    fallbackBody: "Ladda ner appen och logga sedan in med din e-post och ditt lösenord.",
+    fallbackBody:
+      "Ladda ner appen och logga sedan in med din e-post och ditt lösenord.",
     fallbackIos: "Ladda ner för iPhone",
     fallbackAndroid: "Ladda ner för Android",
     errorTitle: "Något gick fel",
@@ -409,6 +416,9 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
       "Your password has been changed. Open the app and sign in with your new password.",
     okOpenApp: "Open the app",
     okWebAdmin: "or sign in on the web admin",
+    okBodyDesktop:
+      "Your password has been changed. Sign in with your new password.",
+    okSignIn: "Sign in to ByggExp",
     destTitle: "Account ready",
     destQuestion: "Where do you want to continue?",
     destOpenApp: "Open the app",
@@ -419,7 +429,8 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
     confirmedHint:
       "Tap the button to open the app and sign in. Don't have the app? Install ByggExp, open it and sign in with your email and password.",
     fallbackTitle: "Open ByggExp",
-    fallbackBody: "Download the app, then sign in with your email and password.",
+    fallbackBody:
+      "Download the app, then sign in with your email and password.",
     fallbackIos: "Download for iPhone",
     fallbackAndroid: "Download for Android",
     errorTitle: "Something went wrong",
@@ -438,6 +449,8 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
       "Passordet ditt er endret. Åpne appen og logg inn med det nye passordet.",
     okOpenApp: "Åpne appen",
     okWebAdmin: "eller logg inn i webadmin",
+    okBodyDesktop: "Passordet ditt er endret. Logg inn med det nye passordet.",
+    okSignIn: "Logg inn i ByggExp",
     destTitle: "Kontoen er klar",
     destQuestion: "Hvor vil du fortsette?",
     destOpenApp: "Åpne appen",
@@ -467,6 +480,8 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
       "Twoje hasło zostało zmienione. Otwórz aplikację i zaloguj się nowym hasłem.",
     okOpenApp: "Otwórz aplikację",
     okWebAdmin: "lub zaloguj się w panelu web",
+    okBodyDesktop: "Twoje hasło zostało zmienione. Zaloguj się nowym hasłem.",
+    okSignIn: "Zaloguj się do ByggExp",
     destTitle: "Konto gotowe",
     destQuestion: "Gdzie chcesz kontynuować?",
     destOpenApp: "Otwórz aplikację",
@@ -477,7 +492,8 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
     confirmedHint:
       "Naciśnij przycisk, aby otworzyć aplikację i zalogować się. Nie masz aplikacji? Zainstaluj ByggExp, otwórz ją i zaloguj się swoim adresem e-mail i hasłem.",
     fallbackTitle: "Otwórz ByggExp",
-    fallbackBody: "Pobierz aplikację, a następnie zaloguj się e-mailem i hasłem.",
+    fallbackBody:
+      "Pobierz aplikację, a następnie zaloguj się e-mailem i hasłem.",
     fallbackIos: "Pobierz na iPhone'a",
     fallbackAndroid: "Pobierz na Androida",
     errorTitle: "Coś poszło nie tak",
@@ -496,17 +512,21 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
       "Sinu parool on muudetud. Ava rakendus ja logi sisse uue parooliga.",
     okOpenApp: "Ava rakendus",
     okWebAdmin: "või logi sisse veebiadminis",
+    okBodyDesktop: "Sinu parool on muudetud. Logi sisse uue parooliga.",
+    okSignIn: "Logi sisse ByggExpi",
     destTitle: "Konto valmis",
     destQuestion: "Kust soovid jätkata?",
     destOpenApp: "Ava rakendus",
     destOpenWebAdmin: "Ava veebiadmin",
     confirmedTitle: "E-post kinnitatud",
-    confirmedMessage: "Konto aktiveeritud. Avan ByggExpi, et sind sisse logida.",
+    confirmedMessage:
+      "Konto aktiveeritud. Avan ByggExpi, et sind sisse logida.",
     confirmedOpenApp: "Ava ByggExp",
     confirmedHint:
       "Vajuta nuppu, et rakendus avada ja sisse logida. Kas sul pole rakendust? Paigalda ByggExp, ava see ja logi sisse oma e-posti ja parooliga.",
     fallbackTitle: "Ava ByggExp",
-    fallbackBody: "Laadi rakendus alla ja logi seejärel sisse oma e-posti ja parooliga.",
+    fallbackBody:
+      "Laadi rakendus alla ja logi seejärel sisse oma e-posti ja parooliga.",
     fallbackIos: "Laadi alla iPhone'ile",
     fallbackAndroid: "Laadi alla Androidile",
     errorTitle: "Midagi läks valesti",
@@ -525,12 +545,15 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
       "Ваш пароль змінено. Відкрийте застосунок і увійдіть із новим паролем.",
     okOpenApp: "Відкрити застосунок",
     okWebAdmin: "або увійдіть у веб-адмінці",
+    okBodyDesktop: "Ваш пароль змінено. Увійдіть з новим паролем.",
+    okSignIn: "Увійти в ByggExp",
     destTitle: "Обліковий запис готовий",
     destQuestion: "Куди бажаєте продовжити?",
     destOpenApp: "Відкрити застосунок",
     destOpenWebAdmin: "Відкрити веб-адмінку",
     confirmedTitle: "Пошту підтверджено",
-    confirmedMessage: "Обліковий запис активовано. Відкриваю ByggExp, щоб вас увійти.",
+    confirmedMessage:
+      "Обліковий запис активовано. Відкриваю ByggExp, щоб вас увійти.",
     confirmedOpenApp: "Відкрити ByggExp",
     confirmedHint:
       "Натисніть кнопку, щоб відкрити застосунок і увійти. Немає застосунку? Встановіть ByggExp, відкрийте його та увійдіть за своєю поштою й паролем.",
@@ -554,6 +577,8 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
       "Ваш пароль изменён. Откройте приложение и войдите с новым паролем.",
     okOpenApp: "Открыть приложение",
     okWebAdmin: "или войдите в веб-админке",
+    okBodyDesktop: "Ваш пароль изменён. Войдите с новым паролем.",
+    okSignIn: "Войти в ByggExp",
     destTitle: "Аккаунт готов",
     destQuestion: "Куда хотите продолжить?",
     destOpenApp: "Открыть приложение",
@@ -583,17 +608,22 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
       "Salasanasi on vaihdettu. Avaa sovellus ja kirjaudu uudella salasanalla.",
     okOpenApp: "Avaa sovellus",
     okWebAdmin: "tai kirjaudu verkkoadminissa",
+    okBodyDesktop:
+      "Salasanasi on vaihdettu. Kirjaudu sisään uudella salasanalla.",
+    okSignIn: "Kirjaudu ByggExpiin",
     destTitle: "Tili valmis",
     destQuestion: "Missä haluat jatkaa?",
     destOpenApp: "Avaa sovellus",
     destOpenWebAdmin: "Avaa verkkoadmin",
     confirmedTitle: "Sähköposti vahvistettu",
-    confirmedMessage: "Tili aktivoitu. Avataan ByggExp kirjatakseen sinut sisään.",
+    confirmedMessage:
+      "Tili aktivoitu. Avataan ByggExp kirjatakseen sinut sisään.",
     confirmedOpenApp: "Avaa ByggExp",
     confirmedHint:
       "Avaa sovellus ja kirjaudu painamalla painiketta. Eikö sinulla ole sovellusta? Asenna ByggExp, avaa se ja kirjaudu sähköpostillasi ja salasanallasi.",
     fallbackTitle: "Avaa ByggExp",
-    fallbackBody: "Lataa sovellus ja kirjaudu sitten sähköpostilla ja salasanalla.",
+    fallbackBody:
+      "Lataa sovellus ja kirjaudu sitten sähköpostilla ja salasanalla.",
     fallbackIos: "Lataa iPhonelle",
     fallbackAndroid: "Lataa Androidille",
     errorTitle: "Jotain meni pieleen",
@@ -612,17 +642,22 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
       "Jūsų slaptažodis pakeistas. Atidarykite programėlę ir prisijunkite su nauju slaptažodžiu.",
     okOpenApp: "Atidaryti programėlę",
     okWebAdmin: "arba prisijunkite žiniatinklio administratoriuje",
+    okBodyDesktop:
+      "Jūsų slaptažodis pakeistas. Prisijunkite nauju slaptažodžiu.",
+    okSignIn: "Prisijungti prie ByggExp",
     destTitle: "Paskyra paruošta",
     destQuestion: "Kur norite tęsti?",
     destOpenApp: "Atidaryti programėlę",
     destOpenWebAdmin: "Atidaryti žiniatinklio administratorių",
     confirmedTitle: "El. paštas patvirtintas",
-    confirmedMessage: "Paskyra aktyvuota. Atidaroma ByggExp, kad jus prijungtų.",
+    confirmedMessage:
+      "Paskyra aktyvuota. Atidaroma ByggExp, kad jus prijungtų.",
     confirmedOpenApp: "Atidaryti ByggExp",
     confirmedHint:
       "Paspauskite mygtuką, kad atidarytumėte programėlę ir prisijungtumėte. Neturite programėlės? Įdiekite ByggExp, atidarykite ją ir prisijunkite su savo el. paštu ir slaptažodžiu.",
     fallbackTitle: "Atidaryti ByggExp",
-    fallbackBody: "Atsisiųskite programėlę, tada prisijunkite su el. paštu ir slaptažodžiu.",
+    fallbackBody:
+      "Atsisiųskite programėlę, tada prisijunkite su el. paštu ir slaptažodžiu.",
     fallbackIos: "Atsisiųsti iPhone",
     fallbackAndroid: "Atsisiųsti Android",
     errorTitle: "Kažkas nutiko",
@@ -641,6 +676,8 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
       "Jūsu parole ir nomainīta. Atveriet lietotni un piesakieties ar jauno paroli.",
     okOpenApp: "Atvērt lietotni",
     okWebAdmin: "vai piesakieties tīmekļa administratorā",
+    okBodyDesktop: "Jūsu parole ir nomainīta. Piesakieties ar jauno paroli.",
+    okSignIn: "Pieteikties ByggExp",
     destTitle: "Konts gatavs",
     destQuestion: "Kur vēlaties turpināt?",
     destOpenApp: "Atvērt lietotni",
@@ -651,7 +688,8 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
     confirmedHint:
       "Nospiediet pogu, lai atvērtu lietotni un pieteiktos. Nav lietotnes? Instalējiet ByggExp, atveriet to un piesakieties ar savu e-pastu un paroli.",
     fallbackTitle: "Atvērt ByggExp",
-    fallbackBody: "Lejupielādējiet lietotni, pēc tam piesakieties ar e-pastu un paroli.",
+    fallbackBody:
+      "Lejupielādējiet lietotni, pēc tam piesakieties ar e-pastu un paroli.",
     fallbackIos: "Lejupielādēt iPhone",
     fallbackAndroid: "Lejupielādēt Android",
     errorTitle: "Kaut kas nogāja greizi",
@@ -670,6 +708,8 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
       "Vaša lozinka je promijenjena. Otvorite aplikaciju i prijavite se novom lozinkom.",
     okOpenApp: "Otvori aplikaciju",
     okWebAdmin: "ili se prijavite u web adminu",
+    okBodyDesktop: "Vaša lozinka je promijenjena. Prijavite se novom lozinkom.",
+    okSignIn: "Prijavite se u ByggExp",
     destTitle: "Račun spreman",
     destQuestion: "Gdje želite nastaviti?",
     destOpenApp: "Otvori aplikaciju",
@@ -680,7 +720,8 @@ export const authPageCopy: Record<MailLang, () => AuthPageCopy> = {
     confirmedHint:
       "Pritisnite dugme da otvorite aplikaciju i prijavite se. Nemate aplikaciju? Instalirajte ByggExp, otvorite je i prijavite se svojim e-mailom i lozinkom.",
     fallbackTitle: "Otvori ByggExp",
-    fallbackBody: "Preuzmite aplikaciju, zatim se prijavite e-mailom i lozinkom.",
+    fallbackBody:
+      "Preuzmite aplikaciju, zatim se prijavite e-mailom i lozinkom.",
     fallbackIos: "Preuzmi za iPhone",
     fallbackAndroid: "Preuzmi za Android",
     errorTitle: "Nešto je pošlo po zlu",
@@ -955,8 +996,7 @@ export const loginCodeCopy: Record<
     subject: "Twój kod logowania do ByggExp",
     hi: `Cześć ${name},`,
     intro: "Twój kod logowania do ByggExp:",
-    expires:
-      "Wygasa za 15 minut. Jeśli to nie Ty, zignoruj tę wiadomość.",
+    expires: "Wygasa za 15 minut. Jeśli to nie Ty, zignoruj tę wiadomość.",
   }),
   et: ({ name }) => ({
     subject: "Sinu ByggExpi sisselogimiskood",
@@ -969,8 +1009,7 @@ export const loginCodeCopy: Record<
     subject: "Ваш код входу ByggExp",
     hi: `Вітаємо, ${name},`,
     intro: "Ваш код входу ByggExp:",
-    expires:
-      "Він діє 15 хвилин. Якщо це були не ви, проігноруйте цей лист.",
+    expires: "Він діє 15 хвилин. Якщо це були не ви, проігноруйте цей лист.",
   }),
   ru: ({ name }) => ({
     subject: "Ваш код входа ByggExp",
@@ -990,8 +1029,7 @@ export const loginCodeCopy: Record<
     subject: "Jūsų ByggExp prisijungimo kodas",
     hi: `Sveiki, ${name},`,
     intro: "Jūsų ByggExp prisijungimo kodas:",
-    expires:
-      "Jis galioja 15 minučių. Jei to neprašėte, ignoruokite šį laišką.",
+    expires: "Jis galioja 15 minučių. Jei to neprašėte, ignoruokite šį laišką.",
   }),
   lv: ({ name }) => ({
     subject: "Jūsu ByggExp pieteikšanās kods",

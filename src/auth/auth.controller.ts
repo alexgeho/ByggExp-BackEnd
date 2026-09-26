@@ -116,9 +116,23 @@ function chooseDestinationHtml(magicLoginCode: string, lang: MailLang): string {
     <div class="card">
       <h1>${c.destTitle} ✅</h1>
       <p>${c.destQuestion}</p>
-      <a class="button" href="${appUrl}">${c.destOpenApp}</a>
-      <a class="button secondary" href="${adminUrl}">${c.destOpenWebAdmin}</a>
+      <a class="button" id="app" href="${appUrl}">${c.destOpenApp}</a>
+      <a class="button secondary" id="web" href="${adminUrl}">${c.destOpenWebAdmin}</a>
     </div>
+    <script>
+      (function () {
+        // On a computer the mobile app can't open: lead with the web app.
+        var ua = navigator.userAgent || '';
+        var mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua)
+          || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+        if (mobile) { return; }
+        var app = document.getElementById('app');
+        var web = document.getElementById('web');
+        web.className = 'button';
+        app.className = 'button secondary';
+        app.parentNode.insertBefore(web, app);
+      })();
+    </script>
   </body>
 </html>`;
 }
@@ -130,10 +144,7 @@ function chooseDestinationHtml(magicLoginCode: string, lang: MailLang): string {
 // another app). So we lead with an "Open the app" deep link (custom scheme +
 // Android intent) that works when the app is installed, and fall back to the
 // store links below it.
-export function appMagicFallbackHtml(
-  lang: MailLang = "sv",
-  code = "",
-): string {
+export function appMagicFallbackHtml(lang: MailLang = "sv", code = ""): string {
   const c = authPageCopy[lang]();
   const appStore = "https://apps.apple.com/app/id6748280779";
   const playStore =
@@ -392,15 +403,27 @@ function resetPasswordFormHtml(
 
 // Shown after a successful password reset. The web-admin link is admin-only —
 // workers have no admin-panel access, so they never see it (they use the app).
-function resetSuccessHtml(role: string | null, lang: MailLang): string {
+// Phones get "Open the app"; a computer can't open the mobile app, so it gets
+// a plain "Sign in" to the web app instead.
+const MOBILE_UA = /Android|iPhone|iPad|iPod|Mobile/i;
+export function isMobileUserAgent(ua: string | undefined): boolean {
+  return MOBILE_UA.test(ua || "");
+}
+
+export function resetSuccessHtml(
+  role: string | null,
+  lang: MailLang,
+  mobile = true,
+): string {
   const c = authPageCopy[lang]();
   const appUrl = "byggexp://";
   const androidIntentUrl =
     "intent://#Intent;scheme=byggexp;package=se.byggexp.app;end";
+  const loginUrl = "https://admin.byggexp.se/login";
   const isAdmin =
     role === "superadmin" || role === "companyAdmin" || role === "projectAdmin";
   const webAdminLink = isAdmin
-    ? `<p><a class="secondary" href="https://admin.byggexp.se/login">${c.okWebAdmin}</a></p>`
+    ? `<p><a class="secondary" href="${loginUrl}">${c.okWebAdmin}</a></p>`
     : "";
   return `<!DOCTYPE html>
 <html lang="${lang}">
@@ -420,15 +443,26 @@ function resetSuccessHtml(role: string | null, lang: MailLang): string {
   <body>
     <div class="card">
       <h1>${c.okTitle}</h1>
-      <p>${c.okBody}</p>
-      <a class="button" id="openIos" href="${appUrl}">${c.okOpenApp}</a>
-      <a class="button" id="openAndroid" href="${androidIntentUrl}" style="display:none;">${c.okOpenApp}</a>
-      ${webAdminLink}
+      <div id="mobile"${mobile ? "" : ' style="display:none;"'}>
+        <p>${c.okBody}</p>
+        <a class="button" id="openIos" href="${appUrl}">${c.okOpenApp}</a>
+        <a class="button" id="openAndroid" href="${androidIntentUrl}" style="display:none;">${c.okOpenApp}</a>
+        ${webAdminLink}
+      </div>
+      <div id="desktop"${mobile ? ' style="display:none;"' : ""}>
+        <p>${c.okBodyDesktop}</p>
+        <a class="button" href="${loginUrl}">${c.okSignIn}</a>
+      </div>
     </div>
     <script>
       (function () {
-        var isAndroid = /Android/i.test(navigator.userAgent || '');
-        if (isAndroid) {
+        var ua = navigator.userAgent || '';
+        // iPadOS Safari reports itself as a Mac — spot it by touch support.
+        var mobile = ${MOBILE_UA.toString()}.test(ua)
+          || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+        document.getElementById('mobile').style.display = mobile ? '' : 'none';
+        document.getElementById('desktop').style.display = mobile ? 'none' : '';
+        if (/Android/i.test(ua)) {
           document.getElementById('openIos').style.display = 'none';
           document.getElementById('openAndroid').style.display = 'inline-block';
         }
@@ -515,7 +549,10 @@ export class AuthController {
           ? error.message
           : "Unable to create your account. Please try again.";
       // Re-show the form with the error so they can retry.
-      res.status(400).type("html").send(passwordFormHtml(token, lang, message));
+      res
+        .status(400)
+        .type("html")
+        .send(passwordFormHtml(token, lang, message));
     }
   }
 
@@ -567,6 +604,7 @@ export class AuthController {
   @Post("reset-password/set")
   async setNewPassword(
     @Body() body: { token?: string; password?: string },
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const token = (body?.token || "").trim();
@@ -583,7 +621,16 @@ export class AuthController {
     const lang = await this.authService.getResetMailLang(token);
     try {
       const { role } = await this.authService.resetPassword(token, password);
-      res.status(200).type("html").send(resetSuccessHtml(role, lang));
+      res
+        .status(200)
+        .type("html")
+        .send(
+          resetSuccessHtml(
+            role,
+            lang,
+            isMobileUserAgent(req.headers["user-agent"]),
+          ),
+        );
     } catch (error) {
       const message =
         error instanceof BadRequestException
