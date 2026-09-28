@@ -1730,6 +1730,63 @@ export class ShiftsService {
     }));
   }
 
+  // Hours per worker per project for the period — the month-end view payroll
+  // asks for ("which sites was he on, and how long"), so one file covers every
+  // project a worker touched instead of one export per project.
+  private summarizeByWorkerProject(shifts: SerializedShiftRecord[]) {
+    const byWorker = new Map<
+      string,
+      {
+        workerName: string;
+        totalMs: number;
+        projects: Map<
+          string,
+          { projectName: string; dates: Set<string>; ms: number }
+        >;
+      }
+    >();
+    for (const shift of shifts) {
+      const workerKey = String(shift.workerId);
+      if (!byWorker.has(workerKey)) {
+        byWorker.set(workerKey, {
+          workerName: shift.workerName || workerKey,
+          totalMs: 0,
+          projects: new Map(),
+        });
+      }
+      const worker = byWorker.get(workerKey)!;
+      const projectKey = String(shift.projectId);
+      if (!worker.projects.has(projectKey)) {
+        worker.projects.set(projectKey, {
+          projectName: shift.projectName || projectKey,
+          dates: new Set(),
+          ms: 0,
+        });
+      }
+      const project = worker.projects.get(projectKey)!;
+      project.dates.add(shift.shiftDate);
+      project.ms += shift.durationMs || 0;
+      worker.totalMs += shift.durationMs || 0;
+    }
+    return [...byWorker.values()]
+      .sort((a, b) => a.workerName.localeCompare(b.workerName, "sv"))
+      .map((worker) => ({
+        workerName: worker.workerName,
+        totalMs: worker.totalMs,
+        projects: [...worker.projects.values()]
+          .sort((a, b) => b.ms - a.ms)
+          .map((project) => ({
+            projectName: project.projectName,
+            days: project.dates.size,
+            ms: project.ms,
+          })),
+      }));
+  }
+
+  private msToHours(ms: number) {
+    return Math.round((ms / 3_600_000) * 100) / 100;
+  }
+
   private async buildExcelReport(
     shifts: SerializedShiftRecord[],
     days: ShiftDayRecord[],
@@ -1823,17 +1880,45 @@ export class ShiftsService {
           end: this.formatDateTimeValue(shift.endedAt),
           duration: this.formatDurationLabel(shift.durationMs),
           status: shift.status,
-      hourType: shift.hourType || "normal",
-      travelKm: shift.travelKm || 0,
-      travelMinutes: shift.travelMinutes || 0,
-      perDiem: shift.perDiem || "none",
-      dayNote: shift.dayNote || "",
-      ataId: shift.ataId || null,
-      reportedAt: shift.reportedAt || null,
-      approvedAt: shift.approvedAt || null,
           photos: shift.photos?.length || 0,
+          hourType: shift.hourType || "normal",
+          travelKm: shift.travelKm || 0,
+          travelHours: shift.travelMinutes
+            ? Math.round((shift.travelMinutes / 60) * 100) / 100
+            : 0,
+          perDiem: shift.perDiem || "none",
+          approved: shift.approvedAt
+            ? this.formatDateTimeValue(shift.approvedAt)
+            : "",
+          note: shift.dayNote || "",
         });
       }
+    }
+
+    const summarySheet = workbook.addWorksheet("Per project");
+    summarySheet.columns = [
+      { header: "Worker", key: "worker", width: 26 },
+      { header: "Project", key: "project", width: 32 },
+      { header: "Days", key: "days", width: 8 },
+      { header: "Hours", key: "hours", width: 10 },
+    ];
+    summarySheet.getRow(1).font = { bold: true };
+    for (const worker of this.summarizeByWorkerProject(shifts)) {
+      for (const project of worker.projects) {
+        summarySheet.addRow({
+          worker: worker.workerName,
+          project: project.projectName,
+          days: project.days,
+          hours: this.msToHours(project.ms),
+        });
+      }
+      const totalRow = summarySheet.addRow({
+        worker: worker.workerName,
+        project: "Total",
+        hours: this.msToHours(worker.totalMs),
+      });
+      totalRow.font = { bold: true };
+      summarySheet.addRow({});
     }
 
     return Buffer.from(await workbook.xlsx.writeBuffer());
@@ -1877,6 +1962,25 @@ export class ShiftsService {
         doc.fontSize(11).text("No shifts found for the selected filters.");
         doc.end();
         return;
+      }
+
+      doc.moveDown(0.8);
+      doc.fontSize(13).text("Per project");
+      for (const worker of this.summarizeByWorkerProject(shifts)) {
+        ensureSpace(30 + worker.projects.length * 14);
+        doc.moveDown(0.35);
+        doc
+          .fontSize(11)
+          .text(
+            `${worker.workerName} | Total ${this.msToHours(worker.totalMs)} h`,
+          );
+        for (const project of worker.projects) {
+          doc
+            .fontSize(10)
+            .text(
+              `   ${project.projectName} | ${project.days} d | ${this.msToHours(project.ms)} h`,
+            );
+        }
       }
 
       for (const day of days) {
@@ -1930,6 +2034,16 @@ export class ShiftsService {
       storedDurationMs: shift.durationMs,
       manualDurationMs:
         shift.manualDurationMs == null ? null : shift.manualDurationMs,
+      // Dagens rapport — sent back with the shift, otherwise the app reopens the
+      // report empty and the day looks unreported however often it is saved.
+      hourType: shift.hourType || "normal",
+      travelKm: shift.travelKm || 0,
+      travelMinutes: shift.travelMinutes || 0,
+      perDiem: shift.perDiem || "none",
+      dayNote: shift.dayNote || "",
+      ataId: shift.ataId || null,
+      reportedAt: shift.reportedAt || null,
+      approvedAt: shift.approvedAt || null,
       completionReason: shift.completionReason || null,
       completionSource: shift.completionSource || null,
       completionNotifiedAt: shift.completionNotifiedAt || null,
