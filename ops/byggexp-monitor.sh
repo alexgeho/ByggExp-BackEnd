@@ -43,8 +43,14 @@ check_smtp() {
     let sock = net.connect(Number(P), H), step = 0, secure = false;
     const done = (code) => { try { sock.end(); } catch (e) {} process.exit(code); };
     const send = (s) => sock.write(s + "\r\n");
+    // A reply can arrive split over several TCP chunks (Brevo sends its multi-line
+    // EHLO that way). Buffer until the final line ("250 ...", not "250-...") is in,
+    // otherwise the step machine desyncs and reports a false "mail is DOWN".
+    let buf = "";
     function onData(d) {
-      const t = d.toString();
+      buf += d.toString();
+      if (!/(^|\r\n)\d{3} [^\r\n]*\r\n$/.test(buf)) return;
+      const t = buf; buf = "";
       if (step === 0) { send("EHLO byggexp.se"); step = 1; return; }
       if (step === 1) { if (!secure) { send("STARTTLS"); step = 2; } else { send("AUTH LOGIN"); step = 3; } return; }
       if (step === 2) {
