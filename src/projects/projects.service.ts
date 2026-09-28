@@ -17,6 +17,11 @@ import { CreateProjectDto } from "./dto/create-project.dto";
 import { UsersService } from "../users/users.service";
 import { CompanyService } from "../company/company.service";
 import { User, UserRole } from "../users/schemas/user.schema";
+import {
+  getGoogleMapsApiKey,
+  reverseGeocodeWithGoogle,
+  searchAddressesWithGoogle,
+} from "./google-geocoder";
 
 type ProjectAuthUser = {
   userId?: string;
@@ -477,6 +482,24 @@ export class ProjectsService {
     }
 
     const normalizedLimit = Math.max(1, Math.min(limit, 10));
+
+    // Google when a key is configured; any Google failure (quota, bad key,
+    // outage) falls back to Nominatim so address search never goes dark.
+    const googleApiKey = getGoogleMapsApiKey();
+    if (googleApiKey) {
+      try {
+        return await searchAddressesWithGoogle(
+          normalizedQuery,
+          normalizedLimit,
+          googleApiKey,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Google address search failed, falling back to Nominatim: ${(error as Error).message}`,
+        );
+      }
+    }
+
     const data = await this.fetchGeocoderJson("/search", {
       format: "jsonv2",
       addressdetails: "1",
@@ -540,6 +563,24 @@ export class ProjectsService {
       throw new BadRequestException(
         "Latitude and longitude must be valid numbers",
       );
+    }
+
+    const googleApiKey = getGoogleMapsApiKey();
+    if (googleApiKey) {
+      try {
+        const label = await reverseGeocodeWithGoogle(
+          latitude,
+          longitude,
+          googleApiKey,
+        );
+        if (label) {
+          return { label };
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Google reverse geocode failed, falling back to Nominatim: ${(error as Error).message}`,
+        );
+      }
     }
 
     const data = (await this.fetchGeocoderJson("/reverse", {
