@@ -110,6 +110,27 @@ sudo -u deploy node -e '
 Same shape works for `SMTP_PASS` and the Stripe keys. If a secret also lives in GitHub
 Secrets, update it there too, otherwise the next deploy writes the old value back.
 
+## Outgoing mail (Brevo)
+
+Since 28.09.2026 all transactional mail (invites, login codes, password reset, invoices,
+offers, reminders) goes through **Brevo SMTP**, not the Inleed mailbox:
+
+* `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER` = Brevo SMTP login (Brevo → SMTP & API → SMTP),
+  `SMTP_FROM=app@byggexp.se`, `SMTP_PASS` = Brevo **SMTP key** `byggexp-api-prod`
+  (not the API key, not the account password).
+* All five live in **GitHub Secrets**; the deploy writes them into `shared/.env`. Change
+  them there and re-run the deploy, never only on the server.
+* Changing the password of the `app@byggexp.se` mailbox no longer affects sending.
+* `byggexp.se` is authenticated in Brevo (brevo-code TXT, `brevo1/brevo2._domainkey`
+  CNAMEs at Inleed DNS). Keep exactly **one** `_dmarc` record.
+* **The SMTP key expires 28.09.2027**, and after 90 days without sending. Generate a new
+  one in Brevo → SMTP & API → SMTP before that, put it in `SMTP_PASS`, re-run the deploy.
+* Free plan: 300 mails/day across everything.
+
+Why: on 28.09.2026 the mailbox password was changed while setting up newsletters, the
+server kept the old one, and every mail failed with `535` while the admin still said
+"sent".
+
 ## Certificates and the two domains
 
 Known and **not** fixed, because it needs an owner decision:
