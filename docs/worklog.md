@@ -1,5 +1,11 @@
 # ByggExp-BackEnd worklog
 
+## 2026-09-28 — Google-geokodning för projektadress
+- /projects/geocode/search och /reverse använder Google (Places API (New) Text Search + Geocoding API) när GOOGLE_MAPS_API_KEY finns; vid fel eller utan nyckel → Nominatim. Kontraktet oförändrat (app + admin kräver ingen release).
+- Reverse: väljer första street_address/premise/subpremise-resultatet (annars Googles första).
+- Nyckeln: GitHub-secret GOOGLE_MAPS_API_KEY → deploy.yml skriver den till shared/.env.
+- Nästa: adress vid kartklick kommer i Nominatim-format → kontrollera att Geocoding API är aktiverat och tillåtet i nyckelns API-restriktioner. Företagsinbjudan (createWithInvite) sväljer SMTP-fel och svarar invited:true → felet ska synas i admin + "skicka igen".
+
 ## 2026-09-26 — Fair use för skanning
 - Skanning: bara de första 5 sidorna av en PDF skickas till AI (filen sparas hel). pdf-lib tillagd.
 - Inkommande fakturamejl: max 20 mejl/dygn per företag och 20 bilagor per mejl tolkas automatiskt; över gränsen sparas filerna ändå, utan tolkning, med en notering att kontakta ByggExp. Nytt fält supplierinvoice.inboundBatch.
