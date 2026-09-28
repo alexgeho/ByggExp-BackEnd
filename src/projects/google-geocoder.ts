@@ -114,7 +114,7 @@ export async function reverseGeocodeWithGoogle(
   const data = (await response.json()) as {
     status?: string;
     error_message?: string;
-    results?: Array<{ formatted_address?: string }>;
+    results?: Array<{ formatted_address?: string; types?: string[] }>;
   };
 
   // The Geocoding API answers 200 even for a bad/unauthorised key; the real
@@ -128,5 +128,16 @@ export async function reverseGeocodeWithGoogle(
     );
   }
 
-  return data.results?.[0]?.formatted_address?.trim() || "";
+  // Google returns several candidates (building, street, district, city …)
+  // and the first is not always the building — on a street it can be the bare
+  // road ("Sõpruse pst, Tallinn") with no house number. Prefer the first
+  // house-level result, else fall back to Google's own first pick.
+  const results = data.results || [];
+  const precise = results.find((r) =>
+    r.types?.some((type) => HOUSE_LEVEL_TYPES.has(type)),
+  );
+  return (precise || results[0])?.formatted_address?.trim() || "";
 }
+
+// Geocoding result types that carry a house number / building.
+const HOUSE_LEVEL_TYPES = new Set(["street_address", "premise", "subpremise"]);

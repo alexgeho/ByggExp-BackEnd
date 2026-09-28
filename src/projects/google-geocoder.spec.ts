@@ -70,6 +70,25 @@ describe("google-geocoder", () => {
     await expect(reverseGeocodeWithGoogle(0, 0, "KEY")).resolves.toBe("");
   });
 
+  it("prefers a house-level reverse result over a bare street", async () => {
+    mockFetchJson({
+      status: "OK",
+      results: [
+        {
+          formatted_address: "Sõpruse pst, Tallinn, Estonia",
+          types: ["route"],
+        },
+        {
+          formatted_address: "Sõpruse pst 257, 13414 Tallinn, Estonia",
+          types: ["street_address"],
+        },
+      ],
+    });
+    await expect(reverseGeocodeWithGoogle(59.4, 24.68, "KEY")).resolves.toBe(
+      "Sõpruse pst 257, 13414 Tallinn, Estonia",
+    );
+  });
+
   it("throws when the Geocoding API rejects the key (it still answers 200)", async () => {
     mockFetchJson({ status: "REQUEST_DENIED", error_message: "bad key" });
     await expect(reverseGeocodeWithGoogle(59.33, 18.06, "KEY")).rejects.toThrow(
