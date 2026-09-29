@@ -18,6 +18,10 @@ type DemoRequestPayload = {
   name: string;
   email: string;
   phone: string;
+  /** Page the lead was sent from, e.g. "byggexp.se/sv/contact". */
+  source?: string;
+  /** Free-text message from the form ("Berätta mer …"). */
+  message?: string;
 };
 
 @Injectable()
@@ -723,19 +727,23 @@ export class MailService {
 
   async sendDemoRequestEmail(payload: DemoRequestPayload): Promise<void> {
     const recipients = this.getDemoRequestRecipients();
-    const subject = "New demo request from byggexp.se";
+    const source = payload.source?.trim() || "byggexp.se";
+    const message = payload.message?.trim();
+    const subject = `New demo request from ${source}`;
     const text = [
-      "New demo request submitted from byggexp.se/",
+      `New demo request submitted from ${source}`,
       "",
       `Name: ${payload.name}`,
       `Email: ${payload.email}`,
       `Phone: ${payload.phone}`,
+      ...(message ? ["", `Message: ${message}`] : []),
     ].join("\n");
     const html = `
-      <p>New demo request submitted from <strong>byggexp.se/ru</strong>.</p>
+      <p>New demo request submitted from <strong>${this.escapeHtml(source)}</strong>.</p>
       <p><strong>Name:</strong> ${this.escapeHtml(payload.name)}</p>
       <p><strong>Email:</strong> ${this.escapeHtml(payload.email)}</p>
       <p><strong>Phone:</strong> ${this.escapeHtml(payload.phone)}</p>
+      ${message ? `<p><strong>Message:</strong> ${this.escapeHtml(message)}</p>` : ""}
     `;
 
     if (!this.transporter || recipients.length === 0) {

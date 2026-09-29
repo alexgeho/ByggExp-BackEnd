@@ -15,6 +15,8 @@ export class MailController {
       name: dto["f-name"],
       email: dto["f-email"],
       phone: dto["f-phone"],
+      source: dto["f-source"],
+      message: dto["f-message"],
     });
 
     return { success: true };
