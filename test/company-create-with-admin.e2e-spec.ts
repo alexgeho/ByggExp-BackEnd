@@ -18,6 +18,7 @@ import { getConnectionToken } from "@nestjs/mongoose";
 import { Connection } from "mongoose";
 import request from "supertest";
 import { AppModule } from "./../src/app.module";
+import { MailService } from "./../src/mail/mail.service";
 
 describe("Company create + admin invite (e2e)", () => {
   let app: INestApplication;
@@ -74,7 +75,9 @@ describe("Company create + admin invite (e2e)", () => {
     // company created with that email as login
     expect(res.body.company).toBeDefined();
     expect(res.body.company.email).toBe(email);
-    expect(res.body.invited).toBe(true);
+    // `invited` is true only if the mail really went out — without SMTP (CI)
+    // the invite is merely logged, and the admin UI must say so.
+    expect(res.body.invited).toBe(app.get(MailService).isConfigured());
     // the admin account is created only when the invite is accepted
     expect(res.body.admin).toBeUndefined();
 
@@ -90,6 +93,29 @@ describe("Company create + admin invite (e2e)", () => {
     expect(String(invite?.companyId)).toBe(
       String(res.body.company._id ?? res.body.company.id),
     );
+  });
+
+  it("resend-invite reports a real error instead of pretending (no SMTP)", async () => {
+    if (app.get(MailService).isConfigured()) return; // only meaningful without SMTP
+    const email = `resend-${uniq}@e2e.local`;
+    const created = await request(http)
+      .post("/company")
+      .set("Authorization", `Bearer ${superToken}`)
+      .send({ email });
+    const companyId = created.body.company._id ?? created.body.company.id;
+
+    const res = await request(http)
+      .post(`/company/${companyId}/resend-invite`)
+      .set("Authorization", `Bearer ${superToken}`);
+    expect(res.status).toBe(503);
+    expect(String(res.body.message)).toMatch(/inte/i);
+  });
+
+  it("resend-invite is superadmin-only", async () => {
+    const res = await request(http).post(
+      `/company/000000000000000000000000/resend-invite`,
+    );
+    expect(res.status).toBe(401);
   });
 
   it("rejects a second company with the same email (409)", async () => {

@@ -67,6 +67,14 @@ export class CompanyController {
     return this.companyService.createWithInvite(createCompanyDto);
   }
 
+  // Re-send the pending company-admin invite (fresh link). Errors are real:
+  // the admin sees why the mail did not go out.
+  @Post(":id/resend-invite")
+  @Roles(UserRole.SuperAdmin)
+  resendInvite(@Param("id") id: string): Promise<{ ok: true; email: string }> {
+    return this.companyService.resendCompanyInvite(id);
+  }
+
   @Get()
   @Roles(UserRole.SuperAdmin)
   findAll(): Promise<Company[]> {

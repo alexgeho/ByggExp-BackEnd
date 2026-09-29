@@ -6,6 +6,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import { InjectModel, InjectConnection } from "@nestjs/mongoose";
 import { Model, Connection } from "mongoose";
@@ -101,21 +102,77 @@ export class CompanyService {
       expiresAt: new Date(Date.now() + INVITE_TTL_MS),
     });
 
-    try {
-      await this.mailService.sendCompanyInviteEmail(
-        email,
-        createCompanyDto.name?.trim() || "",
-        token,
-        inviteLang,
+    // `invited` must mean the mail really went out: the admin UI tells the
+    // superadmin to resend when it is false. Without SMTP the invite is only
+    // logged, which is not "sent".
+    let invited = false;
+    if (this.mailService.isConfigured()) {
+      try {
+        await this.mailService.sendCompanyInviteEmail(
+          email,
+          createCompanyDto.name?.trim() || "",
+          token,
+          inviteLang,
+        );
+        invited = true;
+      } catch (error) {
+        this.logger.error(
+          `Failed to send company invite to ${email}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+    } else {
+      this.logger.warn(`SMTP not configured — company invite to ${email} not sent`);
+    }
+
+    return { company: company.toObject(), invited };
+  }
+
+  // Superadmin: re-send the pending admin invite of a company with a fresh
+  // token and expiry (the old link may have expired or never arrived). Throws a
+  // readable error when the mail cannot go out, instead of pretending it did.
+  async resendCompanyInvite(companyId: string): Promise<{ ok: true; email: string }> {
+    const company = await this.companyModel.findById(companyId).exec();
+    if (!company) {
+      throw new NotFoundException("Company not found");
+    }
+    const invite = await this.inviteModel
+      .findOne({ companyId: company._id.toString(), acceptedAt: null })
+      .sort({ createdAt: -1 })
+      .exec();
+    if (!invite) {
+      throw new ConflictException(
+        "No pending invitation — the company admin has already accepted it",
       );
-    } catch (error) {
-      this.logger.error(
-        `Failed to send company invite to ${email}`,
-        error instanceof Error ? error.stack : undefined,
+    }
+    if (!this.mailService.isConfigured()) {
+      throw new ServiceUnavailableException(
+        "E-post är inte konfigurerad — inbjudan kunde inte skickas",
       );
     }
 
-    return { company: company.toObject(), invited: true };
+    invite.token = randomBytes(32).toString("hex");
+    invite.expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+    await invite.save();
+
+    try {
+      await this.mailService.sendCompanyInviteEmail(
+        invite.email,
+        company.name || invite.name || "",
+        invite.token,
+        invite.language || "sv",
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to resend company invite to ${invite.email}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw new ServiceUnavailableException(
+        `Inbjudan kunde inte skickas: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    return { ok: true, email: invite.email };
   }
 
   private async findLiveInvite(token: string): Promise<CompanyInviteDocument> {

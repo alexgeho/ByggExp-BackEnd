@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
@@ -667,7 +668,7 @@ export class UsersService {
       companyId?: string | null;
       createdBy?: string | null;
     },
-  ): Promise<UserDocument> {
+  ): Promise<{ user: UserDocument; inviteEmailSent: boolean }> {
     // Seat limit applies to every creation path — bulk import and invite go
     // through here, so enforcing it once closes the single-create bypass.
     await this.assertCompanySeatAvailable(createUserDto.companyId ?? null);
@@ -731,22 +732,32 @@ export class UsersService {
       savedUser.projectIds,
     );
 
-    try {
-      await this.mailService.sendUserInviteEmail(
-        savedUser.email,
-        savedUser.name,
-        plainToken,
-        this.getRoleLabel(savedUser.role, languageCode(savedUser.language)),
-        languageCode(savedUser.language),
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to send invite email to ${savedUser.email}`,
-        error instanceof Error ? error.stack : undefined,
+    // The user exists either way; report whether the mail really went out so
+    // the admin can resend instead of waiting for an invite that never comes.
+    let inviteEmailSent = false;
+    if (this.mailService.isConfigured()) {
+      try {
+        await this.mailService.sendUserInviteEmail(
+          savedUser.email,
+          savedUser.name,
+          plainToken,
+          this.getRoleLabel(savedUser.role, languageCode(savedUser.language)),
+          languageCode(savedUser.language),
+        );
+        inviteEmailSent = true;
+      } catch (error) {
+        this.logger.error(
+          `Failed to send invite email to ${savedUser.email}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+    } else {
+      this.logger.warn(
+        `SMTP not configured — invite to ${savedUser.email} not sent`,
       );
     }
 
-    return savedUser;
+    return { user: savedUser, inviteEmailSent };
   }
 
   // Re-send the invitation email with a fresh temporary password and
@@ -771,13 +782,23 @@ export class UsersService {
     );
     await user.save();
 
-    await this.mailService.sendUserInviteEmail(
-      user.email,
-      user.name,
-      plainToken,
-      this.getRoleLabel(user.role, languageCode(user.language)),
-      languageCode(user.language),
-    );
+    try {
+      await this.mailService.sendUserInviteEmail(
+        user.email,
+        user.name,
+        plainToken,
+        this.getRoleLabel(user.role, languageCode(user.language)),
+        languageCode(user.language),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to resend invite email to ${user.email}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw new ServiceUnavailableException(
+        `Inbjudan kunde inte skickas: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
 
     return { ok: true };
   }

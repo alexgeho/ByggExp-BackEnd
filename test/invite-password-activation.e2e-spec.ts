@@ -122,6 +122,8 @@ describe("Invite → create-password activation (e2e)", () => {
     expect(res.status).toBeLessThan(300);
     // Created pending, with no plaintext password ever returned.
     expect(res.body.password).toBeUndefined();
+    // The admin UI trusts this flag to say "invitation sent".
+    expect(res.body.inviteEmailSent).toBe(true);
 
     const invite = lastMail("sendUserInviteEmail");
     expect(invite).toBeDefined();
@@ -130,6 +132,28 @@ describe("Invite → create-password activation (e2e)", () => {
     inviteToken = invite!.args[2];
     expect(typeof inviteToken).toBe("string");
     expect(inviteToken.length).toBeGreaterThan(10);
+  });
+
+  it("company resend-invite mails a fresh link and kills the old one", async () => {
+    const before = lastMail("sendCompanyInviteEmail");
+    expect(before).toBeDefined();
+    const oldToken = before!.args[2];
+
+    const res = await request(http)
+      .post(`/company/${companyId}/resend-invite`)
+      .set("Authorization", `Bearer ${superToken}`);
+    expect(res.status).toBeGreaterThanOrEqual(200);
+    expect(res.status).toBeLessThan(300);
+    expect(res.body.email).toBe(companyEmail);
+
+    const after = lastMail("sendCompanyInviteEmail");
+    expect(after!.args[0]).toBe(companyEmail);
+    expect(after!.args[2]).not.toBe(oldToken);
+
+    const stale = await request(http).get(`/company/invite/${oldToken}`);
+    expect(stale.status).toBe(404);
+    const fresh = await request(http).get(`/company/invite/${after!.args[2]}`);
+    expect(fresh.status).toBe(200);
   });
 
   it("cannot log in yet — no password was ever set", async () => {

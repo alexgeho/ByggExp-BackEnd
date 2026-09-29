@@ -117,7 +117,7 @@ export class UsersController {
   async create(
     @Body() createUserDto: CreateUserDto,
     @Request() req,
-  ): Promise<User> {
+  ): Promise<User | (Record<string, unknown> & { inviteEmailSent: boolean })> {
     // ProjectAdmin may create workers and (scoped) project admins — never a
     // company admin / superadmin. Escalation attempts fall back to worker. The
     // finance capability is never grantable by a project admin (permission edits
@@ -179,11 +179,15 @@ export class UsersController {
     }
 
     if (createUserDto.inviteViaEmail || !createUserDto.password) {
-      return this.usersService.createUserPendingApproval({
-        ...createUserDto,
-        role,
-        createdBy,
-      });
+      const { user, inviteEmailSent } =
+        await this.usersService.createUserPendingApproval({
+          ...createUserDto,
+          role,
+          createdBy,
+        });
+      // toJSON strips credentials (see user.schema); the flag lets the admin
+      // UI say "invite NOT sent" instead of a false "Invitation sent".
+      return Object.assign(user.toJSON(), { inviteEmailSent });
     }
 
     const hashedPassword = await this.usersService.hashPassword(
@@ -207,8 +211,11 @@ export class UsersController {
   ): Promise<{
     created: number;
     failed: Array<{ index: number; email: string; reason: string }>;
+    notEmailed: string[];
   }> {
     const failed: Array<{ index: number; email: string; reason: string }> = [];
+    // Created, but the invite mail did not go out — resend from the user list.
+    const notEmailed: string[] = [];
     let created = 0;
 
     for (let i = 0; i < body.users.length; i += 1) {
@@ -231,13 +238,15 @@ export class UsersController {
             ? row.companyId
             : req.user.companyId;
 
-        await this.usersService.createUserPendingApproval({
-          ...row,
-          role,
-          companyId,
-          inviteViaEmail: true,
-        });
+        const { user, inviteEmailSent } =
+          await this.usersService.createUserPendingApproval({
+            ...row,
+            role,
+            companyId,
+            inviteViaEmail: true,
+          });
         created += 1;
+        if (!inviteEmailSent) notEmailed.push(user.email);
       } catch (error) {
         const isDuplicate =
           (error as { code?: number })?.code === 11000 ||
@@ -252,7 +261,7 @@ export class UsersController {
       }
     }
 
-    return { created, failed };
+    return { created, failed, notEmailed };
   }
 
   @Get()
