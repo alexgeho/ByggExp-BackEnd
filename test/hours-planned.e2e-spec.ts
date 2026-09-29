@@ -130,6 +130,18 @@ describe("Hours grid: planned hours (e2e)", () => {
     expect(cells["2026-09-30"]?.edited).toBe(true);
   });
 
+  it("treats Saturday/Sunday as days off: a weekend entry starts from 0", async () => {
+    const save = await request(http)
+      .put("/hours/adjustment")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ projectId, workerId, date: "2026-09-26", plannedHours: 8 });
+    expect(save.status).toBe(200);
+    const cells = await grid();
+    expect(cells["2026-09-26"]?.planned).toBe(8);
+    expect(cells["2026-09-26"]?.orig).toBe(0);
+    expect(cells["2026-09-27"]?.planned ?? null).toBeNull();
+  });
+
   it("gives a worker their own plan, and only their own row", async () => {
     const workerToken = (
       await request(http)

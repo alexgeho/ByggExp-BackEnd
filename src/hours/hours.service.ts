@@ -104,6 +104,13 @@ export class HoursService {
   }
 
   // Working days (Mon–Fri) between two YYYY-MM-DD keys, inclusive.
+  // Saturday/Sunday are days off by default: no schedule baseline, only an
+  // explicit planned entry puts hours there.
+  private isWeekendKey(date: string): boolean {
+    const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+    return dow === 0 || dow === 6;
+  }
+
   private eachWorkingDate(start: string, end: string): string[] {
     const out: string[] = [];
     const cur = new Date(`${start}T00:00:00Z`);
@@ -407,7 +414,11 @@ export class HoursService {
 
         for (const pid of projectList) {
           const project = projectById.get(pid);
-          const basePlanned = project ? this.schedulePlanned(project) : null;
+          // A weekend shift (GPS/Manual) must not pull in the weekday plan.
+          const basePlanned =
+            project && !this.isWeekendKey(date)
+              ? this.schedulePlanned(project)
+              : null;
           const adj = adjMap.get(`${pid}|${workerId}|${date}`);
           if (adj) {
             edited = true;
@@ -539,7 +550,9 @@ export class HoursService {
     // Keep the very first schedule-derived value as the trail's origin.
     const originalPlannedHours = existing
       ? existing.originalPlannedHours
-      : (this.schedulePlanned(project) ?? 0);
+      : this.isWeekendKey(dto.date)
+        ? 0
+        : (this.schedulePlanned(project) ?? 0);
 
     const saved = await this.adjustmentModel
       .findOneAndUpdate(
