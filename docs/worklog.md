@@ -1,5 +1,13 @@
 # ByggExp-BackEnd worklog
 
+## 🟢 SESSION 2026-09-29 — invites honest, weekends off, monitor
+### DONE
+- `f9fecec` invites: POST /company returns real `invited`, POST /users `inviteEmailSent`, bulk `notEmailed`; new POST /company/:id/resend-invite (fresh token, readable 503).
+- `d5d1993` hours: Sat/Sun have no default planned baseline; weekend adjustment starts from 0.
+- Monitor fix `21bb7d0` copied to the server (/opt/byggexp-monitor.sh) → RECOVERED smtp.
+### NEXT
+1. Monitor alerts via Telegram (needs bot token from owner).
+
 ## 2026-09-28 — Google-geokodning för projektadress
 - /projects/geocode/search och /reverse använder Google (Places API (New) Text Search + Geocoding API) när GOOGLE_MAPS_API_KEY finns; vid fel eller utan nyckel → Nominatim. Kontraktet oförändrat (app + admin kräver ingen release).
 - Reverse: väljer första street_address/premise/subpremise-resultatet (annars Googles första).
