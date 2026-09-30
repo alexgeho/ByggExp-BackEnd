@@ -103,6 +103,15 @@ export class HoursService {
     }
   }
 
+  // First day hours may be planned/entered for a project ("YYYY-MM-DD"), or
+  // null when the project has no start date (then nothing is locked).
+  private projectStartKey(project: ProjectDocument): string | null {
+    return this.projectDateKey(
+      project.beginningDate,
+      project.shiftSchedule?.timezone,
+    );
+  }
+
   // Working days (Mon–Fri) between two YYYY-MM-DD keys, inclusive.
   // Saturday/Sunday are days off by default: no schedule baseline, only an
   // explicit planned entry puts hours there.
@@ -176,11 +185,24 @@ export class HoursService {
     const projectById = new Map(projects.map((p) => [this.getEntityId(p), p]));
     const projectIds = [...projectById.keys()];
 
+    // Days before a project's start are locked: no planned baseline, no admin
+    // corrections (older ones saved before this rule are ignored), and the
+    // grid tells the client each start so it can refuse edits there.
+    const projectStarts: Record<string, string | null> = {};
+    for (const [pid, project] of projectById) {
+      projectStarts[pid] = this.projectStartKey(project);
+    }
+    const beforeStart = (pid: string, date: string) => {
+      const start = projectStarts[pid];
+      return !!start && date < start;
+    };
+
     if (!projectIds.length) {
       return {
         from: query.from || null,
         to: query.to || null,
         projectId: query.projectId || null,
+        projectStarts,
         workers: [],
       };
     }
@@ -213,7 +235,7 @@ export class HoursService {
     if (query.to) leaveFilter.startDate = { $lte: query.to };
     if (query.from) leaveFilter.endDate = { $gte: query.from };
 
-    const [shifts, adjustments, leaves] = await Promise.all([
+    const [shifts, allAdjustments, leaves] = await Promise.all([
       this.shiftModel.find(shiftFilter).lean().exec(),
       this.adjustmentModel
         .find({ projectId: { $in: projectIds } })
@@ -221,6 +243,9 @@ export class HoursService {
         .exec(),
       this.leaveModel.find(leaveFilter).lean().exec(),
     ]);
+    const adjustments = allAdjustments.filter(
+      (adj) => !beforeStart(String(adj.projectId), String(adj.date)),
+    );
 
     // worker → set of absent date keys (Mon–Fri only, clamped to the query range).
     const leaveDatesByWorker = new Map<string, Set<string>>();
@@ -473,6 +498,7 @@ export class HoursService {
       from: query.from || null,
       to: query.to || null,
       projectId: query.projectId || null,
+      projectStarts,
       workers,
     };
   }
@@ -538,6 +564,13 @@ export class HoursService {
       throw new ForbiddenException("Project belongs to another company");
     }
 
+    const start = this.projectStartKey(project);
+    if (start && dto.date < start) {
+      throw new BadRequestException(
+        `Hours can't be entered before the project start (${start})`,
+      );
+    }
+
     const existing = await this.adjustmentModel
       .findOne({
         companyId,
@@ -584,7 +617,12 @@ export class HoursService {
   // again — used to undo test/bulk edits that got stuck overriding the schedule.
   async resetAdjustments(
     user: AuthenticatedUser,
-    { projectId, from, to }: { projectId: string; from?: string; to?: string },
+    {
+      projectId,
+      from,
+      to,
+      workerId,
+    }: { projectId: string; from?: string; to?: string; workerId?: string },
   ): Promise<{ deleted: number }> {
     if (!projectId) {
       throw new BadRequestException("projectId is required");
@@ -604,6 +642,8 @@ export class HoursService {
     }
 
     const filter: Record<string, unknown> = { companyId, projectId };
+    // One worker only — clearing a single cell (from = to = that day).
+    if (workerId) filter.workerId = workerId;
     if (from || to) {
       filter.date = {
         ...(from ? { $gte: from } : {}),

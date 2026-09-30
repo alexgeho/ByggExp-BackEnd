@@ -58,7 +58,13 @@ export class HoursController {
     @Query("projectId") projectId: string,
     @Query("from") from?: string,
     @Query("to") to?: string,
+    @Query("workerId") workerId?: string,
   ) {
-    return this.hoursService.resetAdjustments(req.user, { projectId, from, to });
+    return this.hoursService.resetAdjustments(req.user, {
+      projectId,
+      from,
+      to,
+      workerId,
+    });
   }
 }
