@@ -25,6 +25,7 @@ import {
   unsubscribeUrlFor,
 } from "./mailer-personalize";
 import { MAIN_SENDER, MailerSettingsService } from "./mailer-settings.service";
+import { dailyCap, inSendWindow, minuteBudget } from "./mailer-warmup";
 import {
   Campaign,
   CampaignDocument,
@@ -452,8 +453,17 @@ export class MailerCampaignsService {
       );
       return;
     }
-    // Per-minute budget shared by this sender's running campaigns.
-    let budget = Math.max(1, Math.ceil(transport.settings.ratePerHour / 60));
+    // Outside office hours / weekend: just wait, campaigns stay "sending".
+    const now = new Date();
+    const st = transport.settings;
+    if (!inSendWindow(st, now)) return;
+    // Per-minute budget shared by this sender's running campaigns: ratePerHour,
+    // and with warm-up on, today's cap spread over the rest of the day.
+    const cap = dailyCap(st, now);
+    const remaining =
+      cap === null ? null : cap - this.settings.sentToday(st, now);
+    let budget = minuteBudget(st, now, remaining);
+    if (budget <= 0) return;
 
     for (const c of active) {
       // Recover recipients left mid-send by a crash/restart.
@@ -477,7 +487,7 @@ export class MailerCampaignsService {
         );
         if (!r) break;
         budget--;
-        const stop = await this.sendOne(c, r, base, transport);
+        const stop = await this.sendOne(c, r, base, transport, senderKey);
         // Account-level SMTP failure: this sender stops, others continue.
         if (stop) return;
       }
@@ -501,6 +511,7 @@ export class MailerCampaignsService {
     r: CampaignRecipientDocument,
     base: { html: string; text: string },
     t: Awaited<ReturnType<MailerSettingsService["transport"]>>,
+    senderKey: string,
   ): Promise<boolean> {
     const msg = this.personalize(base, c.subject, r, {
       trackOpens: t.settings.trackOpens,
@@ -533,6 +544,7 @@ export class MailerCampaignsService {
         { $inc: { "stats.sent": 1 } },
       );
       if (r.subscriberId) await this.listsService.markSent([r.subscriberId]);
+      await this.settings.recordSent(senderKey);
       await this.log("sent", c._id, r.email);
       return false;
     } catch (err) {
@@ -565,7 +577,9 @@ export class MailerCampaignsService {
         );
         await this.listsService.markEverywhere(r.email, "bounced");
         await this.log("bounce", c._id, r.email, message);
-        return false;
+        await this.settings.recordSent(senderKey);
+        // Stop this minute's run if the campaign just got paused.
+        return this.pauseOnHighBounces(c._id, t.settings.maxBounceRatePct);
       }
       if (r.attempts >= 3) {
         await this.recipients.updateOne(
@@ -585,6 +599,29 @@ export class MailerCampaignsService {
       }
       return false;
     }
+  }
+
+  // Many hard bounces = a dirty list; mailbox providers punish the domain for
+  // it, so the campaign stops before the reputation is gone.
+  private async pauseOnHighBounces(
+    campaignId: Types.ObjectId,
+    maxPct: number,
+  ): Promise<boolean> {
+    const c = await this.campaigns.findById(campaignId, { stats: 1 }).lean();
+    const st = c?.stats;
+    if (!st) return false;
+    const attempted = (st.sent || 0) + (st.bounced || 0);
+    if (attempted < 20) return false;
+    const pct = ((st.bounced || 0) / attempted) * 100;
+    if (pct <= maxPct) return false;
+    await this.campaigns.updateOne(
+      { _id: campaignId, status: "sending" },
+      {
+        status: "paused",
+        lastError: `Pausad: ${pct.toFixed(1)} % studsar (gräns ${maxPct} %). Rensa listan innan du fortsätter.`,
+      },
+    );
+    return true;
   }
 
   // ---------- tracking (public endpoints) ----------

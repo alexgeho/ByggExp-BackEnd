@@ -228,6 +228,9 @@ export class MailerController {
   ) {
     return this.settings.update(sender || "main", body as MailerSettingsInput);
   }
+  @Get("settings/dns") dnsCheck(@Query("sender") sender?: string) {
+    return this.settings.dnsCheck(sender || undefined);
+  }
   @Post("settings/verify") async verifySmtp(@Query("sender") sender?: string) {
     await this.settings.verifyConnection(sender || undefined);
     return { ok: true };

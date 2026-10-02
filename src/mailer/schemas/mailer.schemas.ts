@@ -310,6 +310,47 @@ export class MailerSettings {
 
   @Prop({ default: true })
   trackClicks: boolean;
+
+  // ----- warm-up: daily cap that grows every day on a young sending domain -----
+  @Prop({ default: false })
+  warmupEnabled: boolean;
+
+  @Prop({ type: Date, default: null })
+  warmupStartedAt: Date | null;
+
+  @Prop({ default: 20 })
+  warmupStartPerDay: number;
+
+  // Daily growth of the cap in percent (20–30 % is the usual safe pace).
+  @Prop({ default: 25 })
+  warmupGrowthPct: number;
+
+  @Prop({ default: 300 })
+  warmupTargetPerDay: number;
+
+  // ----- send window: business hours in Sweden, like a person would send -----
+  @Prop({ default: false })
+  sendWindowEnabled: boolean;
+
+  @Prop({ default: 8 })
+  sendHourFrom: number;
+
+  @Prop({ default: 17 })
+  sendHourTo: number;
+
+  @Prop({ default: true })
+  weekdaysOnly: boolean;
+
+  // Pause a campaign when its hard-bounce rate goes above this (percent).
+  @Prop({ default: 5 })
+  maxBounceRatePct: number;
+
+  // Mails sent today (Stockholm date) by this sender — for the daily cap.
+  @Prop({ default: "" })
+  dailyDate: string;
+
+  @Prop({ default: 0 })
+  dailySent: number;
 }
 export const MailerSettingsSchema =
   SchemaFactory.createForClass(MailerSettings);
