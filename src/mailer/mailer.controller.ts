@@ -201,14 +201,35 @@ export class MailerController {
   }
 
   // ---------- settings ----------
-  @Get("settings") getSettings() {
-    return this.settings.getPublic();
+  // `sender` = sender profile key; omitted = the main (ByggExp) profile.
+  @Get("settings/senders") getSenders() {
+    return this.settings.listSenders();
   }
-  @Put("settings") updateSettings(@Body() body: AnyBody) {
-    return this.settings.update(body as MailerSettingsInput);
+  @Post("settings/senders") createSender(@Body() body: AnyBody) {
+    return this.settings.createSender(
+      typeof body.label === "string" ? body.label : "",
+    );
   }
-  @Post("settings/verify") async verifySmtp() {
-    await this.settings.verifyConnection();
+  @Delete("settings/senders/:key") async removeSender(
+    @Param("key") key: string,
+  ) {
+    if (await this.campaigns.usesSender(key))
+      throw new BadRequestException(
+        "Avsändaren används av en kampanj — byt avsändare där först",
+      );
+    return this.settings.removeSender(key);
+  }
+  @Get("settings") getSettings(@Query("sender") sender?: string) {
+    return this.settings.getPublic(sender || undefined);
+  }
+  @Put("settings") updateSettings(
+    @Query("sender") sender: string | undefined,
+    @Body() body: AnyBody,
+  ) {
+    return this.settings.update(sender || "main", body as MailerSettingsInput);
+  }
+  @Post("settings/verify") async verifySmtp(@Query("sender") sender?: string) {
+    await this.settings.verifyConnection(sender || undefined);
     return { ok: true };
   }
 }

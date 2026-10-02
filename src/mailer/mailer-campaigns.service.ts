@@ -24,7 +24,7 @@ import {
   applyMergeTags,
   unsubscribeUrlFor,
 } from "./mailer-personalize";
-import { MailerSettingsService } from "./mailer-settings.service";
+import { MAIN_SENDER, MailerSettingsService } from "./mailer-settings.service";
 import {
   Campaign,
   CampaignDocument,
@@ -52,6 +52,7 @@ type CampaignInput = {
   newsletterId?: string | null;
   listId?: string | null;
   subject?: string;
+  senderKey?: string;
 };
 
 // SMTP errors that mean "this account/connection is broken" rather than "this
@@ -96,10 +97,12 @@ export class MailerCampaignsService {
       .find(filter, { snapshot: 0 })
       .sort({ createdAt: -1 })
       .lean();
-    const [lists, nls] = await Promise.all([
+    const [lists, nls, senders] = await Promise.all([
       this.lists.find({}, { name: 1 }).lean(),
       this.newsletters.find({}, { title: 1 }).lean(),
+      this.settings.listSenders(),
     ]);
+    const senderLabel = new Map(senders.map((x) => [x.key, x.label]));
     const listName = new Map(lists.map((l) => [String(l._id), l.name]));
     const nlTitle = new Map(nls.map((n) => [String(n._id), n.title]));
     return items.map((c) => ({
@@ -108,6 +111,7 @@ export class MailerCampaignsService {
       newsletterTitle: c.newsletterId
         ? nlTitle.get(String(c.newsletterId)) || ""
         : "",
+      senderLabel: senderLabel.get(c.senderKey || MAIN_SENDER) || "",
     }));
   }
 
@@ -141,6 +145,12 @@ export class MailerCampaignsService {
     }
     if (input.listId !== undefined)
       set.listId = input.listId ? oid(input.listId) : null;
+    if (input.senderKey !== undefined) {
+      const key = String(input.senderKey || MAIN_SENDER);
+      if (!(await this.settings.exists(key)))
+        throw new BadRequestException("Avsändaren finns inte");
+      set.senderKey = key;
+    }
     return set;
   }
 
@@ -164,10 +174,15 @@ export class MailerCampaignsService {
       // Content/list are frozen once sending started; only name/subject change.
       delete set.newsletterId;
       delete set.listId;
+      delete set.senderKey;
     }
     return this.campaigns
       .findByIdAndUpdate(id, set, { new: true, projection: { snapshot: 0 } })
       .lean();
+  }
+
+  async usesSender(key: string) {
+    return Boolean(await this.campaigns.exists({ senderKey: key }));
   }
 
   async remove(id: string) {
@@ -186,6 +201,7 @@ export class MailerCampaignsService {
       newsletterId: c.newsletterId,
       listId: c.listId,
       subject: c.subject,
+      senderKey: c.senderKey || MAIN_SENDER,
     });
   }
 
@@ -201,7 +217,7 @@ export class MailerCampaignsService {
       throw new BadRequestException("Välj ett nyhetsbrev (design)");
     if (!c.listId) throw new BadRequestException("Välj en prenumerationslista");
     if (!c.subject.trim()) throw new BadRequestException("Ämnesrad saknas");
-    await this.settings.transport(); // throws if SMTP isn't configured
+    await this.settings.transport(c.senderKey || MAIN_SENDER); // throws if SMTP isn't configured
 
     const when = scheduledAt ? new Date(scheduledAt) : null;
     if (when && Number.isNaN(when.getTime()))
@@ -278,7 +294,7 @@ export class MailerCampaignsService {
     const c = await this.get(id);
     if (c.status !== "paused")
       throw new BadRequestException("Kampanjen är inte pausad");
-    await this.settings.transport();
+    await this.settings.transport(c.senderKey || MAIN_SENDER);
     const hasQueue = await this.recipients.exists({
       campaignId: c._id,
       status: { $in: ["queued", "sending"] },
@@ -358,7 +374,9 @@ export class MailerCampaignsService {
         ? await this.newsletters.findById(c.newsletterId).lean()
         : null);
     if (!nl) throw new BadRequestException("Välj ett nyhetsbrev (design)");
-    const { transporter, from, settings } = await this.settings.transport();
+    const { transporter, from, settings } = await this.settings.transport(
+      c.senderKey || MAIN_SENDER,
+    );
     const base = this.renderBase(
       { settings: nl.settings, blocks: nl.blocks },
       c.subject,
@@ -409,12 +427,24 @@ export class MailerCampaignsService {
       .sort({ startedAt: 1 });
     if (!active.length) return;
 
+    // Each sender has its own SMTP account and its own per-minute budget.
+    const bySender = new Map<string, CampaignDocument[]>();
+    for (const c of active) {
+      const key = c.senderKey || MAIN_SENDER;
+      bySender.set(key, [...(bySender.get(key) ?? []), c]);
+    }
+    for (const [senderKey, campaigns] of bySender) {
+      await this.sendForSender(senderKey, campaigns);
+    }
+  }
+
+  private async sendForSender(senderKey: string, active: CampaignDocument[]) {
     let transport: Awaited<ReturnType<MailerSettingsService["transport"]>>;
     try {
-      transport = await this.settings.transport();
+      transport = await this.settings.transport(senderKey);
     } catch (err) {
       await this.campaigns.updateMany(
-        { status: "sending" },
+        { _id: { $in: active.map((c) => c._id) }, status: "sending" },
         {
           status: "paused",
           lastError: err instanceof Error ? err.message : String(err),
@@ -422,7 +452,7 @@ export class MailerCampaignsService {
       );
       return;
     }
-    // Per-minute budget shared by all running campaigns.
+    // Per-minute budget shared by this sender's running campaigns.
     let budget = Math.max(1, Math.ceil(transport.settings.ratePerHour / 60));
 
     for (const c of active) {
@@ -448,6 +478,7 @@ export class MailerCampaignsService {
         if (!r) break;
         budget--;
         const stop = await this.sendOne(c, r, base, transport);
+        // Account-level SMTP failure: this sender stops, others continue.
         if (stop) return;
       }
       const left = await this.recipients.exists({

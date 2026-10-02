@@ -168,6 +168,10 @@ export class Campaign {
 
   @Prop({ default: "" })
   lastError: string;
+
+  // Which sender profile (MailerSettings.key) the campaign goes out from.
+  @Prop({ default: "main" })
+  senderKey: string;
 }
 export const CampaignSchema = SchemaFactory.createForClass(Campaign);
 
@@ -262,7 +266,7 @@ export const MailEventSchema = SchemaFactory.createForClass(MailEvent);
 MailEventSchema.index({ createdAt: -1 });
 MailEventSchema.index({ campaignId: 1, email: 1, type: 1 });
 
-// ---------- settings (singleton) ----------
+// ---------- settings: one doc per sender profile ("main" = ByggExp) ----------
 
 export type MailerSettingsDocument = MailerSettings & Document;
 
@@ -270,6 +274,10 @@ export type MailerSettingsDocument = MailerSettings & Document;
 export class MailerSettings {
   @Prop({ default: "main" })
   key: string;
+
+  // Name shown in the admin when picking a sender for a campaign.
+  @Prop({ default: "" })
+  label: string;
 
   @Prop({ default: "" })
   smtpHost: string;

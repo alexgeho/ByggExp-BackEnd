@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { randomBytes } from "crypto";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import nodemailer, { Transporter } from "nodemailer";
@@ -9,6 +14,7 @@ import {
 } from "./schemas/mailer.schemas";
 
 export type MailerSettingsInput = Partial<{
+  label: string;
   smtpHost: string;
   smtpPort: number;
   smtpUser: string;
@@ -21,27 +27,67 @@ export type MailerSettingsInput = Partial<{
   trackClicks: boolean;
 }>;
 
-// SMTP account for marketing mail. Deliberately separate from the
-// transactional SMTP_* env (invoices, login codes) so a spam complaint on a
-// campaign can never take down the product's own mail.
+export const MAIN_SENDER = "main";
+
+// SMTP accounts for marketing mail, one doc per sender profile ("main" =
+// ByggExp; more can be added, e.g. a separate outreach domain). Deliberately
+// separate from the transactional SMTP_* env (invoices, login codes) so a spam
+// complaint on a campaign can never take down the product's own mail.
 @Injectable()
 export class MailerSettingsService {
-  private cached: Transporter | null = null;
-  private cachedKey = "";
+  private cache = new Map<string, { key: string; transporter: Transporter }>();
 
   constructor(
     @InjectModel(MailerSettings.name)
     private readonly model: Model<MailerSettingsDocument>,
   ) {}
 
-  async getDoc() {
-    const doc = await this.model.findOne({ key: "main" });
-    return doc ?? this.model.create({ key: "main" });
+  async getDoc(key = MAIN_SENDER) {
+    const doc = await this.model.findOne({ key });
+    if (doc) return doc;
+    if (key !== MAIN_SENDER)
+      throw new NotFoundException("Avsändaren finns inte");
+    return this.model.create({ key: MAIN_SENDER, label: "ByggExp" });
   }
 
-  async getPublic() {
-    const d = await this.getDoc();
+  async exists(key: string) {
+    return key === MAIN_SENDER || Boolean(await this.model.exists({ key }));
+  }
+
+  async listSenders() {
+    await this.getDoc(MAIN_SENDER); // make sure the default profile exists
+    const docs = await this.model.find({}).sort({ createdAt: 1 }).lean();
+    return docs.map((d) => ({
+      key: d.key,
+      label: d.label || d.fromName || d.key,
+      fromEmail: d.fromEmail,
+      configured: this.isConfigured(d),
+    }));
+  }
+
+  async createSender(label: string) {
+    const name = String(label ?? "")
+      .trim()
+      .slice(0, 80);
+    if (!name) throw new BadRequestException("Ange ett namn för avsändaren");
+    const key = `s-${randomBytes(4).toString("hex")}`;
+    await this.model.create({ key, label: name, fromName: name });
+    return this.getPublic(key);
+  }
+
+  async removeSender(key: string) {
+    if (key === MAIN_SENDER)
+      throw new BadRequestException("Huvudavsändaren kan inte tas bort");
+    await this.model.deleteOne({ key });
+    this.cache.delete(key);
+    return { deleted: true };
+  }
+
+  async getPublic(key = MAIN_SENDER) {
+    const d = await this.getDoc(key);
     return {
+      key: d.key,
+      label: d.label || d.fromName || d.key,
       smtpHost: d.smtpHost,
       smtpPort: d.smtpPort,
       smtpUser: d.smtpUser,
@@ -60,12 +106,13 @@ export class MailerSettingsService {
     return Boolean(d.smtpHost && d.smtpUser && d.smtpPassEnc && d.fromEmail);
   }
 
-  async update(input: MailerSettingsInput) {
-    const d = await this.getDoc();
+  async update(key: string, input: MailerSettingsInput) {
+    const d = await this.getDoc(key);
     const str = (v: unknown, max = 200) =>
       String(v ?? "")
         .trim()
         .slice(0, max);
+    if (input.label !== undefined) d.label = str(input.label, 80);
     if (input.smtpHost !== undefined) d.smtpHost = str(input.smtpHost);
     if (input.smtpPort !== undefined)
       d.smtpPort = Math.min(65535, Math.max(1, Number(input.smtpPort) || 587));
@@ -86,25 +133,26 @@ export class MailerSettingsService {
     if (input.trackClicks !== undefined)
       d.trackClicks = Boolean(input.trackClicks);
     await d.save();
-    this.cached = null;
-    return this.getPublic();
+    this.cache.delete(d.key);
+    return this.getPublic(d.key);
   }
 
   // Transport + envelope for a send. Throws a readable error when unset.
-  async transport(): Promise<{
+  async transport(key = MAIN_SENDER): Promise<{
     transporter: Transporter;
     settings: MailerSettings;
     from: string;
   }> {
-    const d = await this.getDoc();
+    const d = await this.getDoc(key);
     if (!this.isConfigured(d)) {
       throw new BadRequestException(
-        "SMTP för utskick är inte inställt (Nyhetsbrev → Inställningar)",
+        `SMTP för avsändaren "${d.label || d.key}" är inte inställt (Nyhetsbrev → Inställningar)`,
       );
     }
     const cacheKey = `${d.smtpHost}|${d.smtpPort}|${d.smtpUser}|${d.smtpPassEnc}`;
-    if (!this.cached || this.cachedKey !== cacheKey) {
-      this.cached = nodemailer.createTransport({
+    let entry = this.cache.get(d.key);
+    if (!entry || entry.key !== cacheKey) {
+      const transporter = nodemailer.createTransport({
         host: d.smtpHost,
         port: d.smtpPort,
         secure: d.smtpPort === 465,
@@ -112,18 +160,19 @@ export class MailerSettingsService {
         pool: true,
         maxConnections: 2,
       });
-      this.cachedKey = cacheKey;
+      entry = { key: cacheKey, transporter };
+      this.cache.set(d.key, entry);
     }
     const name = d.fromName.replace(/["\r\n]/g, "");
     return {
-      transporter: this.cached,
+      transporter: entry.transporter,
       settings: d,
       from: `"${name}" <${d.fromEmail}>`,
     };
   }
 
-  async verifyConnection() {
-    const { transporter } = await this.transport();
+  async verifyConnection(key = MAIN_SENDER) {
+    const { transporter } = await this.transport(key);
     try {
       await transporter.verify();
     } catch (err) {
