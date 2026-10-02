@@ -388,15 +388,39 @@ export class MailerCampaignsService {
       { email: to, name: "Test", company: "Testföretag AB", token: "test" },
       null,
     );
-    await transporter.sendMail({
-      from,
-      to,
-      replyTo: settings.replyTo || undefined,
-      subject: `[TEST] ${msg.subject}`,
-      html: msg.html,
-      text: msg.text,
-    });
-    return { sent: true, to };
+    // Log what the SMTP server answered (or the error), so a test that never
+    // arrives can be traced in the event log instead of guessed at.
+    try {
+      const info = (await transporter.sendMail({
+        from,
+        to,
+        replyTo: settings.replyTo || undefined,
+        subject: `[TEST] ${msg.subject}`,
+        html: msg.html,
+        text: msg.text,
+      })) as { response?: string; rejected?: unknown[] };
+      const response = String(info.response ?? "").slice(0, 300);
+      const rejected = Array.isArray(info.rejected) && info.rejected.length > 0;
+      await this.log(
+        "test",
+        c._id,
+        to,
+        `${rejected ? "AVVISAD" : "OK"} via ${settings.smtpHost} (${from}): ${response}`,
+      );
+      if (rejected)
+        throw new BadRequestException(`SMTP avvisade mottagaren: ${response}`);
+      return { sent: true, to, response };
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      await this.log(
+        "test",
+        c._id,
+        to,
+        `FEL via ${settings.smtpHost} (${from}): ${message}`,
+      );
+      throw err;
+    }
   }
 
   // ---------- sender ----------

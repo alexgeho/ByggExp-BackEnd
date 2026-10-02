@@ -243,6 +243,7 @@ export const EVENT_TYPES = [
   "click",
   "unsubscribe",
   "bounce",
+  "test",
 ] as const;
 export type MailEventType = (typeof EVENT_TYPES)[number];
 
