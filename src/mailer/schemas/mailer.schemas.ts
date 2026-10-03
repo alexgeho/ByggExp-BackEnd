@@ -172,6 +172,12 @@ export class Campaign {
   // Which sender profile (MailerSettings.key) the campaign goes out from.
   @Prop({ default: "main" })
   senderKey: string;
+
+  // Rotate through several sender profiles (mailboxes) — each keeps its own
+  // warm-up cap, so volume scales with the number of mailboxes. Empty = only
+  // senderKey (older campaigns).
+  @Prop({ type: [String], default: [] })
+  senderKeys: string[];
 }
 export const CampaignSchema = SchemaFactory.createForClass(Campaign);
 

@@ -105,3 +105,16 @@ describe("mailer address checks", () => {
     expect(isValidEmailSyntax("a b@c.se")).toBe(false);
   });
 });
+
+import { senderKeysOf } from "./mailer-campaigns.service";
+
+describe("campaign sender rotation", () => {
+  it("uses senderKeys when set, otherwise the single senderKey or main", () => {
+    expect(senderKeysOf({ senderKeys: ["a", "b"], senderKey: "a" })).toEqual([
+      "a",
+      "b",
+    ]);
+    expect(senderKeysOf({ senderKey: "s-1", senderKeys: [] })).toEqual(["s-1"]);
+    expect(senderKeysOf({})).toEqual(["main"]);
+  });
+});
