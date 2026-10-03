@@ -808,6 +808,7 @@ export class MailerCampaignsService {
     switch (event) {
       case "opened":
       case "unique_opened":
+      case "first_opening":
       case "proxy_open":
       case "unique_proxy_open":
         await this.trackOpen(r.token);
@@ -835,6 +836,8 @@ export class MailerCampaignsService {
         return;
       }
       case "hard_bounce":
+      case "hard_bounced":
+      case "invalid":
       case "invalid_email":
       case "blocked": {
         const seen = await this.events.exists({
@@ -857,6 +860,7 @@ export class MailerCampaignsService {
         return;
       }
       case "spam":
+      case "complaint":
       case "unsubscribed":
         await this.unsubscribe(r.token);
         return;
