@@ -31,6 +31,8 @@ export type NewsletterBlock =
       alt: string;
       href: string;
       fullWidth: boolean;
+      // Optional fixed width in px (e.g. a small logo in a signature); 0 = auto.
+      width?: number;
     }
   | { id: string; type: "heading"; text: string; level: "h1" | "h2" }
   | { id: string; type: "text"; text: string; muted: boolean }
@@ -190,6 +192,7 @@ export function normalizeBlocks(raw: unknown): NewsletterBlock[] {
           alt: str(b.alt, 300),
           href: str(b.href, 2000),
           fullWidth: Boolean(b.fullWidth),
+          width: Math.min(600, Math.max(0, Math.round(Number(b.width) || 0))),
         });
         break;
       case "heading":
@@ -311,11 +314,16 @@ function renderImage(
   href: string,
   fullWidth: boolean,
   ctx: Ctx,
+  fixedWidth = 0,
 ) {
   if (!src) return "";
-  const width = fullWidth ? 600 : 440;
-  const pad = fullWidth ? "0" : hp(ctx, "0 80px");
-  const img = `<img src="${escapeHtml(safeUrl(src))}" width="${width}" alt="${escapeHtml(alt)}" class="${fullWidth ? "" : "nl-narrow"}" style="display:block;width:${width}px;max-width:100%;height:auto;border:0;">`;
+  const width = fixedWidth || (fullWidth ? 600 : 440);
+  const pad = fullWidth
+    ? "0"
+    : fixedWidth
+      ? hp(ctx, "0 24px")
+      : hp(ctx, "0 80px");
+  const img = `<img src="${escapeHtml(safeUrl(src))}" width="${width}" alt="${escapeHtml(alt)}" class="${fullWidth || fixedWidth ? "" : "nl-narrow"}" style="display:block;width:${width}px;max-width:100%;height:auto;border:0;">`;
   const link = href
     ? `<a href="${escapeHtml(ctx.href(href))}">${img}</a>`
     : img;
@@ -326,7 +334,7 @@ function renderBlock(b: NewsletterBlock, ctx: Ctx): string {
   const { brandColor, utmCampaign } = ctx.s;
   switch (b.type) {
     case "image":
-      return renderImage(b.src, b.alt, b.href, b.fullWidth, ctx);
+      return renderImage(b.src, b.alt, b.href, b.fullWidth, ctx, b.width);
     case "heading": {
       const size = b.level === "h1" ? 28 : 24;
       return `<tr><td align="${al(ctx)}" class="nl-px" style="padding:24px ${hp(ctx, "60px")} 6px;">
