@@ -118,3 +118,11 @@ describe("campaign sender rotation", () => {
     expect(senderKeysOf({})).toEqual(["main"]);
   });
 });
+
+describe("brevo webhook key", () => {
+  it("is stable and not the raw secret", () => {
+    const a = signLink("brevo-webhook", "v1");
+    expect(a).toBe(signLink("brevo-webhook", "v1"));
+    expect(a.length).toBe(22);
+  });
+});

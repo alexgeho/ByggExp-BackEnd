@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   Post,
   Put,
@@ -27,6 +28,7 @@ import { RolesGuard } from "../common/guards/roles.guard";
 import { escapeHtml } from "../newsletters/newsletter-render";
 import { UserRole } from "../users/schemas/user.schema";
 import { MailerCampaignsService } from "./mailer-campaigns.service";
+import { signLink } from "./mailer-crypto";
 import { ImportRow, MailerListsService } from "./mailer-lists.service";
 import {
   MailerSettingsInput,
@@ -53,6 +55,11 @@ class IdsDto {
 
 // Free-form bodies below are validated/normalised in the services.
 type AnyBody = Record<string, unknown>;
+
+const apiBaseUrl = () =>
+  (process.env.API_PUBLIC_URL || "https://api.byggexp.se").replace(/\/+$/, "");
+// Stable secret for the Brevo webhook URL, derived from the app secret.
+const brevoWebhookKey = () => signLink("brevo-webhook", "v1");
 
 @Controller("mailer")
 @UseGuards(AuthGuard("jwt"), RolesGuard)
@@ -228,6 +235,10 @@ export class MailerController {
   ) {
     return this.settings.update(sender || "main", body as MailerSettingsInput);
   }
+  // URL to paste into Brevo → Transactional → Settings → Webhook.
+  @Get("settings/brevo-webhook") brevoWebhook() {
+    return { url: `${apiBaseUrl()}/m/brevo/${brevoWebhookKey()}` };
+  }
   @Get("settings/dns") dnsCheck(@Query("sender") sender?: string) {
     return this.settings.dnsCheck(sender || undefined);
   }
@@ -257,6 +268,20 @@ button{margin-top:18px;background:#1c6cf3;color:#fff;border:0;border-radius:24px
 @Public()
 export class MailerPublicController {
   constructor(private readonly campaigns: MailerCampaignsService) {}
+
+  // Brevo transactional webhook: opens, clicks, bounces, complaints. The
+  // secret in the path is the only auth Brevo's webhook can carry.
+  @Post("brevo/:key")
+  async brevo(@Param("key") key: string, @Body() body: unknown) {
+    if (key !== brevoWebhookKey()) throw new NotFoundException();
+    const events = Array.isArray(body) ? body : [body];
+    for (const ev of events)
+      if (ev && typeof ev === "object")
+        await this.campaigns
+          .handleBrevoEvent(ev as Record<string, unknown>)
+          .catch(() => undefined);
+    return { ok: true };
+  }
 
   @Get("o/:file")
   async open(@Param("file") file: string, @Res() res: Response) {

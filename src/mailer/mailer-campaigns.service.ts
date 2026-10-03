@@ -594,6 +594,9 @@ export class MailerCampaignsService {
           "List-Unsubscribe": `<${msg.unsub}>, <mailto:${mailto}?subject=unsubscribe>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
           "X-Campaign": String(c._id),
+          // Brevo echoes this back in its webhook events (opens, clicks,
+          // bounces), so they can be matched to this recipient.
+          "X-Mailin-custom": r.token,
         },
       });
       await this.recipients.updateOne(
@@ -784,6 +787,82 @@ export class MailerCampaignsService {
       await this.log("unsubscribe", r.campaignId, r.email);
     }
     return { ok: true, email: r.email };
+  }
+
+  // ---------- Brevo webhook (opens/clicks/bounces seen by Brevo) ----------
+
+  // One Brevo transactional webhook event. Matched by our recipient token
+  // (sent as X-Mailin-custom); older mails fall back to the latest send to
+  // that address.
+  async handleBrevoEvent(ev: Record<string, unknown>): Promise<void> {
+    const str = (v: unknown) => (typeof v === "string" ? v : "");
+    const event = str(ev.event).toLowerCase();
+    const email = str(ev.email).toLowerCase().trim();
+    const custom = str(ev["X-Mailin-custom"]) || str(ev["x-mailin-custom"]);
+    let r = await this.byToken(custom);
+    if (!r && email)
+      r = await this.recipients
+        .findOne({ email, status: "sent" })
+        .sort({ sentAt: -1 });
+    if (!r) return;
+    switch (event) {
+      case "opened":
+      case "unique_opened":
+      case "proxy_open":
+      case "unique_proxy_open":
+        await this.trackOpen(r.token);
+        return;
+      case "click": {
+        await this.recipients.updateOne(
+          { _id: r._id },
+          { $inc: { clicks: 1 } },
+        );
+        const firstClick = await this.markFirst(r._id, "clickedAt");
+        const firstOpen = await this.markFirst(r._id, "openedAt");
+        const inc: Record<string, number> = {};
+        if (firstClick) inc["stats.clicked"] = 1;
+        if (firstOpen) inc["stats.opened"] = 1;
+        if (Object.keys(inc).length)
+          await this.campaigns.updateOne({ _id: r.campaignId }, { $inc: inc });
+        const link = str(ev.link).slice(0, 500);
+        const seen = await this.events.exists({
+          type: "click",
+          campaignId: r.campaignId,
+          email: r.email,
+          detail: link,
+        });
+        if (!seen) await this.log("click", r.campaignId, r.email, link);
+        return;
+      }
+      case "hard_bounce":
+      case "invalid_email":
+      case "blocked": {
+        const seen = await this.events.exists({
+          type: "bounce",
+          campaignId: r.campaignId,
+          email: r.email,
+        });
+        if (seen) return;
+        await this.campaigns.updateOne(
+          { _id: r.campaignId },
+          { $inc: { "stats.bounced": 1 } },
+        );
+        await this.listsService.markEverywhere(r.email, "bounced");
+        await this.log(
+          "bounce",
+          r.campaignId,
+          r.email,
+          `Brevo: ${event} ${str(ev.reason)}`.trim(),
+        );
+        return;
+      }
+      case "spam":
+      case "unsubscribed":
+        await this.unsubscribe(r.token);
+        return;
+      default:
+        return;
+    }
   }
 
   // ---------- log ----------
