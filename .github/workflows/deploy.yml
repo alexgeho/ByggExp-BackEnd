@@ -68,9 +68,9 @@ jobs:
               --exclude='./.github' \
               --exclude='./node_modules' \
               --exclude='./test' \
-              -czf /tmp/release.tar.gz .
-          mv /tmp/release.tar.gz ./release.tar.gz
-          ls -lh release.tar.gz
+              -czf /tmp/byggexp-api-release.tar.gz .
+          mv /tmp/byggexp-api-release.tar.gz ./byggexp-api-release.tar.gz
+          ls -lh byggexp-api-release.tar.gz
 
       - name: Upload to VPS
         uses: appleboy/scp-action@v0.1.7
@@ -79,7 +79,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: release.tar.gz
+          source: byggexp-api-release.tar.gz
           target: /tmp/
 
       - name: Deploy on VPS
@@ -98,8 +98,8 @@ jobs:
             echo "==> New release: $DIR"
 
             mkdir -p "$DIR"
-            tar -xzf /tmp/release.tar.gz -C "$DIR"
-            rm -f /tmp/release.tar.gz
+            tar -xzf /tmp/byggexp-api-release.tar.gz -C "$DIR"
+            rm -f /tmp/byggexp-api-release.tar.gz
 
             # link shared resources (env + uploads)
             ln -sf "$BASE/shared/.env" "$DIR/.env"
