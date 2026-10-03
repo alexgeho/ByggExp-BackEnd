@@ -209,7 +209,9 @@ export class MailerCampaignsService {
 
   async usesSender(key: string) {
     return Boolean(
+      // Finished campaigns don't block removing an old mailbox.
       await this.campaigns.exists({
+        status: { $in: ["draft", "scheduled", "sending", "paused"] },
         $or: [{ senderKey: key }, { senderKeys: key }],
       }),
     );
