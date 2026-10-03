@@ -196,11 +196,11 @@ export class MailerCampaignsService {
     }
     const set = await this.resolveRefs(input);
     if (c.status === "paused") {
-      // Content/list are frozen once sending started; only name/subject change.
+      // Content/list are frozen once sending started; name/subject and the
+      // sender mailboxes may still change (recipients are already fixed, so
+      // nobody is mailed twice or skipped).
       delete set.newsletterId;
       delete set.listId;
-      delete set.senderKey;
-      delete set.senderKeys;
     }
     return this.campaigns
       .findByIdAndUpdate(id, set, { new: true, projection: { snapshot: 0 } })

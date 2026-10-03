@@ -24,6 +24,7 @@ import {
 
 export type MailerSettingsInput = Partial<{
   label: string;
+  smtpShareKey: string;
   smtpHost: string;
   smtpPort: number;
   smtpUser: string;
@@ -79,11 +80,12 @@ export class MailerSettingsService {
   async listSenders() {
     await this.getDoc(MAIN_SENDER); // make sure the default profile exists
     const docs = await this.model.find({}).sort({ createdAt: 1 }).lean();
+    const byKey = new Map(docs.map((d) => [d.key, d]));
     return docs.map((d) => ({
       key: d.key,
       label: d.label || d.fromName || d.key,
       fromEmail: d.fromEmail,
-      configured: this.isConfigured(d),
+      configured: this.isConfigured(d, byKey.get(d.smtpShareKey) ?? null),
     }));
   }
 
@@ -139,7 +141,8 @@ export class MailerSettingsService {
       sendHourTo: d.sendHourTo,
       weekdaysOnly: d.weekdaysOnly,
       maxBounceRatePct: d.maxBounceRatePct,
-      configured: this.isConfigured(d),
+      smtpShareKey: d.smtpShareKey,
+      configured: this.isConfigured(d, await this.sharedOf(d)),
       status: this.status(d),
     };
   }
@@ -215,8 +218,26 @@ export class MailerSettingsService {
     };
   }
 
-  isConfigured(d: MailerSettings) {
-    return Boolean(d.smtpHost && d.smtpUser && d.smtpPassEnc && d.fromEmail);
+  // SMTP account actually used by a profile: its own, or the shared one.
+  smtpOf(d: MailerSettings, shared?: MailerSettings | null) {
+    const s = d.smtpShareKey && shared ? shared : d;
+    return {
+      host: s.smtpHost,
+      port: s.smtpPort,
+      user: s.smtpUser,
+      passEnc: s.smtpPassEnc,
+    };
+  }
+
+  isConfigured(d: MailerSettings, shared?: MailerSettings | null) {
+    const smtp = this.smtpOf(d, shared);
+    if (d.smtpShareKey && !shared) return false;
+    return Boolean(smtp.host && smtp.user && smtp.passEnc && d.fromEmail);
+  }
+
+  private async sharedOf(d: MailerSettings) {
+    if (!d.smtpShareKey || d.smtpShareKey === d.key) return null;
+    return this.model.findOne({ key: d.smtpShareKey }).lean();
   }
 
   async update(key: string, input: MailerSettingsInput) {
@@ -226,6 +247,9 @@ export class MailerSettingsService {
         .trim()
         .slice(0, max);
     if (input.label !== undefined) d.label = str(input.label, 80);
+    if (input.smtpShareKey !== undefined)
+      d.smtpShareKey =
+        input.smtpShareKey === d.key ? "" : str(input.smtpShareKey, 40);
     if (input.smtpHost !== undefined) d.smtpHost = str(input.smtpHost);
     if (input.smtpPort !== undefined)
       d.smtpPort = Math.min(65535, Math.max(1, Number(input.smtpPort) || 587));
@@ -283,19 +307,21 @@ export class MailerSettingsService {
     from: string;
   }> {
     const d = await this.getDoc(key);
-    if (!this.isConfigured(d)) {
+    const shared = await this.sharedOf(d);
+    if (!this.isConfigured(d, shared)) {
       throw new BadRequestException(
         `SMTP för avsändaren "${d.label || d.key}" är inte inställt (Nyhetsbrev → Inställningar)`,
       );
     }
-    const cacheKey = `${d.smtpHost}|${d.smtpPort}|${d.smtpUser}|${d.smtpPassEnc}`;
+    const smtp = this.smtpOf(d, shared);
+    const cacheKey = `${smtp.host}|${smtp.port}|${smtp.user}|${smtp.passEnc}`;
     let entry = this.cache.get(d.key);
     if (!entry || entry.key !== cacheKey) {
       const transporter = nodemailer.createTransport({
-        host: d.smtpHost,
-        port: d.smtpPort,
-        secure: d.smtpPort === 465,
-        auth: { user: d.smtpUser, pass: decryptSecret(d.smtpPassEnc) },
+        host: smtp.host,
+        port: smtp.port,
+        secure: smtp.port === 465,
+        auth: { user: smtp.user, pass: decryptSecret(smtp.passEnc) },
         pool: true,
         maxConnections: 2,
       });

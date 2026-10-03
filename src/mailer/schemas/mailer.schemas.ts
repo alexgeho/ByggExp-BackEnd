@@ -295,6 +295,11 @@ export class MailerSettings {
   @Prop({ default: "" })
   smtpUser: string;
 
+  // Use the SMTP account (host/port/login/password) of another sender profile,
+  // e.g. a second Brevo "from" domain on the same Brevo key. "" = own account.
+  @Prop({ default: "" })
+  smtpShareKey: string;
+
   // AES-256-GCM, see mailer-crypto.ts. Never returned by the API.
   @Prop({ default: "" })
   smtpPassEnc: string;
