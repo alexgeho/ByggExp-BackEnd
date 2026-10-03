@@ -31,6 +31,10 @@ export class CreateExpenseDto {
   vat?: number;
 
   @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @IsOptional()
   @IsIn(Object.values(ExpensePaidBy))
   paidBy?: ExpensePaidBy;
 

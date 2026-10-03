@@ -17,10 +17,7 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
-import {
-  FileInterceptor,
-  FilesInterceptor,
-} from "@nestjs/platform-express";
+import { FileInterceptor, FilesInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
 import { diskStorage } from "multer";
 import { extname } from "path";

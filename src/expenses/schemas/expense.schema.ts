@@ -49,6 +49,11 @@ export class Expense {
   @Prop({ type: Number, default: 0 })
   vat: number;
 
+  // Currency the receipt is in (ISO code, as read by the scanner). Amounts are
+  // stored in this currency, not converted — like supplier invoices.
+  @Prop({ default: "SEK" })
+  currency: string;
+
   @Prop({ type: String, enum: ExpensePaidBy, default: ExpensePaidBy.Own })
   paidBy: ExpensePaidBy;
 
@@ -60,7 +65,12 @@ export class Expense {
   @Prop({ type: [String], default: [] })
   attachments: string[];
 
-  @Prop({ type: String, enum: ExpenseStatus, default: ExpenseStatus.Submitted, index: true })
+  @Prop({
+    type: String,
+    enum: ExpenseStatus,
+    default: ExpenseStatus.Submitted,
+    index: true,
+  })
   status: ExpenseStatus;
 
   @Prop({ type: Date, default: null })

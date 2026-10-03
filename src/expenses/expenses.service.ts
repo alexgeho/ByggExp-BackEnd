@@ -35,6 +35,14 @@ const ADMIN_ROLES = [
   UserRole.ProjectAdmin,
 ];
 
+// ISO currency code, e.g. "EUR"; anything unusable falls back to SEK.
+const normCurrency = (v: unknown) => {
+  const c = String(v ?? "")
+    .trim()
+    .toUpperCase();
+  return /^[A-Z]{3}$/.test(c) ? c : "SEK";
+};
+
 @Injectable()
 export class ExpensesService {
   private readonly logger = new Logger(ExpensesService.name);
@@ -67,6 +75,7 @@ export class ExpensesService {
       projectId: dto.projectId || null,
       amount: round2(dto.amount ?? 0),
       vat: round2(dto.vat ?? 0),
+      currency: normCurrency(dto.currency),
       status: dto.status || ExpenseStatus.Submitted,
     });
     return doc.save();
@@ -182,6 +191,7 @@ export class ExpensesService {
     const next: Record<string, unknown> = { ...dto };
     if (dto.amount !== undefined) next.amount = round2(dto.amount);
     if (dto.vat !== undefined) next.vat = round2(dto.vat);
+    if (dto.currency !== undefined) next.currency = normCurrency(dto.currency);
     if (dto.projectId !== undefined) next.projectId = dto.projectId || null;
     // Never let a worker relabel their own expense as approved via update.
     if (!this.isAdmin(user)) {
@@ -272,9 +282,7 @@ export class ExpensesService {
       .select("amount vat status paidBy")
       .lean()
       .exec();
-    const counted = docs.filter(
-      (d) => d.status !== ExpenseStatus.Rejected,
-    );
+    const counted = docs.filter((d) => d.status !== ExpenseStatus.Rejected);
     const total = counted.reduce(
       (s, d) => s + ((d.amount || 0) - (d.vat || 0)),
       0,
