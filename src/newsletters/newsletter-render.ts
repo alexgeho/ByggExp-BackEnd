@@ -318,10 +318,12 @@ function renderImage(
 ) {
   if (!src) return "";
   const width = fixedWidth || (fullWidth ? 600 : 440);
+  // A fixed-width image (signature logo) gets the same 20px gap above and
+  // below as the text blocks around it, so the signature reads evenly.
   const pad = fullWidth
     ? "0"
     : fixedWidth
-      ? hp(ctx, "0 24px")
+      ? `0 ${hp(ctx, "24px")} 8px`
       : hp(ctx, "0 80px");
   const img = `<img src="${escapeHtml(safeUrl(src))}" width="${width}" alt="${escapeHtml(alt)}" class="${fullWidth || fixedWidth ? "" : "nl-narrow"}" style="display:block;width:${width}px;max-width:100%;height:auto;border:0;">`;
   const link = href
