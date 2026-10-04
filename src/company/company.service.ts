@@ -5,6 +5,7 @@ import {
   GoneException,
   Injectable,
   Logger,
+  OnApplicationBootstrap,
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
@@ -39,8 +40,12 @@ import { inboundAddressFor, newInboundCode } from "./inbound-address";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Demo account for the solo Egenkontroll plan (owner's sales demo). Created by
+// a superadmin before the plan existed, so it is put on the plan once here.
+const EGENKONTROLL_DEMO_EMAIL = "alexander.gerhard+egenkontroll@outlook.com";
+
 @Injectable()
-export class CompanyService {
+export class CompanyService implements OnApplicationBootstrap {
   private readonly logger = new Logger(CompanyService.name);
 
   constructor(
@@ -51,6 +56,18 @@ export class CompanyService {
     private usersService: UsersService,
     private mailService: MailService,
   ) {}
+
+  async onApplicationBootstrap() {
+    try {
+      const res = await this.companyModel.updateOne(
+        { email: EGENKONTROLL_DEMO_EMAIL, plan: { $ne: "egenkontroll" } },
+        { $set: { plan: "egenkontroll", maxUsers: 1, moduleOverrides: {} } },
+      );
+      if (res.modifiedCount) this.logger.log("Demo company moved to the egenkontroll plan");
+    } catch (error) {
+      this.logger.warn(`Egenkontroll demo plan update skipped: ${String(error)}`);
+    }
+  }
 
   async create(createCompanyDto: CreateCompanyDto): Promise<CompanyDocument> {
     const createdCompany = new this.companyModel(createCompanyDto);
