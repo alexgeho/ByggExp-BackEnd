@@ -3,6 +3,8 @@ export type ChecklistPdfItem = {
   reference?: string;
   result?: string;
   comment?: string;
+  date?: string;
+  photos?: string[]; // data URIs
 };
 
 export type ChecklistPdfData = {
@@ -56,7 +58,12 @@ export function buildChecklistHtml(data: ChecklistPdfData): string {
           <td class="res" style="color:${RESULT_COLORS[result] || "#334155"}">
             ${esc(RESULT_LABELS[result] || result)}
           </td>
-          <td class="cmt">${esc(item.comment)}</td>
+          <td class="dt">${esc(item.date)}</td>
+          <td class="cmt">${esc(item.comment)}${
+            item.photos?.length
+              ? `<div class="ph">${item.photos.map((src) => `<img src="${src}" />`).join("")}</div>`
+              : ""
+          }</td>
         </tr>`;
     })
     .join("");
@@ -83,6 +90,10 @@ export function buildChecklistHtml(data: ChecklistPdfData): string {
   td.num { width: 28px; color: #94a3b8; }
   td.res { width: 90px; font-weight: 600; }
   td.cmt { width: 30%; color: #334155; }
+  td.dt { width: 76px; color: #334155; white-space: nowrap; }
+  .ph { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .ph img { width: 72px; height: 72px; object-fit: cover; border-radius: 3px; }
+  tr { page-break-inside: avoid; }
   .pt { font-weight: 500; }
   .ref { color: #94a3b8; font-size: 11px; margin-top: 2px; }
   .notes { margin-top: 18px; }
@@ -113,7 +124,7 @@ export function buildChecklistHtml(data: ChecklistPdfData): string {
 
   <table>
     <thead>
-      <tr><th>#</th><th>Kontrollpunkt</th><th>Resultat</th><th>Kommentar</th></tr>
+      <tr><th>#</th><th>Kontrollpunkt</th><th>Resultat</th><th>Datum</th><th>Kommentar</th></tr>
     </thead>
     <tbody>${rows}</tbody>
   </table>

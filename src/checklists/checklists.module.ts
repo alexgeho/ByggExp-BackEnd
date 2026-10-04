@@ -4,6 +4,7 @@ import { Company, CompanySchema } from "../company/schemas/company.schema";
 import { Project, ProjectSchema } from "../projects/schemas/project.schema";
 import { ChecklistsController } from "./checklists.controller";
 import { ChecklistsService } from "./checklists.service";
+import { EgenkontrollAiService } from "./egenkontroll-ai.service";
 import { Checklist, ChecklistSchema } from "./schemas/checklist.schema";
 import {
   ChecklistTemplate,
@@ -20,7 +21,7 @@ import {
     ]),
   ],
   controllers: [ChecklistsController],
-  providers: [ChecklistsService],
+  providers: [ChecklistsService, EgenkontrollAiService],
   exports: [ChecklistsService],
 })
 export class ChecklistsModule {}

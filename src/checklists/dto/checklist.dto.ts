@@ -1,7 +1,10 @@
 import { Type } from "class-transformer";
 import {
   IsArray,
+  IsBoolean,
   IsIn,
+  IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   ValidateNested,
@@ -10,6 +13,32 @@ import {
   ChecklistCategory,
   ChecklistItemResult,
 } from "../schemas/checklist.enums";
+
+export class ChecklistItemSuggestionDto {
+  @IsOptional()
+  @IsIn(Object.values(ChecklistItemResult))
+  result?: ChecklistItemResult;
+
+  @IsOptional()
+  @IsString()
+  date?: string;
+
+  @IsOptional()
+  @IsString()
+  photoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @IsOptional()
+  @IsNumber()
+  confidence?: number;
+
+  @IsOptional()
+  @IsIn(["pending", "accepted", "rejected"])
+  state?: "pending" | "accepted" | "rejected";
+}
 
 export class ChecklistItemDto {
   @IsOptional()
@@ -27,6 +56,20 @@ export class ChecklistItemDto {
   @IsOptional()
   @IsString()
   comment?: string;
+
+  @IsOptional()
+  @IsString()
+  date?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  photoUrls?: string[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ChecklistItemSuggestionDto)
+  suggestion?: ChecklistItemSuggestionDto | null;
 }
 
 export class CreateChecklistDto {
@@ -62,6 +105,10 @@ export class CreateChecklistDto {
   @ValidateNested({ each: true })
   @Type(() => ChecklistItemDto)
   items?: ChecklistItemDto[];
+
+  @IsOptional()
+  @IsObject()
+  sourceDocument?: { url: string; name: string };
 }
 
 export class UpdateChecklistDto {
@@ -96,4 +143,9 @@ export class SignChecklistDto {
   @IsOptional()
   @IsString()
   signedByName?: string;
+}
+
+export class SuggestionDecisionDto {
+  @IsBoolean()
+  accept: boolean;
 }

@@ -5,6 +5,10 @@ import {
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
+import exifr from "exifr";
+import { readFile } from "fs/promises";
+import { join } from "path";
+import sharp from "sharp";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import { launchForInvoicePdf } from "../invoices/puppeteer-launch";
 import { Project, ProjectDocument } from "../projects/schemas/project.schema";
@@ -14,6 +18,8 @@ import {
   SignChecklistDto,
   UpdateChecklistDto,
 } from "./dto/checklist.dto";
+import { toIsoDate } from "./egenkontroll-ai.logic";
+import { EgenkontrollAiService } from "./egenkontroll-ai.service";
 import { CreateTemplateDto, UpdateTemplateDto } from "./dto/template.dto";
 import { Checklist, ChecklistDocument } from "./schemas/checklist.schema";
 import {
@@ -34,6 +40,13 @@ type AuthUser = {
   companyId?: string | null;
   userId?: string;
   _id?: string;
+  email?: string;
+};
+
+export type UploadedPhoto = {
+  filename: string;
+  originalname: string;
+  path: string;
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -52,6 +65,7 @@ export class ChecklistsService {
     private checklistModel: Model<ChecklistDocument>,
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    private readonly ai: EgenkontrollAiService,
   ) {}
 
   private companyId(user: AuthUser): string {
@@ -143,6 +157,7 @@ export class ChecklistsService {
       responsible: dto.responsible || "",
       notes: dto.notes || "",
       items: items || [],
+      sourceDocument: dto.sourceDocument || null,
       status: ChecklistStatus.Draft,
       createdByUserId: this.userId(user),
     });
@@ -167,7 +182,13 @@ export class ChecklistsService {
       companyId: doc.companyId,
       projectId: doc.projectId,
     });
-    // Auto-complete once every point has an answer.
+    this.syncStatus(doc);
+    await doc.save();
+    return doc;
+  }
+
+  // Auto-complete once every point has an answer.
+  private syncStatus(doc: ChecklistDocument) {
     if (
       doc.items.length &&
       doc.items.every((it) => it.result !== ChecklistItemResult.Pending)
@@ -178,8 +199,150 @@ export class ChecklistsService {
     } else if (doc.status === ChecklistStatus.Completed) {
       doc.status = ChecklistStatus.Draft;
     }
+  }
+
+  // ---- AI egenkontroll ----
+
+  aiStatus() {
+    return { enabled: this.ai.enabled };
+  }
+
+  draftFromDocument(
+    file: { buffer: Buffer; mimetype: string } | null,
+    text: string,
+  ) {
+    return this.ai.draftFromDocument(file, text);
+  }
+
+  // Stores site photos (EXIF date/GPS kept) and lets the AI propose results.
+  async addPhotos(id: string, files: UploadedPhoto[], user: AuthUser) {
+    const doc = await this.findChecklist(id, user);
+    if (doc.status === ChecklistStatus.Signed) {
+      throw new ForbiddenException("A signed checklist can no longer be edited");
+    }
+    for (const file of files) {
+      const meta = await this.readExif(file.path);
+      doc.photos.push({
+        url: `/uploads/checklist-photos/${file.filename}`,
+        name: file.originalname || file.filename,
+        takenAt: meta.takenAt,
+        lat: meta.lat,
+        lng: meta.lng,
+        uploadedAt: new Date(),
+        uploadedByName: user.email || "",
+        analyzed: false,
+      });
+    }
+    await doc.save();
+    if (this.ai.enabled) await this.runAnalysis(doc, false);
+    return doc;
+  }
+
+  // Re-runs the AI over every photo (e.g. after editing the points).
+  async analyze(id: string, user: AuthUser) {
+    const doc = await this.findChecklist(id, user);
+    if (doc.status === ChecklistStatus.Signed) return doc;
+    await this.runAnalysis(doc, true);
+    return doc;
+  }
+
+  private async runAnalysis(doc: ChecklistDocument, all: boolean) {
+    const photos = doc.photos
+      .filter((p) => all || !p.analyzed)
+      .slice()
+      .reverse()
+      .map((p) => ({
+        url: p.url,
+        date: toIsoDate(p.takenAt) || toIsoDate(p.uploadedAt),
+      }));
+    if (!photos.length) return;
+    const suggestions = await this.ai.suggestFromPhotos(
+      doc.items.map((it) => ({
+        text: it.text,
+        reference: it.reference,
+        result: it.result,
+        suggestion: it.suggestion,
+      })),
+      photos,
+    );
+    for (const s of suggestions) {
+      doc.items[s.index].suggestion = {
+        result: s.result,
+        date: s.date,
+        photoUrl: s.photoUrl,
+        reason: s.reason,
+        confidence: s.confidence,
+        state: "pending",
+      };
+    }
+    const sent = new Set(photos.map((p) => p.url));
+    doc.photos.forEach((p) => {
+      if (sent.has(p.url)) p.analyzed = true;
+    });
+    doc.markModified("items");
+    doc.markModified("photos");
+    await doc.save();
+  }
+
+  async decideSuggestion(
+    id: string,
+    index: number,
+    accept: boolean,
+    user: AuthUser,
+  ) {
+    const doc = await this.findChecklist(id, user);
+    if (doc.status === ChecklistStatus.Signed) {
+      throw new ForbiddenException("A signed checklist can no longer be edited");
+    }
+    const item = doc.items[index];
+    if (!item?.suggestion) throw new NotFoundException("No suggestion");
+    if (accept) {
+      item.result = item.suggestion.result;
+      item.date = item.suggestion.date || toIsoDate(new Date());
+      if (item.suggestion.photoUrl && !item.photoUrls.includes(item.suggestion.photoUrl)) {
+        item.photoUrls.push(item.suggestion.photoUrl);
+      }
+      if (!item.comment && item.suggestion.result !== ChecklistItemResult.Ok) {
+        item.comment = item.suggestion.reason;
+      }
+    }
+    item.suggestion.state = accept ? "accepted" : "rejected";
+    doc.markModified("items");
+    this.syncStatus(doc);
     await doc.save();
     return doc;
+  }
+
+  private async readExif(path: string) {
+    try {
+      const data = await exifr.parse(path, {
+        pick: ["DateTimeOriginal", "CreateDate", "latitude", "longitude"],
+        gps: true,
+      });
+      const takenAt = data?.DateTimeOriginal || data?.CreateDate || null;
+      return {
+        takenAt: takenAt instanceof Date ? takenAt : null,
+        lat: typeof data?.latitude === "number" ? data.latitude : null,
+        lng: typeof data?.longitude === "number" ? data.longitude : null,
+      };
+    } catch {
+      return { takenAt: null, lat: null, lng: null };
+    }
+  }
+
+  // Small inline JPEG for the PDF; null when the file is missing/unreadable.
+  private async thumbDataUri(url: string): Promise<string | null> {
+    try {
+      const buf = await readFile(join(process.cwd(), url.replace(/^\//, "")));
+      const jpeg = await sharp(buf)
+        .rotate()
+        .resize({ width: 360, height: 360, fit: "inside" })
+        .jpeg({ quality: 70 })
+        .toBuffer();
+      return `data:image/jpeg;base64,${jpeg.toString("base64")}`;
+    } catch {
+      return null;
+    }
   }
 
   async signChecklist(id: string, dto: SignChecklistDto, user: AuthUser) {
@@ -214,12 +377,18 @@ export class ChecklistsService {
       date: doc.date,
       responsible: doc.responsible,
       notes: doc.notes,
-      items: (doc.items || []).map((it) => ({
-        text: it.text,
-        reference: it.reference,
-        result: it.result,
-        comment: it.comment,
-      })),
+      items: await Promise.all(
+        (doc.items || []).map(async (it) => ({
+          text: it.text,
+          reference: it.reference,
+          result: it.result,
+          comment: it.comment,
+          date: it.date,
+          photos: (
+            await Promise.all((it.photoUrls || []).slice(0, 4).map((u) => this.thumbDataUri(u)))
+          ).filter((x): x is string => Boolean(x)),
+        })),
+      ),
       signedByName: doc.signedByName,
       signedAt: doc.signedAt
         ? new Date(doc.signedAt).toISOString().slice(0, 10)

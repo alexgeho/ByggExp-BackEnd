@@ -6,6 +6,63 @@ import {
   ChecklistStatus,
 } from "./checklist.enums";
 
+// AI proposal for one control point, made from a site photo. Never applied on
+// its own: a human accepts (copies it into result/date/photos) or rejects it.
+@Schema({ _id: false })
+export class ChecklistItemSuggestion {
+  @Prop({ type: String, enum: ChecklistItemResult, default: ChecklistItemResult.Ok })
+  result: ChecklistItemResult;
+
+  @Prop({ default: "" })
+  date: string; // YYYY-MM-DD, from the photo's EXIF or upload time
+
+  @Prop({ default: "" })
+  photoUrl: string;
+
+  @Prop({ default: "" })
+  reason: string;
+
+  @Prop({ default: 0 })
+  confidence: number;
+
+  @Prop({ type: String, enum: ["pending", "accepted", "rejected"], default: "pending" })
+  state: "pending" | "accepted" | "rejected";
+}
+
+const ChecklistItemSuggestionSchema = SchemaFactory.createForClass(
+  ChecklistItemSuggestion,
+);
+
+// A photo uploaded to an egenkontroll (proof from site).
+@Schema({ _id: false })
+export class ChecklistPhoto {
+  @Prop({ required: true })
+  url: string;
+
+  @Prop({ default: "" })
+  name: string;
+
+  @Prop({ type: Date, default: null })
+  takenAt?: Date | null;
+
+  @Prop({ type: Number, default: null })
+  lat?: number | null;
+
+  @Prop({ type: Number, default: null })
+  lng?: number | null;
+
+  @Prop({ type: Date, default: () => new Date() })
+  uploadedAt: Date;
+
+  @Prop({ default: "" })
+  uploadedByName: string;
+
+  @Prop({ default: false })
+  analyzed: boolean;
+}
+
+const ChecklistPhotoSchema = SchemaFactory.createForClass(ChecklistPhoto);
+
 // A control point on a running egenkontroll.
 @Schema({ _id: false })
 export class ChecklistItem {
@@ -20,6 +77,16 @@ export class ChecklistItem {
 
   @Prop({ default: "" })
   comment: string;
+
+  // Date the point was checked (YYYY-MM-DD).
+  @Prop({ default: "" })
+  date: string;
+
+  @Prop({ type: [String], default: [] })
+  photoUrls: string[];
+
+  @Prop({ type: ChecklistItemSuggestionSchema, default: null })
+  suggestion?: ChecklistItemSuggestion | null;
 }
 
 const ChecklistItemSchema = SchemaFactory.createForClass(ChecklistItem);
@@ -56,6 +123,13 @@ export class Checklist {
 
   @Prop({ type: [ChecklistItemSchema], default: [] })
   items: ChecklistItem[];
+
+  @Prop({ type: [ChecklistPhotoSchema], default: [] })
+  photos: ChecklistPhoto[];
+
+  // Contract / arbetsbeskrivning the points were generated from (AI draft).
+  @Prop({ type: Object, default: null })
+  sourceDocument?: { url: string; name: string } | null;
 
   @Prop({ type: String, enum: ChecklistStatus, default: ChecklistStatus.Draft, index: true })
   status: ChecklistStatus;
