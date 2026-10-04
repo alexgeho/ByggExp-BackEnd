@@ -82,6 +82,9 @@ export class EgenkontrollAiService {
     return claudeEnabled();
   }
 
+  // TEMP debug: last raw photo-matching reply (exposed via analyze?debug=1).
+  lastPhotoReply = "";
+
   async draftFromDocument(
     file: { buffer: Buffer; mimetype: string } | null,
     text: string,
@@ -142,6 +145,8 @@ export class EgenkontrollAiService {
     if (!sent.length) return [];
     content.push({ type: "text", text: matchPrompt(items, sent) });
     const reply = await callClaude({ model: this.photoModel, maxTokens: 2048, content });
+    this.lastPhotoReply = reply;
+    this.logger.log(`Photo match reply: ${reply.slice(0, 1500)}`);
     try {
       return pickSuggestions(items, sent, normalizeMatches(parseJsonObject(reply)));
     } catch (error) {

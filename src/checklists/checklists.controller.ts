@@ -169,8 +169,12 @@ export class ChecklistsController {
   }
 
   @Post(":id/analyze")
-  analyze(@Request() req, @Param("id") id: string) {
-    return this.service.analyze(id, req.user);
+  analyze(
+    @Request() req,
+    @Param("id") id: string,
+    @Query("debug") debug?: string,
+  ) {
+    return this.service.analyze(id, req.user, debug === "1");
   }
 
   @Post(":id/items/:index/suggestion")
