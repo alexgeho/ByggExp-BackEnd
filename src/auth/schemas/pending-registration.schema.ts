@@ -17,6 +17,10 @@ export class PendingRegistration {
   @Prop({ default: "" })
   userName: string;
 
+  // Plan chosen at sign-up (e.g. "egenkontroll"); null = full trial.
+  @Prop({ type: String, default: null })
+  plan?: string | null;
+
   // bcrypt hash of the password — set at step 2 (after email confirmation), so
   // it doesn't exist yet at sign-up. Never stores the plaintext.
   @Prop({ type: String, default: null, select: false })

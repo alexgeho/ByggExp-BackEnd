@@ -265,16 +265,20 @@ export class ChecklistsService {
       })),
       photos,
     );
+    // AI fills the point in directly; the user can undo it per point.
     for (const s of suggestions) {
-      doc.items[s.index].suggestion = {
+      const item = doc.items[s.index];
+      item.suggestion = {
         result: s.result,
         date: s.date,
         photoUrl: s.photoUrl,
         reason: s.reason,
         confidence: s.confidence,
-        state: "pending",
+        state: "auto",
       };
+      this.applySuggestion(item);
     }
+    this.syncStatus(doc);
     const sent = new Set(photos.map((p) => p.url));
     doc.photos.forEach((p) => {
       if (sent.has(p.url)) p.analyzed = true;
@@ -296,21 +300,33 @@ export class ChecklistsService {
     }
     const item = doc.items[index];
     if (!item?.suggestion) throw new NotFoundException("No suggestion");
-    if (accept) {
-      item.result = item.suggestion.result;
-      item.date = item.suggestion.date || toIsoDate(new Date());
-      if (item.suggestion.photoUrl && !item.photoUrls.includes(item.suggestion.photoUrl)) {
-        item.photoUrls.push(item.suggestion.photoUrl);
-      }
-      if (!item.comment && item.suggestion.result !== ChecklistItemResult.Ok) {
-        item.comment = item.suggestion.reason;
-      }
+    const wasApplied = item.suggestion.state === "auto" || item.suggestion.state === "accepted";
+    if (accept && !wasApplied) this.applySuggestion(item);
+    if (!accept && wasApplied) {
+      // Undo what the AI filled in, unless the user has changed it since.
+      if (item.result === item.suggestion.result) item.result = ChecklistItemResult.Pending;
+      if (item.date === item.suggestion.date) item.date = "";
+      item.photoUrls = item.photoUrls.filter((u) => u !== item.suggestion?.photoUrl);
+      if (item.comment === item.suggestion.reason) item.comment = "";
     }
     item.suggestion.state = accept ? "accepted" : "rejected";
     doc.markModified("items");
     this.syncStatus(doc);
     await doc.save();
     return doc;
+  }
+
+  private applySuggestion(item: ChecklistDocument["items"][number]) {
+    const s = item.suggestion;
+    if (!s) return;
+    item.result = s.result;
+    item.date = s.date || toIsoDate(new Date());
+    if (s.photoUrl && !item.photoUrls.includes(s.photoUrl)) {
+      item.photoUrls.push(s.photoUrl);
+    }
+    if (!item.comment && s.result !== ChecklistItemResult.Ok) {
+      item.comment = s.reason;
+    }
   }
 
   private async readExif(path: string) {

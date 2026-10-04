@@ -9,11 +9,13 @@
 //              base fee incl. 10 users + a fee per extra user.
 //   komplett — projekt + economy (offers, invoices, expenses, payroll,
 //              profitability). Per-seat like projekt.
+//   egenkontroll — solo tier (from 2026-10-04): only projects + AI
+//              egenkontroll (contract + photos → filled checklist), 1 user.
 // Per-seat tiers use a Stripe *graduated tiered* price (tier 1: up to
 // INCLUDED_SEATS units, flat base fee, 0/unit; tier 2: per-unit fee), so the
 // subscription quantity is simply the company's number of billable users
 // (see BillingService.countBillableSeats).
-export type PlanTier = "faktura" | "projekt" | "komplett";
+export type PlanTier = "faktura" | "projekt" | "komplett" | "egenkontroll";
 export type BillingInterval = "monthly" | "yearly";
 
 // Plans sold before 2026-09-25. Not offered in checkout any more, but companies
@@ -41,9 +43,18 @@ export const PRICE_ENV: Record<PlanTier, Record<BillingInterval, string>> = {
     monthly: "STRIPE_PRICE_KOMPLETT_MONTHLY",
     yearly: "STRIPE_PRICE_KOMPLETT_YEARLY",
   },
+  egenkontroll: {
+    monthly: "STRIPE_PRICE_EGENKONTROLL_MONTHLY",
+    yearly: "STRIPE_PRICE_EGENKONTROLL_YEARLY",
+  },
 };
 
-export const PLAN_TIERS: PlanTier[] = ["faktura", "projekt", "komplett"];
+export const PLAN_TIERS: PlanTier[] = [
+  "faktura",
+  "projekt",
+  "komplett",
+  "egenkontroll",
+];
 
 // Users included in the base fee of a per-seat tier.
 export const INCLUDED_SEATS = 10;
@@ -110,6 +121,7 @@ export const ACTIVE_STATUSES = new Set(["trialing", "active", "past_due"]);
 export const PLAN_MAX_USERS: Record<PlanTier | LegacyPlanTier, number | null> =
   {
     faktura: 2,
+    egenkontroll: 1,
     projekt: null,
     komplett: null,
     start: 10,

@@ -297,7 +297,7 @@ export class CompanyService {
   // company self-registers from the app.
   async startTrialForCompany(
     companyId: string,
-    opts: { days: number; maxUsers: number },
+    opts: { days: number; maxUsers: number; plan?: string | null },
   ): Promise<void> {
     const trialEndsAt = new Date(
       Date.now() + opts.days * 24 * 60 * 60 * 1000,
@@ -306,6 +306,7 @@ export class CompanyService {
       subscriptionStatus: "trialing",
       trialEndsAt,
       maxUsers: opts.maxUsers,
+      ...(opts.plan ? { plan: opts.plan } : {}),
     });
   }
 

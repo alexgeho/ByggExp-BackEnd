@@ -1,3 +1,4 @@
+import { maxUsersForPlan } from "../billing/plans";
 import {
   HttpException,
   HttpStatus,
@@ -198,6 +199,7 @@ export class AuthService {
         email,
         companyName,
         userName,
+        plan: dto.plan || null,
         passwordHash: null,
         codeHash,
         expiresAt,
@@ -283,10 +285,15 @@ export class AuthService {
     const companyId =
       (company as { _id?: { toString(): string } })?._id?.toString?.() ??
       admin.companyId;
+    // A plan picked at sign-up (solo egenkontroll) limits modules + seats from
+    // day one; otherwise the trial shows everything.
+    const plan = pending.plan || null;
+    const trialMaxUsers = maxUsersForPlan(plan) ?? AuthService.TRIAL_MAX_USERS;
     try {
       await this.companyService.startTrialForCompany(companyId, {
         days: AuthService.TRIAL_DAYS,
-        maxUsers: AuthService.TRIAL_MAX_USERS,
+        maxUsers: trialMaxUsers,
+        plan,
       });
     } catch (error) {
       this.logger.error(
@@ -307,7 +314,7 @@ export class AuthService {
         name: admin.name,
         companyName: pending.companyName,
         trialDays: AuthService.TRIAL_DAYS,
-        maxUsers: AuthService.TRIAL_MAX_USERS,
+        maxUsers: trialMaxUsers,
       });
     } catch (error) {
       this.logger.error(`Failed to send welcome email: ${String(error)}`);

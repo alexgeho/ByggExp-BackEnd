@@ -80,6 +80,9 @@ const PROJEKT = [
   "tools",
 ];
 
+// "Egenkontroll": solo tier — projects + AI egenkontroll only.
+const EGENKONTROLL = ["projects", "kma"];
+
 // "Komplett": everything, incl. offers, invoices, expenses, payroll, profitability.
 const KOMPLETT = [...TOGGLEABLE_MODULES];
 
@@ -116,6 +119,7 @@ export const PLAN_MODULES: Record<string, string[]> = {
   faktura: FAKTURA,
   projekt: PROJEKT,
   komplett: KOMPLETT,
+  egenkontroll: EGENKONTROLL,
   start: START,
   tillvaxt: TILLVAXT,
   professionell: PROFESSIONELL,

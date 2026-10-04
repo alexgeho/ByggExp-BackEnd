@@ -36,8 +36,8 @@ export class ChecklistItemSuggestionDto {
   confidence?: number;
 
   @IsOptional()
-  @IsIn(["pending", "accepted", "rejected"])
-  state?: "pending" | "accepted" | "rejected";
+  @IsIn(["pending", "auto", "accepted", "rejected"])
+  state?: "pending" | "auto" | "accepted" | "rejected";
 }
 
 export class ChecklistItemDto {

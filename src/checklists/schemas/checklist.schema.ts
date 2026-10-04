@@ -6,8 +6,9 @@ import {
   ChecklistStatus,
 } from "./checklist.enums";
 
-// AI proposal for one control point, made from a site photo. Never applied on
-// its own: a human accepts (copies it into result/date/photos) or rejects it.
+// AI result for one control point, made from a site photo. Applied straight
+// away ("auto": result/date/photo filled in) — the user can undo it (rejected)
+// and still signs the checklist themselves. "pending" = legacy, not applied.
 @Schema({ _id: false })
 export class ChecklistItemSuggestion {
   @Prop({ type: String, enum: ChecklistItemResult, default: ChecklistItemResult.Ok })
@@ -25,8 +26,12 @@ export class ChecklistItemSuggestion {
   @Prop({ default: 0 })
   confidence: number;
 
-  @Prop({ type: String, enum: ["pending", "accepted", "rejected"], default: "pending" })
-  state: "pending" | "accepted" | "rejected";
+  @Prop({
+    type: String,
+    enum: ["pending", "auto", "accepted", "rejected"],
+    default: "auto",
+  })
+  state: "pending" | "auto" | "accepted" | "rejected";
 }
 
 const ChecklistItemSuggestionSchema = SchemaFactory.createForClass(
