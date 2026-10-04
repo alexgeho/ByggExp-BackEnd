@@ -20,4 +20,13 @@ describe("sanitizeSignupSource", () => {
   it("ignores non-string values", () => {
     expect(sanitizeSignupSource({ utmSource: 5 }, "").utmSource).toBe("");
   });
+
+  it("keeps only well-formed GA ids", () => {
+    const s = sanitizeSignupSource(
+      { gaClientId: "123.456", gaSessionId: "<script>" },
+      "",
+    );
+    expect(s.gaClientId).toBe("123.456");
+    expect(s.gaSessionId).toBe("");
+  });
 });

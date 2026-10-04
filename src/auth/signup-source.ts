@@ -11,6 +11,8 @@ export type SignupSource = {
   referrer: string;
   landing: string;
   client: "web" | "app";
+  gaClientId: string;
+  gaSessionId: string;
   campaign: string;
   campaignClicked: boolean;
 };
@@ -42,5 +44,13 @@ export function sanitizeSignupSource(
   // The web register page always sends a source object; the mobile app doesn't
   // (and its HTTP client isn't a browser).
   const client = raw || /Mozilla/i.test(userAgent) ? "web" : "app";
-  return { ...out, client };
+  // GA ids from the visitor's _ga cookies — digits and dots only.
+  const gaId = (v: unknown) =>
+    typeof v === "string" && /^[0-9.]{1,40}$/.test(v) ? v : "";
+  return {
+    ...out,
+    client,
+    gaClientId: gaId(src.gaClientId),
+    gaSessionId: gaId(src.gaSessionId),
+  };
 }

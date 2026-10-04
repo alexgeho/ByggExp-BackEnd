@@ -22,6 +22,7 @@ import { CompanyService } from "../company/company.service";
 import { RegisterCompanyWithAdminDto } from "../company/dto/register-company-with-admin.dto";
 import { RegisterCompanyPublicDto } from "./dto/register-company-public.dto";
 import { sanitizeSignupSource } from "./signup-source";
+import { sendGaEvent } from "../analytics/ga-measurement";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import {
   Campaign,
@@ -367,15 +368,28 @@ export class AuthService {
           .findById(recipient.campaignId, { name: 1 })
           .lean()
       : null;
-    await this.companyModel.updateOne(
-      { _id: companyId },
+    const signupSource = {
+      ...(source || {}),
+      campaign: campaign?.name || "",
+      campaignClicked: !!recipient?.clickedAt,
+    };
+    await this.companyModel.updateOne({ _id: companyId }, { signupSource });
+
+    // GA4 key event; joins the visitor's web session when the ids are known.
+    const str = (v: unknown) => (typeof v === "string" ? v : "");
+    sendGaEvent(
+      "sign_up",
       {
-        signupSource: {
-          ...(source || {}),
-          campaign: campaign?.name || "",
-          campaignClicked: !!recipient?.clickedAt,
-        },
+        method: "email",
+        signup_client: str(signupSource["client"]) || "web",
+        ...(campaign?.name ? { mailer_campaign: campaign.name } : {}),
       },
+      {
+        clientId: str(signupSource["gaClientId"]),
+        sessionId: str(signupSource["gaSessionId"]),
+      },
+    ).catch((error) =>
+      this.logger.warn(`GA sign_up event failed: ${String(error)}`),
     );
   }
 
