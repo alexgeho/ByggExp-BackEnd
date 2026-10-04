@@ -67,9 +67,49 @@ export class ChecklistItemDto {
   photoUrls?: string[];
 
   @IsOptional()
+  @IsString()
+  method?: string;
+
+  @IsOptional()
+  @IsString()
+  measuredValue?: string;
+
+  @IsOptional()
+  @IsString()
+  unit?: string;
+
+  @IsOptional()
+  @IsString()
+  checkedByName?: string;
+
+  @IsOptional()
+  @IsString()
+  action?: string;
+
+  @IsOptional()
+  @IsString()
+  actionDoneAt?: string;
+
+  @IsOptional()
   @ValidateNested()
   @Type(() => ChecklistItemSuggestionDto)
   suggestion?: ChecklistItemSuggestionDto | null;
+}
+
+export const TRADES = ["", "vvs", "vatrum", "el"];
+
+export class ChecklistTradeInfoDto {
+  @IsOptional()
+  @IsString()
+  scope?: string;
+
+  @IsOptional()
+  @IsString()
+  part?: string;
+
+  @IsOptional()
+  @IsString()
+  rulesVersion?: string;
 }
 
 export class CreateChecklistDto {
@@ -99,6 +139,15 @@ export class CreateChecklistDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsIn(TRADES)
+  trade?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ChecklistTradeInfoDto)
+  tradeInfo?: ChecklistTradeInfoDto | null;
 
   @IsOptional()
   @IsArray()
@@ -131,6 +180,15 @@ export class UpdateChecklistDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsIn(TRADES)
+  trade?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ChecklistTradeInfoDto)
+  tradeInfo?: ChecklistTradeInfoDto | null;
 
   @IsOptional()
   @IsArray()

@@ -90,11 +90,52 @@ export class ChecklistItem {
   @Prop({ type: [String], default: [] })
   photoUrls: string[];
 
+  // Metod — how the point is checked (visuell, mätning, provtryckning …).
+  @Prop({ default: "" })
+  method: string;
+
+  // Mätvärde + enhet, e.g. "250" + "MΩ" (optional).
+  @Prop({ default: "" })
+  measuredValue: string;
+
+  @Prop({ default: "" })
+  unit: string;
+
+  // Vem — who performed/approved the check.
+  @Prop({ default: "" })
+  checkedByName: string;
+
+  // Avvikelse → åtgärd: for a remark, what was done and when (YYYY-MM-DD).
+  // A remark without actionDoneAt is an open deviation.
+  @Prop({ default: "" })
+  action: string;
+
+  @Prop({ default: "" })
+  actionDoneAt: string;
+
   @Prop({ type: ChecklistItemSuggestionSchema, default: null })
   suggestion?: ChecklistItemSuggestion | null;
 }
 
 const ChecklistItemSchema = SchemaFactory.createForClass(ChecklistItem);
+
+// Trade-specific header (e.g. Intyg om Säker Vatteninstallation).
+@Schema({ _id: false })
+export class ChecklistTradeInfo {
+  // Omfattning — what the installation covers.
+  @Prop({ default: "" })
+  scope: string;
+
+  // Byggnad / del of the building.
+  @Prop({ default: "" })
+  part: string;
+
+  // Branschregler version, e.g. "2026:1" (Säker Vatten).
+  @Prop({ default: "" })
+  rulesVersion: string;
+}
+
+const ChecklistTradeInfoSchema = SchemaFactory.createForClass(ChecklistTradeInfo);
 
 export type ChecklistDocument = HydratedDocument<Checklist>;
 
@@ -125,6 +166,13 @@ export class Checklist {
 
   @Prop({ default: "" })
   notes: string;
+
+  // Trade preset the points follow: "vvs" | "vatrum" | "el" | "".
+  @Prop({ default: "" })
+  trade: string;
+
+  @Prop({ type: ChecklistTradeInfoSchema, default: null })
+  tradeInfo?: ChecklistTradeInfo | null;
 
   @Prop({ type: [ChecklistItemSchema], default: [] })
   items: ChecklistItem[];

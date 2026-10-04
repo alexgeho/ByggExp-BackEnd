@@ -34,17 +34,24 @@ Svara ENDAST med ett JSON-objekt (ingen text runt, inga kodblock):
 {
   "title": string,      // kort titel, t.ex. "Egenkontroll badrumsrenovering – Storgatan 5"
   "category": string,   // "quality" | "environment" | "work_environment" | "other"
+  "trade": string,      // "vvs" (tappvatten/värme/avlopp) | "vatrum" (tätskikt i våtrum) | "el" (elinstallation) | "" — det huvudsakliga arbetet
+  "tradeInfo": { "scope": string, "part": string }, // endast vvs: omfattning och byggnad/del enligt dokumentet, annars ""
   "items": [
-    { "text": string,       // vad som kontrolleras och hur (metod), en kort mening, på svenska
+    { "text": string,       // vad som kontrolleras, en kort mening, på svenska
+      "method": string,     // hur: "Visuell kontroll" | "Mätning" | "Provtryckning" | "Provning" | "Dokumentkontroll" | "Funktionskontroll"
+      "unit": string,       // enhet om punkten har ett mätvärde (t.ex. "mm", "bar", "MΩ", "Ω", "ms"), annars ""
       "reference": string } // krav/underlag, annars ""
   ]
 }
 
 Regler:
 - 5–25 punkter, i den ordning arbetet utförs.
-- Varje punkt ska gå att verifiera på plats, gärna med ett foto.
+- Varje punkt ska gå att verifiera på plats, gärna med ett foto eller ett mätvärde.
 - Hitta inte på mått, märken eller adresser som inte står i dokumentet.
-- reference: skriv bara ett krav du är helt säker på gäller just den punkten — t.ex. "GVK Våtrumsregler", "Säker Vatten", "SS 436 40 00" (endast elinstallation), "BBR 6:5" (fukt/våtrum), "tillverkarens anvisning" eller en handling som nämns i dokumentet. Skriv aldrig ut förkortningar på egen hand. Är du osäker: "".`;
+- Våtrum: börja med "Förkontroll underlag" och ha med "Egenkontroll tätskikt".
+- El: ha med kontroll före idrifttagning med mätvärden (isolationsresistans MΩ, kontinuitet skyddsledare Ω, jordfelsbrytare ms).
+- VVS: ha med täthetskontroll (provtryckning, bar).
+- reference: skriv bara ett krav du är helt säker på gäller just den punkten — t.ex. "GVK Säkra Våtrum", "Säker Vatten", "SS 436 40 00" (endast elinstallation), "BBR 6:5" (fukt/våtrum), "tillverkarens anvisning" eller en handling som nämns i dokumentet. Skriv aldrig ut förkortningar på egen hand. Är du osäker: "".`;
 
 function matchPrompt(items: { text: string; reference: string }[], photos: AiPhoto[]) {
   const list = items

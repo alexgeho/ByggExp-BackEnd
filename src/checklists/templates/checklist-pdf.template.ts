@@ -4,6 +4,12 @@ export type ChecklistPdfItem = {
   result?: string;
   comment?: string;
   date?: string;
+  method?: string;
+  measuredValue?: string;
+  unit?: string;
+  checkedByName?: string;
+  action?: string;
+  actionDoneAt?: string;
   photos?: string[]; // data URIs
 };
 
@@ -16,6 +22,9 @@ export type ChecklistPdfData = {
   date?: string;
   responsible?: string;
   notes?: string;
+  // Intyg om Säker Vatteninstallation header (VVS only).
+  tradeInfo?: { scope?: string; part?: string; rulesVersion?: string } | null;
+  trade?: string;
   items: ChecklistPdfItem[];
   signedByName?: string;
   signedAt?: string;
@@ -45,9 +54,21 @@ const RESULT_COLORS: Record<string, string> = {
 };
 
 export function buildChecklistHtml(data: ChecklistPdfData): string {
-  const rows = (data.items || [])
+  const items = data.items || [];
+  // Optional columns only when some point uses them.
+  const hasMethod = items.some((it) => it.method);
+  const hasValue = items.some((it) => it.measuredValue);
+  const rows = items
     .map((item, i) => {
       const result = item.result || "pending";
+      const value = item.measuredValue
+        ? `${item.measuredValue}${item.unit ? ` ${item.unit}` : ""}`
+        : "";
+      const action = item.action
+        ? `<div class="act">Åtgärd: ${esc(item.action)}${
+            item.actionDoneAt ? ` · ${esc(item.actionDoneAt)}` : ""
+          }</div>`
+        : "";
       return `
         <tr>
           <td class="num">${i + 1}</td>
@@ -55,11 +76,15 @@ export function buildChecklistHtml(data: ChecklistPdfData): string {
             <div class="pt">${esc(item.text)}</div>
             ${item.reference ? `<div class="ref">${esc(item.reference)}</div>` : ""}
           </td>
+          ${hasMethod ? `<td class="mt">${esc(item.method)}</td>` : ""}
+          ${hasValue ? `<td class="mv">${esc(value)}</td>` : ""}
           <td class="res" style="color:${RESULT_COLORS[result] || "#334155"}">
             ${esc(RESULT_LABELS[result] || result)}
           </td>
-          <td class="dt">${esc(item.date)}</td>
-          <td class="cmt">${esc(item.comment)}${
+          <td class="dt">${esc(item.checkedByName)}${
+            item.checkedByName && item.date ? "<br/>" : ""
+          }${esc(item.date)}</td>
+          <td class="cmt">${esc(item.comment)}${action}${
             item.photos?.length
               ? `<div class="ph">${item.photos.map((src) => `<img src="${src}" />`).join("")}</div>`
               : ""
@@ -67,6 +92,33 @@ export function buildChecklistHtml(data: ChecklistPdfData): string {
         </tr>`;
     })
     .join("");
+
+  // Avvikelser without a completed åtgärd.
+  const open = items
+    .map((it, i) => ({ it, n: i + 1 }))
+    .filter(({ it }) => it.result === "remark" && !it.actionDoneAt);
+  const openHtml = open.length
+    ? `<div class="notes"><div class="label">Öppna avvikelser</div>${open
+        .map(
+          ({ it, n }) =>
+            `<div>${n}. ${esc(it.text)}${it.comment ? ` — ${esc(it.comment)}` : ""}${
+              it.action ? ` · Åtgärd: ${esc(it.action)}` : ""
+            }</div>`,
+        )
+        .join("")}</div>`
+    : "";
+
+  const ti = data.trade === "vvs" ? data.tradeInfo : null;
+  const intyg = ti
+    ? `<div class="intyg">
+        <div class="label">Intyg om Säker Vatteninstallation</div>
+        <div class="meta">
+          <div class="row"><span class="label">Omfattning</span><span class="val">${esc(ti.scope) || "—"}</span></div>
+          <div class="row"><span class="label">Byggnad/del</span><span class="val">${esc(ti.part) || "—"}</span></div>
+          <div class="row"><span class="label">Branschregler</span><span class="val">Säker Vatten ${esc(ti.rulesVersion) || "—"}</span></div>
+        </div>
+      </div>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="sv">
@@ -90,7 +142,12 @@ export function buildChecklistHtml(data: ChecklistPdfData): string {
   td.num { width: 28px; color: #94a3b8; }
   td.res { width: 90px; font-weight: 600; }
   td.cmt { width: 30%; color: #334155; }
-  td.dt { width: 76px; color: #334155; white-space: nowrap; }
+  td.dt { width: 96px; color: #334155; }
+  td.mt { width: 80px; color: #334155; }
+  td.mv { width: 64px; color: #334155; white-space: nowrap; }
+  .act { margin-top: 4px; color: #0f172a; }
+  .intyg { margin-bottom: 18px; }
+  .intyg > .label { font-weight: 600; margin-bottom: 6px; }
   .ph { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
   .ph img { width: 72px; height: 72px; object-fit: cover; border-radius: 3px; }
   tr { page-break-inside: avoid; }
@@ -122,12 +179,18 @@ export function buildChecklistHtml(data: ChecklistPdfData): string {
     <div class="row"><span class="label">Kategori</span><span class="val">${esc(data.categoryLabel) || "—"}</span></div>
   </div>
 
+  ${intyg}
+
   <table>
     <thead>
-      <tr><th>#</th><th>Kontrollpunkt</th><th>Resultat</th><th>Datum</th><th>Kommentar</th></tr>
+      <tr><th>#</th><th>Kontrollpunkt</th>${hasMethod ? "<th>Metod</th>" : ""}${
+        hasValue ? "<th>Mätvärde</th>" : ""
+      }<th>Resultat</th><th>Kontrollerad av</th><th>Kommentar</th></tr>
     </thead>
     <tbody>${rows}</tbody>
   </table>
+
+  ${openHtml}
 
   ${
     data.notes

@@ -24,7 +24,58 @@ describe("egenkontroll AI logic", () => {
     });
     expect(d.title).toBe("Egenkontroll");
     expect(d.category).toBe("quality");
-    expect(d.items).toEqual([{ text: "Golvbrunn monterad", reference: "GVK" }]);
+    expect(d.trade).toBe("");
+    expect(d.tradeInfo).toBeNull();
+    expect(d.items).toEqual([
+      { text: "Golvbrunn monterad", reference: "GVK", method: "", unit: "" },
+    ]);
+  });
+
+  it("keeps method and unit from the model", () => {
+    const d = normalizeDraft({
+      items: [{ text: "Fall mot brunn", method: "Mätning", unit: "mm", reference: "" }],
+    });
+    expect(d.items[0]).toMatchObject({ method: "Mätning", unit: "mm" });
+  });
+
+  it("våtrum: Förkontroll underlag first, tätskikt added once", () => {
+    const d = normalizeDraft({
+      trade: "vatrum",
+      items: [{ text: "Egenkontroll tätskikt golv" }, { text: "Golvbrunn" }],
+    });
+    expect(d.items.map((i) => i.text)).toEqual([
+      "Förkontroll underlag",
+      "Egenkontroll tätskikt golv",
+      "Golvbrunn",
+    ]);
+  });
+
+  it("el: adds kontroll före idrifttagning with units", () => {
+    const d = normalizeDraft({ trade: "EL", items: [{ text: "Uttag monterade" }] });
+    expect(d.trade).toBe("el");
+    expect(d.items.slice(1).map((i) => i.unit)).toEqual(["MΩ", "Ω", "ms"]);
+    expect(d.items.every((i) => !i.reference || i.reference === "SS 436 40 00")).toBe(true);
+  });
+
+  it("vvs: Säker Vatten intyg header with version 2026:1", () => {
+    const d = normalizeDraft({
+      trade: "vvs",
+      tradeInfo: { scope: "Tappvatten kök", part: "Lgh 1101" },
+      items: [{ text: "Provtryckning av ledningar", unit: "bar" }],
+    });
+    expect(d.tradeInfo).toEqual({
+      scope: "Tappvatten kök",
+      part: "Lgh 1101",
+      rulesVersion: "2026:1",
+    });
+    expect(d.items.map((i) => i.text)).toEqual([
+      "Provtryckning av ledningar",
+      "Intyg om Säker Vatteninstallation upprättat",
+    ]);
+  });
+
+  it("ignores unknown trades", () => {
+    expect(normalizeDraft({ trade: "måleri", items: [] }).trade).toBe("");
   });
 
   it("clamps confidence and coerces numbers in matches", () => {

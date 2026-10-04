@@ -2,31 +2,124 @@ import { ChecklistItemResult } from "./schemas/checklist.enums";
 
 // Pure helpers for AI egenkontroll — no I/O, unit-tested in the spec.
 
-export type DraftItem = { text: string; reference: string };
+export type DraftItem = {
+  text: string;
+  reference: string;
+  method: string;
+  unit: string;
+};
+export type DraftTradeInfo = { scope: string; part: string; rulesVersion: string };
 export type DraftChecklist = {
   title: string;
   category: string;
+  trade: string; // "vvs" | "vatrum" | "el" | ""
+  tradeInfo: DraftTradeInfo | null;
   items: DraftItem[];
 };
 
 const CATEGORIES = ["quality", "environment", "work_environment", "other"];
+export const TRADES = ["vvs", "vatrum", "el"];
+
+// Säker Vatten branschregler version written on the intyg.
+export const SAKER_VATTEN_VERSION = "2026:1";
+
+const point = (text: string, reference: string, method: string, unit = ""): DraftItem => ({
+  text,
+  reference,
+  method,
+  unit,
+});
+
+// Points each trade must contain. `key` matches an existing AI point
+// (case-insensitive) so a preset point is only added when it is missing.
+// References are the governing rules only — nothing invented.
+const TRADE_POINTS: Record<string, { key: RegExp; item: DraftItem; first?: boolean }[]> = {
+  vatrum: [
+    {
+      key: /förkontroll/i,
+      item: point("Förkontroll underlag", "GVK Säkra Våtrum", "Visuell kontroll"),
+      first: true,
+    },
+    {
+      key: /egenkontroll tätskikt/i,
+      item: point("Egenkontroll tätskikt", "GVK Säkra Våtrum", "Visuell kontroll"),
+    },
+  ],
+  vvs: [
+    {
+      key: /täthet|provtryck|tryckprov/i,
+      item: point("Täthetskontroll tappvatteninstallation", "Säker Vatten", "Provtryckning", "bar"),
+    },
+    {
+      key: /intyg om säker vatten/i,
+      item: point("Intyg om Säker Vatteninstallation upprättat", "Säker Vatten", "Dokumentkontroll"),
+    },
+  ],
+  el: [
+    {
+      key: /isolationsresistans/i,
+      item: point(
+        "Kontroll före idrifttagning – isolationsresistans",
+        "SS 436 40 00",
+        "Mätning",
+        "MΩ",
+      ),
+    },
+    {
+      key: /kontinuitet/i,
+      item: point(
+        "Kontroll före idrifttagning – kontinuitet skyddsledare",
+        "SS 436 40 00",
+        "Mätning",
+        "Ω",
+      ),
+    },
+    {
+      key: /jordfelsbrytare/i,
+      item: point(
+        "Kontroll före idrifttagning – jordfelsbrytare, utlösningstid",
+        "SS 436 40 00",
+        "Provning",
+        "ms",
+      ),
+    },
+  ],
+};
 
 export function normalizeDraft(raw: unknown): DraftChecklist {
   const r = (raw || {}) as Record<string, unknown>;
-  const items = Array.isArray(r.items) ? r.items : [];
+  const list = Array.isArray(r.items) ? r.items : [];
+  const trade = TRADES.includes(str(r.trade).toLowerCase()) ? str(r.trade).toLowerCase() : "";
+  let items: DraftItem[] = list
+    .map((it) => {
+      const o = (it || {}) as Record<string, unknown>;
+      return {
+        text: str(o.text).slice(0, 300),
+        reference: str(o.reference).slice(0, 200),
+        method: str(o.method).slice(0, 80),
+        unit: str(o.unit).slice(0, 12),
+      };
+    })
+    .filter((it) => it.text);
+  for (const preset of TRADE_POINTS[trade] || []) {
+    if (items.some((it) => preset.key.test(it.text))) continue;
+    items = preset.first ? [preset.item, ...items] : [...items, preset.item];
+  }
+  const info = (r.tradeInfo || {}) as Record<string, unknown>;
   return {
     title: str(r.title).slice(0, 120) || "Egenkontroll",
     category: CATEGORIES.includes(str(r.category)) ? str(r.category) : "quality",
-    items: items
-      .map((it) => {
-        const o = (it || {}) as Record<string, unknown>;
-        return {
-          text: str(o.text).slice(0, 300),
-          reference: str(o.reference).slice(0, 200),
-        };
-      })
-      .filter((it) => it.text)
-      .slice(0, 60),
+    trade,
+    // Säker Vatten intyg header: omfattning, byggnad/del, branschregler.
+    tradeInfo:
+      trade === "vvs"
+        ? {
+            scope: str(info.scope).slice(0, 200),
+            part: str(info.part).slice(0, 200),
+            rulesVersion: SAKER_VATTEN_VERSION,
+          }
+        : null,
+    items: items.slice(0, 60),
   };
 }
 

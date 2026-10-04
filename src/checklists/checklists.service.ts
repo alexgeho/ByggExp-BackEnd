@@ -158,6 +158,8 @@ export class ChecklistsService {
       date: dto.date || "",
       responsible: dto.responsible || "",
       notes: dto.notes || "",
+      trade: dto.trade || "",
+      tradeInfo: dto.tradeInfo || null,
       items: items || [],
       sourceDocument: dto.sourceDocument || null,
       status: ChecklistStatus.Draft,
@@ -405,6 +407,8 @@ export class ChecklistsService {
       date: doc.date,
       responsible: doc.responsible,
       notes: doc.notes,
+      trade: doc.trade,
+      tradeInfo: doc.tradeInfo,
       items: await Promise.all(
         (doc.items || []).map(async (it) => ({
           text: it.text,
@@ -412,6 +416,12 @@ export class ChecklistsService {
           result: it.result,
           comment: it.comment,
           date: it.date,
+          method: it.method,
+          measuredValue: it.measuredValue,
+          unit: it.unit,
+          checkedByName: it.checkedByName,
+          action: it.action,
+          actionDoneAt: it.actionDoneAt,
           photos: (
             await Promise.all((it.photoUrls || []).slice(0, 4).map((u) => this.thumbDataUri(u)))
           ).filter((x): x is string => Boolean(x)),
