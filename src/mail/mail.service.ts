@@ -152,7 +152,7 @@ export class MailService {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef4fb;padding:24px 0;">
       <tr><td align="center">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;">
-          <tr><td align="center" style="padding:28px 24px 8px;">${logo}</td></tr>
+          <tr><td align="center" style="padding:32px 24px 8px;">${logo}</td></tr>
           <tr><td style="padding:8px 32px 32px;font-family:Arial,Helvetica,sans-serif;color:#052d50;font-size:15px;line-height:1.55;">
             ${innerHtml}
           </td></tr>
@@ -359,12 +359,15 @@ export class MailService {
       "Öppna länken nedan för att bekräfta din e-post och slutföra skapandet av ditt ByggExp-konto — du loggas in automatiskt:",
       confirmUrl,
       "",
+      "Sedan jobbar du på webben eller i ByggExp-appen (iPhone och Android).",
+      "",
       "Denna länk går ut om 24 timmar. Om du inte begärde detta kan du ignorera mejlet.",
     ].join("\n");
     const html = this.brandedHtml(`
       <p style="margin:0 0 12px;">Hej ${safeName},</p>
       <p style="margin:0 0 20px;">Öppna länken nedan för att bekräfta din e-post och slutföra skapandet av ditt ByggExp-konto — du loggas in automatiskt:</p>
       <p style="margin:0 0 20px;"><a href="${confirmUrl}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Bekräfta e-post och skapa konto</a></p>
+      <p style="margin:0 0 20px;">Sedan jobbar du på webben eller i ByggExp-appen (iPhone och Android).</p>
       <p style="color:#5a6b7d;font-size:13px;margin:0;">Denna länk går ut om 24 timmar. Om du inte begärde detta kan du ignorera mejlet.</p>
     `);
 
