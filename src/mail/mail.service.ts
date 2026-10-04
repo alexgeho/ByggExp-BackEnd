@@ -367,7 +367,7 @@ export class MailService {
       <p style="margin:0 0 12px;">Hej ${name},</p>
       <p style="margin:0 0 12px;">Ditt företag <strong>${companyName}</strong> är uppsatt på <strong>ByggExp</strong> och din <strong>${opts.trialDays} dagar långa gratis provperiod</strong> har börjat (upp till <strong>${opts.maxUsers} användare</strong>).</p>
       <p style="margin:0 0 20px;">Logga in i mobilappen och i webbadmin med din e-post och lösenordet du valde vid registreringen.</p>
-      <p style="margin:0 0 20px;"><a href="${adminLink}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Logga in i webbadmin</a></p>
+      <p style="margin:0 0 20px;"><a href="${adminLink}" style="display:inline-block;text-align:center;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Logga in i webbadmin</a></p>
       <p style="margin:0;">Välkommen ombord!</p>
     `);
 
@@ -411,7 +411,7 @@ export class MailService {
     const html = this.brandedHtml(`
       <p style="margin:0 0 12px;">Hej ${safeName},</p>
       <p style="margin:0 0 20px;">Öppna länken nedan för att bekräfta din e-post och slutföra skapandet av ditt ByggExp-konto — du loggas in automatiskt:</p>
-      <p style="margin:0 0 20px;"><a href="${confirmUrl}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Bekräfta e-post och skapa konto</a></p>
+      <p style="margin:0 0 20px;"><a href="${confirmUrl}" style="display:inline-block;text-align:center;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Bekräfta e-post och skapa konto</a></p>
       <p style="margin:0 0 20px;">Sedan jobbar du på webben eller i ByggExp-appen (iPhone och Android).</p>
       <p class="bx-muted" style="color:#5a6b7d;font-size:13px;margin:0;">Denna länk går ut om 24 timmar. Om du inte begärde detta kan du ignorera mejlet.</p>
     `);
@@ -451,7 +451,7 @@ export class MailService {
     const html = this.brandedHtml(`
       <p style="margin:0 0 12px;">${this.escapeHtml(copy.hi)}</p>
       <p style="margin:0 0 20px;">${copy.intro}</p>
-      <p style="margin:0 0 20px;"><a href="${resetUrl}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">${copy.button}</a></p>
+      <p style="margin:0 0 20px;"><a href="${resetUrl}" style="display:inline-block;text-align:center;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">${copy.button}</a></p>
       <p class="bx-muted" style="color:#5a6b7d;font-size:13px;margin:0;">${copy.expires}</p>
     `);
 
