@@ -2,6 +2,7 @@ import { parseJsonObject } from "../common/anthropic.client";
 import {
   normalizeDraft,
   normalizeMatches,
+  pendingCount,
   pickSuggestions,
   toIsoDate,
 } from "./egenkontroll-ai.logic";
@@ -126,5 +127,11 @@ describe("egenkontroll AI logic", () => {
     expect(toIsoDate(new Date("2026-10-04T12:00:00Z"))).toBe("2026-10-04");
     expect(toIsoDate("garbage")).toBe("");
     expect(toIsoDate(null)).toBe("");
+  });
+
+  it("counts unanswered points (blocks signing)", () => {
+    expect(pendingCount([{ result: "ok" }, { result: "pending" }, {}])).toBe(2);
+    expect(pendingCount([{ result: "ok" }, { result: "na" }])).toBe(0);
+    expect(pendingCount(undefined)).toBe(0);
   });
 });

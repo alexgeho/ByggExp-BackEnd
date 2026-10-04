@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -18,7 +19,7 @@ import {
   SignChecklistDto,
   UpdateChecklistDto,
 } from "./dto/checklist.dto";
-import { toIsoDate } from "./egenkontroll-ai.logic";
+import { pendingCount, toIsoDate } from "./egenkontroll-ai.logic";
 import { EgenkontrollAiService } from "./egenkontroll-ai.service";
 import { CreateTemplateDto, UpdateTemplateDto } from "./dto/template.dto";
 import { Checklist, ChecklistDocument } from "./schemas/checklist.schema";
@@ -377,6 +378,12 @@ export class ChecklistsService {
 
   async signChecklist(id: string, dto: SignChecklistDto, user: AuthUser) {
     const doc = await this.findChecklist(id, user);
+    const left = pendingCount(doc.items);
+    if (left > 0) {
+      throw new BadRequestException(
+        `Alla punkter måste besvaras innan signering (${left} kvar).`,
+      );
+    }
     doc.status = ChecklistStatus.Signed;
     doc.signedByName = dto.signedByName || doc.signedByName || "";
     doc.signedByUserId = this.userId(user);

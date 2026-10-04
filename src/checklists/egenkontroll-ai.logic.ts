@@ -209,3 +209,8 @@ export function toIsoDate(d?: Date | string | null): string {
 function str(v: unknown): string {
   return v == null ? "" : String(v).trim();
 }
+
+// Points still unanswered — signing is only allowed when this is 0.
+export function pendingCount(items?: { result?: string | null }[] | null): number {
+  return (items || []).filter((it) => !it?.result || it.result === "pending").length;
+}
