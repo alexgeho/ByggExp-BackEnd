@@ -28,22 +28,23 @@ export const MAX_PHOTOS_PER_ANALYSIS = 10;
 
 const DRAFT_PROMPT = `Du är kvalitetsansvarig på ett svenskt byggföretag. Bifogat är ett avtal, en arbetsbeskrivning eller en offert för ett arbete.
 
-Skapa en egenkontroll för entreprenören: de kontrollpunkter som visar att arbetet i dokumentet är rätt utfört. Utgå från arbetsmomenten i dokumentet och lägg till relevanta krav (BBR, Säker Vatten, GVK/BKR, SS 436 40 00, AMA, tillverkarens anvisning) där de är tillämpliga.
+Skapa en egenkontroll för entreprenören: de kontrollpunkter som visar att arbetet i dokumentet är rätt utfört. Utgå från arbetsmomenten i dokumentet.
 
 Svara ENDAST med ett JSON-objekt (ingen text runt, inga kodblock):
 {
   "title": string,      // kort titel, t.ex. "Egenkontroll badrumsrenovering – Storgatan 5"
   "category": string,   // "quality" | "environment" | "work_environment" | "other"
   "items": [
-    { "text": string,       // vad som kontrolleras och hur (metod), en mening, på svenska
-      "reference": string } // krav/underlag, t.ex. "BBV 21:1, GVK" eller "Ritning A-40-1-01", annars ""
+    { "text": string,       // vad som kontrolleras och hur (metod), en kort mening, på svenska
+      "reference": string } // krav/underlag, annars ""
   ]
 }
 
 Regler:
 - 5–25 punkter, i den ordning arbetet utförs.
 - Varje punkt ska gå att verifiera på plats, gärna med ett foto.
-- Hitta inte på mått, märken eller adresser som inte står i dokumentet.`;
+- Hitta inte på mått, märken eller adresser som inte står i dokumentet.
+- reference: skriv bara ett krav du är helt säker på gäller just den punkten — t.ex. "GVK Våtrumsregler", "Säker Vatten", "SS 436 40 00" (endast elinstallation), "BBR 6:5" (fukt/våtrum), "tillverkarens anvisning" eller en handling som nämns i dokumentet. Skriv aldrig ut förkortningar på egen hand. Är du osäker: "".`;
 
 function matchPrompt(items: { text: string; reference: string }[], photos: AiPhoto[]) {
   const list = items
@@ -73,7 +74,7 @@ Svara ENDAST med JSON:
 export class EgenkontrollAiService {
   private readonly logger = new Logger(EgenkontrollAiService.name);
   private readonly docModel =
-    process.env.EGENKONTROLL_DOC_MODEL || "claude-haiku-4-5-20251001";
+    process.env.EGENKONTROLL_DOC_MODEL || "claude-sonnet-5-5";
   private readonly photoModel =
     process.env.EGENKONTROLL_PHOTO_MODEL || "claude-sonnet-5-5";
 
