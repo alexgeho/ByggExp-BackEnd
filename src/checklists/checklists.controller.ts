@@ -31,7 +31,7 @@ import {
   UpdateChecklistDto,
 } from "./dto/checklist.dto";
 import { CreateTemplateDto, UpdateTemplateDto } from "./dto/template.dto";
-import { ChecklistsService, UploadedPhoto } from "./checklists.service";
+import { ChecklistsService, PhotoMeta, UploadedPhoto } from "./checklists.service";
 
 const IMAGE_OR_HEIC = /^image\/|heic|heif/i;
 
@@ -46,6 +46,18 @@ const photoStorage = diskStorage({
     cb(null, `foto-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
   },
 });
+
+// Optional per-file metadata from the app (same order as the files): the
+// camera often strips EXIF, so the phone sends when/where the photo was taken.
+function parsePhotoMeta(raw?: string): PhotoMeta[] {
+  if (!raw) return [];
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
 
 function saveSourceDocument(file: { buffer: Buffer; originalname: string }) {
   const dir = "./uploads/checklist-documents";
@@ -163,9 +175,10 @@ export class ChecklistsController {
     @Request() req,
     @Param("id") id: string,
     @UploadedFiles() files: UploadedPhoto[] | undefined,
+    @Body("meta") meta?: string,
   ) {
     if (!files?.length) throw new BadRequestException("No photos uploaded");
-    return this.service.addPhotos(id, files, req.user);
+    return this.service.addPhotos(id, files, req.user, parsePhotoMeta(meta));
   }
 
   @Post(":id/analyze")

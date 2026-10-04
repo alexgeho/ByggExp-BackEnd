@@ -43,6 +43,8 @@ type AuthUser = {
   email?: string;
 };
 
+export type PhotoMeta = { takenAt?: string; lat?: number; lng?: number };
+
 export type UploadedPhoto = {
   filename: string;
   originalname: string;
@@ -215,19 +217,29 @@ export class ChecklistsService {
   }
 
   // Stores site photos (EXIF date/GPS kept) and lets the AI propose results.
-  async addPhotos(id: string, files: UploadedPhoto[], user: AuthUser) {
+  async addPhotos(
+    id: string,
+    files: UploadedPhoto[],
+    user: AuthUser,
+    meta: PhotoMeta[] = [],
+  ) {
     const doc = await this.findChecklist(id, user);
     if (doc.status === ChecklistStatus.Signed) {
       throw new ForbiddenException("A signed checklist can no longer be edited");
     }
-    for (const file of files) {
-      const meta = await this.readExif(file.path);
+    for (const [i, file] of files.entries()) {
+      const exif = await this.readExif(file.path);
+      const sent = meta[i] || {};
+      const sentDate = sent.takenAt ? new Date(sent.takenAt) : null;
+      const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
       doc.photos.push({
         url: `/uploads/checklist-photos/${file.filename}`,
         name: file.originalname || file.filename,
-        takenAt: meta.takenAt,
-        lat: meta.lat,
-        lng: meta.lng,
+        takenAt:
+          exif.takenAt ||
+          (sentDate && !Number.isNaN(sentDate.getTime()) ? sentDate : null),
+        lat: exif.lat ?? num(sent.lat),
+        lng: exif.lng ?? num(sent.lng),
         uploadedAt: new Date(),
         uploadedByName: user.email || "",
         analyzed: false,
