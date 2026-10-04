@@ -239,11 +239,11 @@ export class ChecklistsService {
   }
 
   // Re-runs the AI over every photo (e.g. after editing the points).
-  async analyze(id: string, user: AuthUser, debug = false) {
+  async analyze(id: string, user: AuthUser) {
     const doc = await this.findChecklist(id, user);
     if (doc.status === ChecklistStatus.Signed) return doc;
     await this.runAnalysis(doc, true);
-    return debug ? { checklist: doc, reply: this.ai.lastPhotoReply } : doc;
+    return doc;
   }
 
   private async runAnalysis(doc: ChecklistDocument, all: boolean) {

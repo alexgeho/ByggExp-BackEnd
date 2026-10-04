@@ -58,12 +58,12 @@ ${dates}
 Kontrollpunkter:
 ${list}
 
-För varje kontrollpunkt som ett foto tydligt visar som utförd: ange matchen. Visar fotot ett fel eller en brist mot punkten, ange result "remark". Gissa inte — matcha bara när fotot faktiskt visar momentet.
+För varje kontrollpunkt: finns det ett foto som visar att just det arbetsmomentet är utfört? Fotot är dokumentation — det behöver inte bevisa varje detalj (mått, tjocklek, antal lager går sällan att se). Matcha när fotot visar momentet; sätt lägre confidence om detaljer inte syns. Visar fotot ett fel eller en brist mot punkten, ange result "remark". Matcha inte punkter som fotot inte alls visar.
 
 Svara ENDAST med JSON:
 { "matches": [ { "item": number, "photo": number, "result": "ok" | "remark", "confidence": number, "reason": string } ] }
 - item och photo är numren ovan.
-- confidence 0–1.
+- confidence 0–1: hur säkert fotot visar att momentet är utfört (0.8+ = tydligt, 0.5 = troligt).
 - reason: en kort mening på svenska om vad fotot visar.
 - Tom lista om inget foto passar.`;
 }
@@ -82,8 +82,6 @@ export class EgenkontrollAiService {
     return claudeEnabled();
   }
 
-  // TEMP debug: last raw photo-matching reply (exposed via analyze?debug=1).
-  lastPhotoReply = "";
 
   async draftFromDocument(
     file: { buffer: Buffer; mimetype: string } | null,
@@ -145,8 +143,6 @@ export class EgenkontrollAiService {
     if (!sent.length) return [];
     content.push({ type: "text", text: matchPrompt(items, sent) });
     const reply = await callClaude({ model: this.photoModel, maxTokens: 2048, content });
-    this.lastPhotoReply = reply;
-    this.logger.log(`Photo match reply: ${reply.slice(0, 1500)}`);
     try {
       return pickSuggestions(items, sent, normalizeMatches(parseJsonObject(reply)));
     } catch (error) {

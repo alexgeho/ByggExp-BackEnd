@@ -38,7 +38,7 @@ describe("egenkontroll AI logic", () => {
   it("keeps the most confident match per item, with the photo's date", () => {
     const items = [{ result: "pending" }, { result: "pending" }];
     const s = pickSuggestions(items, photos, [
-      { item: 1, photo: 1, result: "ok", confidence: 0.7, reason: "a" },
+      { item: 1, photo: 1, result: "ok", confidence: 0.5, reason: "a" },
       { item: 1, photo: 2, result: "ok", confidence: 0.9, reason: "b" },
     ]);
     expect(s).toEqual([
@@ -63,7 +63,7 @@ describe("egenkontroll AI logic", () => {
     const s = pickSuggestions(items, photos, [
       { item: 1, photo: 1, result: "ok", confidence: 0.9, reason: "" },
       { item: 2, photo: 1, result: "ok", confidence: 0.9, reason: "" },
-      { item: 3, photo: 1, result: "ok", confidence: 0.3, reason: "" },
+      { item: 3, photo: 1, result: "ok", confidence: 0.2, reason: "" },
       { item: 4, photo: 9, result: "ok", confidence: 0.9, reason: "" },
       { item: 4, photo: 1, result: "na", confidence: 0.9, reason: "" },
       { item: 99, photo: 1, result: "ok", confidence: 0.9, reason: "" },

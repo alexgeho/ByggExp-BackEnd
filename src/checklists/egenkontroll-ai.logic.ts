@@ -54,7 +54,9 @@ export type NewSuggestion = {
   confidence: number;
 };
 
-export const MIN_CONFIDENCE = 0.6;
+// Low on purpose: the model is conservative and a human approves every
+// suggestion anyway.
+export const MIN_CONFIDENCE = 0.4;
 
 export function normalizeMatches(raw: unknown): PhotoMatch[] {
   const r = (raw || {}) as Record<string, unknown>;
