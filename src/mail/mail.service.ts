@@ -140,24 +140,68 @@ export class MailService {
     return { filename: "byggexp-logo.png", path: logoPath, cid: "byggexplogo" };
   }
 
+  // White logo shown instead of the navy one when the mail client is in dark mode.
+  private logoWhiteAttachment(): {
+    filename: string;
+    path: string;
+    cid: string;
+  } | null {
+    const logoPath = join(process.cwd(), "assets", "email-logo-white.png");
+    if (!existsSync(logoPath)) {
+      return null;
+    }
+    return {
+      filename: "byggexp-logo-white.png",
+      path: logoPath,
+      cid: "byggexplogowhite",
+    };
+  }
+
   // Wrap an email body in a branded shell: centered logo header on a light card.
+  // Dark mode: clients that honour prefers-color-scheme (Apple Mail, Outlook
+  // apps) or tag inverted mails with data-ogsc/data-ogsb (Outlook) get a dark
+  // card, light text and the white logo instead of an auto-inverted mix.
   private brandedHtml(innerHtml: string): string {
     const hasLogo = this.logoAttachment() !== null;
+    const hasWhiteLogo = this.logoWhiteAttachment() !== null;
     const logo = hasLogo
-      ? `<img src="cid:byggexplogo" alt="ByggExp" width="150" style="width:150px;max-width:150px;height:auto;display:inline-block;" />`
-      : `<span style="font-size:22px;font-weight:800;letter-spacing:1px;color:#052d50;">BYGGEXP</span>`;
+      ? `<img class="bx-logo" src="cid:byggexplogo" alt="ByggExp" width="150" style="width:150px;max-width:150px;height:auto;display:inline-block;" />` +
+        (hasWhiteLogo
+          ? `<!--[if !mso]><!--><img class="bx-logo-dark" src="cid:byggexplogowhite" alt="ByggExp" width="150" style="display:none;width:0;max-height:0;overflow:hidden;" /><!--<![endif]-->`
+          : "")
+      : `<span class="bx-text" style="font-size:22px;font-weight:800;letter-spacing:1px;color:#052d50;">BYGGEXP</span>`;
+    const dark = (p: string) => `
+      ${p}.bx-outer { background:#0d131a !important; }
+      ${p}.bx-card { background:#18212c !important; }
+      ${p}.bx-body, ${p}.bx-body p, ${p}.bx-body span, ${p}.bx-body strong, ${p}.bx-text { color:#e8eef5 !important; }
+      ${p}.bx-body .bx-muted, ${p}.bx-foot { color:#93a3b5 !important; }`;
+    const darkLogo = (p: string) =>
+      hasWhiteLogo
+        ? `
+      ${p}.bx-logo { display:none !important; }
+      ${p}.bx-logo-dark { display:inline-block !important; width:150px !important; max-height:none !important; }`
+        : "";
     return `<!DOCTYPE html>
 <html lang="en">
-  <body style="margin:0;padding:0;background:#eef4fb;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef4fb;padding:24px 0;">
+  <head>
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <style>
+      :root { color-scheme: light dark; supported-color-schemes: light dark; }
+      @media (prefers-color-scheme: dark) {${dark("")}${darkLogo("")}
+      }${dark("[data-ogsc] ")}${darkLogo("[data-ogsc] ")}${dark("[data-ogsb] ")}
+    </style>
+  </head>
+  <body class="bx-outer" style="margin:0;padding:0;background:#eef4fb;">
+    <table class="bx-outer" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef4fb;padding:24px 0;">
       <tr><td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;">
+        <table class="bx-card" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;">
           <tr><td align="center" style="padding:32px 24px 8px;">${logo}</td></tr>
-          <tr><td style="padding:8px 32px 32px;font-family:Arial,Helvetica,sans-serif;color:#052d50;font-size:15px;line-height:1.55;">
+          <tr><td class="bx-body" style="padding:8px 32px 32px;font-family:Arial,Helvetica,sans-serif;color:#052d50;font-size:15px;line-height:1.55;">
             ${innerHtml}
           </td></tr>
         </table>
-        <div style="max-width:480px;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#8a97a8;font-size:12px;text-align:center;">© ByggExp</div>
+        <div class="bx-foot" style="max-width:480px;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#8a97a8;font-size:12px;text-align:center;">© ByggExp</div>
       </td></tr>
     </table>
   </body>
@@ -170,8 +214,9 @@ export class MailService {
     path: string;
     cid: string;
   }> {
-    const logo = this.logoAttachment();
-    return logo ? [logo] : [];
+    return [this.logoAttachment(), this.logoWhiteAttachment()].filter(
+      (a): a is { filename: string; path: string; cid: string } => a !== null,
+    );
   }
 
   // Invite the recipient to set up a company's admin account. No password —
@@ -368,7 +413,7 @@ export class MailService {
       <p style="margin:0 0 20px;">Öppna länken nedan för att bekräfta din e-post och slutföra skapandet av ditt ByggExp-konto — du loggas in automatiskt:</p>
       <p style="margin:0 0 20px;"><a href="${confirmUrl}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">Bekräfta e-post och skapa konto</a></p>
       <p style="margin:0 0 20px;">Sedan jobbar du på webben eller i ByggExp-appen (iPhone och Android).</p>
-      <p style="color:#5a6b7d;font-size:13px;margin:0;">Denna länk går ut om 24 timmar. Om du inte begärde detta kan du ignorera mejlet.</p>
+      <p class="bx-muted" style="color:#5a6b7d;font-size:13px;margin:0;">Denna länk går ut om 24 timmar. Om du inte begärde detta kan du ignorera mejlet.</p>
     `);
 
     if (!this.transporter) {
@@ -407,7 +452,7 @@ export class MailService {
       <p style="margin:0 0 12px;">${this.escapeHtml(copy.hi)}</p>
       <p style="margin:0 0 20px;">${copy.intro}</p>
       <p style="margin:0 0 20px;"><a href="${resetUrl}" style="display:inline-block;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">${copy.button}</a></p>
-      <p style="color:#5a6b7d;font-size:13px;margin:0;">${copy.expires}</p>
+      <p class="bx-muted" style="color:#5a6b7d;font-size:13px;margin:0;">${copy.expires}</p>
     `);
 
     if (!this.transporter) {
@@ -436,17 +481,14 @@ export class MailService {
     const greetName = name || GREETING_FALLBACK[l];
     const copy = loginCodeCopy[l]({ name: greetName });
     const subject = copy.subject;
-    const text = [
-      copy.hi,
-      "",
-      `${copy.intro} ${code}`,
-      copy.expires,
-    ].join("\n");
+    const text = [copy.hi, "", `${copy.intro} ${code}`, copy.expires].join(
+      "\n",
+    );
     const html = this.brandedHtml(`
       <p style="margin:0 0 8px;">${this.escapeHtml(copy.hi)}</p>
       <p style="margin:0 0 8px;">${copy.intro}</p>
-      <p style="font-size:30px;font-weight:700;letter-spacing:6px;margin:8px 0 16px;color:#052d50;">${this.escapeHtml(code)}</p>
-      <p style="color:#5a6b7d;font-size:13px;margin:0;">${copy.expires}</p>
+      <p class="bx-text" style="font-size:30px;font-weight:700;letter-spacing:6px;margin:8px 0 16px;color:#052d50;">${this.escapeHtml(code)}</p>
+      <p class="bx-muted" style="color:#5a6b7d;font-size:13px;margin:0;">${copy.expires}</p>
     `);
 
     if (!this.transporter) {
@@ -521,7 +563,7 @@ export class MailService {
   }
 
   // Betalningspåminnelse for an overdue invoice. Always Swedish (customer-facing
-   // outgoing comms). Includes the accrued dröjsmålsränta + påminnelseavgift and
+  // outgoing comms). Includes the accrued dröjsmålsränta + påminnelseavgift and
   // the payment details so the customer can pay immediately. Inert-safe: logs and
   // returns { sent:false } when SMTP is not configured.
   async sendReminderEmail(
@@ -565,13 +607,16 @@ export class MailService {
       `Vi vill påminna om att faktura ${nr}${opts.dueDate ? ` med förfallodatum ${opts.dueDate}` : ""} ännu inte är betald${opts.daysOverdue > 0 ? ` (${opts.daysOverdue} dagar försenad)` : ""}.`,
       "",
       `Fakturabelopp: ${money(opts.principal)}`,
-      opts.interest > 0 ? `Dröjsmålsränta (${opts.interestRatePercent} %): ${money(opts.interest)}` : "",
+      opts.interest > 0
+        ? `Dröjsmålsränta (${opts.interestRatePercent} %): ${money(opts.interest)}`
+        : "",
       opts.fee > 0 ? `Påminnelseavgift: ${money(opts.fee)}` : "",
       `Att betala: ${money(opts.newTotal)}`,
       opts.ocr ? `OCR: ${opts.ocr}` : "",
       payLine,
       "",
-      opts.message || "Vänligen betala snarast. Har betalning redan skett kan du bortse från denna påminnelse.",
+      opts.message ||
+        "Vänligen betala snarast. Har betalning redan skett kan du bortse från denna påminnelse.",
       "",
       "Med vänliga hälsningar",
       opts.senderName || "",
