@@ -15,6 +15,13 @@ import {
   PendingRegistration,
   PendingRegistrationSchema,
 } from "./schemas/pending-registration.schema";
+import { Company, CompanySchema } from "../company/schemas/company.schema";
+import {
+  Campaign,
+  CampaignSchema,
+  CampaignRecipient,
+  CampaignRecipientSchema,
+} from "../mailer/schemas/mailer.schemas";
 
 @Module({
   imports: [
@@ -24,6 +31,9 @@ import {
     MailModule,
     MongooseModule.forFeature([
       { name: PendingRegistration.name, schema: PendingRegistrationSchema },
+      { name: Company.name, schema: CompanySchema },
+      { name: Campaign.name, schema: CampaignSchema },
+      { name: CampaignRecipient.name, schema: CampaignRecipientSchema },
     ]),
     PassportModule,
     JwtModule.registerAsync({

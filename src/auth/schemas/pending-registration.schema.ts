@@ -21,6 +21,10 @@ export class PendingRegistration {
   @Prop({ type: String, default: null })
   plan?: string | null;
 
+  // Sign-up channel captured at step 1 (see auth/signup-source.ts).
+  @Prop({ type: Object, default: null })
+  source?: Record<string, unknown> | null;
+
   // bcrypt hash of the password — set at step 2 (after email confirmation), so
   // it doesn't exist yet at sign-up. Never stores the plaintext.
   @Prop({ type: String, default: null, select: false })

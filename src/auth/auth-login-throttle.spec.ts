@@ -11,6 +11,9 @@ describe("AuthService login throttling", () => {
       {} as any, // mailService
       { get: () => undefined } as any, // configService
       {} as any, // pendingRegistrationModel
+      {} as any, // companyModel
+      {} as any, // campaignModel
+      {} as any, // recipientModel
     );
 
   const statusOf = async (fn: () => Promise<unknown>): Promise<number> => {
@@ -41,8 +44,12 @@ describe("AuthService login throttling", () => {
       // eslint-disable-next-line no-await-in-loop
       await statusOf(() => auth.login("locked@example.com", "wrong"));
     }
-    expect(await statusOf(() => auth.login("locked@example.com", "wrong"))).toBe(429);
+    expect(
+      await statusOf(() => auth.login("locked@example.com", "wrong")),
+    ).toBe(429);
     // A different account is unaffected.
-    expect(await statusOf(() => auth.login("someone-else@example.com", "wrong"))).toBe(401);
+    expect(
+      await statusOf(() => auth.login("someone-else@example.com", "wrong")),
+    ).toBe(401);
   });
 });

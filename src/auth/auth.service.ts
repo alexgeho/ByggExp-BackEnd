@@ -21,6 +21,14 @@ import { UsersService } from "../users/users.service";
 import { CompanyService } from "../company/company.service";
 import { RegisterCompanyWithAdminDto } from "../company/dto/register-company-with-admin.dto";
 import { RegisterCompanyPublicDto } from "./dto/register-company-public.dto";
+import { sanitizeSignupSource } from "./signup-source";
+import { Company, CompanyDocument } from "../company/schemas/company.schema";
+import {
+  Campaign,
+  CampaignDocument,
+  CampaignRecipient,
+  CampaignRecipientDocument,
+} from "../mailer/schemas/mailer.schemas";
 import { CreateUserDto } from "../users/dto/create-user.dto";
 import { JwtPayload } from "./interfaces/jwt-payload.interface";
 import { UserAccountStatus, UserRole } from "../users/schemas/user.schema";
@@ -43,6 +51,12 @@ export class AuthService {
     private configService: ConfigService,
     @InjectModel(PendingRegistration.name)
     private pendingRegistrationModel: Model<PendingRegistrationDocument>,
+    @InjectModel(Company.name)
+    private companyModel: Model<CompanyDocument>,
+    @InjectModel(Campaign.name)
+    private campaignModel: Model<CampaignDocument>,
+    @InjectModel(CampaignRecipient.name)
+    private recipientModel: Model<CampaignRecipientDocument>,
   ) {}
 
   // Simple in-memory rate limit for sign-up requests, keyed by email. Blunts a
@@ -167,7 +181,7 @@ export class AuthService {
   // registration (with the user's chosen password hashed) and email a 6-digit
   // code. The company is only created once the code is verified — so spammed
   // sign-ups never create real tenants.
-  async registerCompany(dto: RegisterCompanyPublicDto) {
+  async registerCompany(dto: RegisterCompanyPublicDto, userAgent = "") {
     const email = dto.email.trim().toLowerCase();
     this.assertRegisterAllowed(email);
 
@@ -200,6 +214,7 @@ export class AuthService {
         companyName,
         userName,
         plan: dto.plan || null,
+        source: sanitizeSignupSource(dto.source, userAgent),
         passwordHash: null,
         codeHash,
         expiresAt,
@@ -301,6 +316,14 @@ export class AuthService {
       );
     }
 
+    try {
+      await this.saveSignupSource(companyId, pending.email, pending.source);
+    } catch (error) {
+      this.logger.error(
+        `Failed to save signup source for ${companyId}: ${String(error)}`,
+      );
+    }
+
     await this.pendingRegistrationModel.deleteOne({ _id: pending._id });
 
     const adminId = admin._id ? admin._id.toString() : admin.id;
@@ -325,6 +348,35 @@ export class AuthService {
       await this.usersService.createMagicLoginCode(adminId);
 
     return { magicLoginCode };
+  }
+
+  // Store where the sign-up came from on the company, plus the latest mailer
+  // campaign that reached this e-mail (clicked ones win) — so cold-mail
+  // registrations show up even when the person typed the URL by hand.
+  private async saveSignupSource(
+    companyId: string,
+    email: string,
+    source: Record<string, unknown> | null | undefined,
+  ) {
+    const recipient = await this.recipientModel
+      .findOne({ email, status: "sent" })
+      .sort({ clickedAt: -1, sentAt: -1 })
+      .lean();
+    const campaign = recipient
+      ? await this.campaignModel
+          .findById(recipient.campaignId, { name: 1 })
+          .lean()
+      : null;
+    await this.companyModel.updateOne(
+      { _id: companyId },
+      {
+        signupSource: {
+          ...(source || {}),
+          campaign: campaign?.name || "",
+          campaignClicked: !!recipient?.clickedAt,
+        },
+      },
+    );
   }
 
   // Re-issue a fresh confirmation link for a still-pending sign-up. Always

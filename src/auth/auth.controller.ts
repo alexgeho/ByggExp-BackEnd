@@ -484,8 +484,11 @@ export class AuthController {
 
   // Step 1: validate + email a confirmation link (no company created yet).
   @Post("register-company")
-  registerCompany(@Body() dto: RegisterCompanyPublicDto) {
-    return this.authService.registerCompany(dto);
+  registerCompany(@Body() dto: RegisterCompanyPublicDto, @Req() req: Request) {
+    return this.authService.registerCompany(
+      dto,
+      String(req.headers["user-agent"] || ""),
+    );
   }
 
   // Step 2a: the user clicks the emailed link. Show the "choose a password"

@@ -48,6 +48,9 @@ describe("AuthService login across companies (email unique per company)", () => 
       {} as any, // mailService
       { get: () => undefined } as any, // configService
       {} as any, // pendingRegistrationModel
+      {} as any, // companyModel
+      {} as any, // campaignModel
+      {} as any, // recipientModel
     );
 
   it("logs into the company whose password matches", async () => {
@@ -76,6 +79,8 @@ describe("AuthService login across companies (email unique per company)", () => 
     const agry = await makeUser("a1", "agry", "Agry account", "agryPass");
     const auth = makeService([agry]);
 
-    await expect(auth.login("worker@example.com", "wrongPass")).rejects.toThrow();
+    await expect(
+      auth.login("worker@example.com", "wrongPass"),
+    ).rejects.toThrow();
   });
 });

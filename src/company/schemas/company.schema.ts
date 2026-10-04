@@ -171,6 +171,10 @@ export class Company {
   @Prop({ type: HoursReminderRuleSchema, default: () => ({}) })
   hoursReminderRule?: HoursReminderRule;
 
+  // ---- Where the self-serve sign-up came from (see auth/signup-source.ts) ----
+  @Prop({ type: Object, default: null })
+  signupSource?: Record<string, unknown> | null;
+
   // ---- Onboarding checklist state (server-persisted, per-company) ----
   @Prop({ type: OnboardingStateSchema, default: () => ({}) })
   onboarding?: OnboardingState;

@@ -1,4 +1,11 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsIn } from "class-validator";
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsIn,
+  IsObject,
+} from "class-validator";
 
 // Minimal-friction sign-up: just a name (person or company) + email. The user
 // chooses a password later, on the page opened from the confirmation link.
@@ -21,4 +28,10 @@ export class RegisterCompanyPublicDto {
   @IsOptional()
   @IsIn(["egenkontroll"])
   plan?: "egenkontroll";
+
+  // Where the visitor came from (UTM tags, referrer, landing page) — see
+  // auth/signup-source.ts. Sanitised server-side.
+  @IsOptional()
+  @IsObject()
+  source?: Record<string, unknown>;
 }
