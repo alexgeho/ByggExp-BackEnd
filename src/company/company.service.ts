@@ -381,6 +381,15 @@ export class CompanyService implements OnApplicationBootstrap {
 
   // Superadmin: manually assign a plan tier (or clear it), returning the
   // resolved modules so the caller can refresh in one round-trip.
+  async setLabel(id: string, label: string | null) {
+    const value = ["own", "test", "customer"].includes(label || "") ? label : null;
+    const company = await this.companyModel
+      .findByIdAndUpdate(id, { label: value }, { new: true })
+      .exec();
+    if (!company) throw new NotFoundException("Company not found");
+    return company;
+  }
+
   async setPlan(
     id: string,
     plan: string | null,

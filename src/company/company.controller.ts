@@ -216,6 +216,13 @@ export class CompanyController {
     return this.companyService.getModules(id);
   }
 
+  // Superadmin: tag a company as our own / test / real customer.
+  @Patch(":id/label")
+  @Roles(UserRole.SuperAdmin)
+  async setLabel(@Param("id") id: string, @Body() body: { label?: string | null }) {
+    return this.companyService.setLabel(id, body?.label ?? null);
+  }
+
   // Superadmin: manually assign / clear a company's plan tier.
   @Patch(":id/plan")
   @Roles(UserRole.SuperAdmin)
