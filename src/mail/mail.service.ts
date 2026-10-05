@@ -193,15 +193,15 @@ export class MailService {
     </style>
   </head>
   <body class="bx-outer" style="margin:0;padding:0;background:#eef4fb;">
-    <table class="bx-outer" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef4fb;padding:24px 0;">
-      <tr><td align="center">
+    <table class="bx-outer" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef4fb;">
+      <tr><td align="center" style="padding:48px 16px 0;">
         <table class="bx-card" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;">
           <tr><td align="center" style="padding:32px 24px 8px;">${logo}</td></tr>
           <tr><td class="bx-body" style="padding:8px 32px 32px;font-family:Arial,Helvetica,sans-serif;color:#052d50;font-size:15px;line-height:1.55;">
             ${innerHtml}
           </td></tr>
         </table>
-        <div class="bx-foot" style="max-width:480px;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#8a97a8;font-size:12px;text-align:center;">© ByggExp</div>
+        <div class="bx-foot" style="max-width:480px;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#8a97a8;font-size:12px;line-height:16px;text-align:center;">© ByggExp</div>
       </td></tr>
     </table>
   </body>

@@ -467,7 +467,9 @@ export class AuthService {
   // "Forgot password" step 1: email a reset link. Always resolves (and never
   // reveals whether the email is registered) so it can't be used to probe for
   // accounts. Rate-limited per email like sign-up.
-  async requestPasswordReset(email: string): Promise<void> {
+  // `lang` = the language of the screen the request came from (admin/app login),
+  // so the email matches what the user is looking at; falls back to the profile.
+  async requestPasswordReset(email: string, lang?: string): Promise<void> {
     const normalizedEmail = email?.trim().toLowerCase() || "";
     if (!normalizedEmail) {
       return;
@@ -481,7 +483,7 @@ export class AuthService {
           result.user.email,
           result.user.name,
           result.token,
-          languageCode(result.user.language),
+          lang || languageCode(result.user.language),
         );
       } catch (error) {
         this.logger.error(`Failed to send password reset: ${String(error)}`);

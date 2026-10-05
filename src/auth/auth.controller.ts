@@ -572,11 +572,14 @@ export class AuthController {
   // "Forgot password" step 1: email a reset link. Always 200 so we never reveal
   // whether the email is registered.
   @Post("forgot-password")
-  async forgotPassword(@Body("email") email: string) {
+  async forgotPassword(
+    @Body("email") email: string,
+    @Body("lang") lang?: string,
+  ) {
     if (!email?.trim()) {
       throw new BadRequestException("Email is required");
     }
-    await this.authService.requestPasswordReset(email.trim());
+    await this.authService.requestPasswordReset(email.trim(), lang);
     return { success: true };
   }
 
