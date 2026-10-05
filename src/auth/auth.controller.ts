@@ -265,6 +265,7 @@ function passwordFormHtml(
       ${error ? `<div class="err">${error}</div>` : ""}
       <form method="POST" action="/auth/register-company/set-password" onsubmit="return checkForm()">
         <input type="hidden" name="token" value="${safeToken}" />
+        <input type="hidden" name="lang" value="${lang}" />
         <label for="password">${f.passwordLabel}</label>
         <input id="password" name="password" type="password" minlength="6" required placeholder="${f.passwordPlaceholder}" />
         <label for="confirm">${f.confirmLabel}</label>
@@ -523,7 +524,7 @@ export class AuthController {
   // into the app to sign them in automatically.
   @Post("register-company/set-password")
   async setRegistrationPassword(
-    @Body() body: { token?: string; password?: string },
+    @Body() body: { token?: string; password?: string; lang?: string },
     @Req() req: Request,
     @Res() res: Response,
   ) {
@@ -586,13 +587,20 @@ export class AuthController {
   // Step 2a: the user clicks the reset link. Show the "choose a new password"
   // page (or an error if the link is invalid/expired).
   @Get("reset-password")
-  async resetPasswordPage(@Query("token") token: string, @Res() res: Response) {
+  async resetPasswordPage(
+    @Query("token") token: string,
+    @Query("lang") langHint: string | undefined,
+    @Res() res: Response,
+  ) {
     if (!token?.trim()) {
       throw new BadRequestException("Reset token is required");
     }
     try {
       await this.authService.assertPasswordResetTokenValid(token.trim());
-      const lang = await this.authService.getResetMailLang(token.trim());
+      // Same language as the email (its link carries ?lang=); profile otherwise.
+      const lang = langHint
+        ? resolveMailLang(langHint)
+        : await this.authService.getResetMailLang(token.trim());
       res
         .status(200)
         .type("html")
@@ -609,7 +617,7 @@ export class AuthController {
   // Step 2b: the reset form posts here. Set the new password, then show success.
   @Post("reset-password/set")
   async setNewPassword(
-    @Body() body: { token?: string; password?: string },
+    @Body() body: { token?: string; password?: string; lang?: string },
     @Req() req: Request,
     @Res() res: Response,
   ) {
@@ -624,7 +632,9 @@ export class AuthController {
     }
     // Resolve the language before consuming the token so a re-shown form (on
     // error) stays in the user's language.
-    const lang = await this.authService.getResetMailLang(token);
+    const lang = body?.lang
+      ? resolveMailLang(body.lang)
+      : await this.authService.getResetMailLang(token);
     try {
       const { role } = await this.authService.resetPassword(token, password);
       res
@@ -760,7 +770,7 @@ export class AuthController {
   // with their email + this password.
   @Post("verify-email/set-password")
   async setInvitePassword(
-    @Body() body: { token?: string; password?: string },
+    @Body() body: { token?: string; password?: string; lang?: string },
     @Res() res: Response,
   ) {
     const token = (body?.token || "").trim();

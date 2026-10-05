@@ -440,8 +440,9 @@ export class MailService {
     token: string,
     lang: string = "sv",
   ): Promise<void> {
-    const resetUrl = `${this.getApiPublicUrl()}/auth/reset-password?token=${encodeURIComponent(token)}`;
     const l = this.resolveMailLang(lang);
+    // The page behind the link speaks the same language as this email.
+    const resetUrl = `${this.getApiPublicUrl()}/auth/reset-password?token=${encodeURIComponent(token)}&lang=${l}`;
     const greetName = name || GREETING_FALLBACK[l];
     const copy = resetCopy[l]({ name: greetName });
     const subject = copy.subject;
