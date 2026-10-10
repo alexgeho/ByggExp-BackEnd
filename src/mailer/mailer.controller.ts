@@ -29,6 +29,7 @@ import { escapeHtml } from "../newsletters/newsletter-render";
 import { UserRole } from "../users/schemas/user.schema";
 import { MailerCampaignsService } from "./mailer-campaigns.service";
 import { signLink } from "./mailer-crypto";
+import { InboxInput, MailerFunnelService } from "./mailer-funnel.service";
 import { ImportRow, MailerListsService } from "./mailer-lists.service";
 import {
   MailerSettingsInput,
@@ -69,7 +70,44 @@ export class MailerController {
     private readonly lists: MailerListsService,
     private readonly campaigns: MailerCampaignsService,
     private readonly settings: MailerSettingsService,
+    private readonly funnel: MailerFunnelService,
   ) {}
+
+  // ---------- funnel ----------
+  // `campaignIds` = comma-separated; empty = every sent campaign.
+  @Get("funnel") getFunnel(
+    @Query("brand") brand?: string,
+    @Query("campaignIds") campaignIds?: string,
+  ) {
+    return this.funnel.funnel({
+      brand: brand || undefined,
+      campaignIds: campaignIds ? campaignIds.split(",") : undefined,
+    });
+  }
+  @Put("funnel/replies/:id") updateReply(
+    @Param("id") id: string,
+    @Body() body: AnyBody,
+  ) {
+    return this.funnel.updateReply(id, {
+      category: typeof body.category === "string" ? body.category : undefined,
+      note: typeof body.note === "string" ? body.note : undefined,
+    });
+  }
+  @Get("funnel/share") getShare() {
+    return this.funnel.share();
+  }
+  @Put("funnel/share") setShare(@Body() body: AnyBody) {
+    return this.funnel.setShare(Boolean(body.enabled));
+  }
+  @Get("funnel/inbox") getInbox() {
+    return this.funnel.inbox();
+  }
+  @Put("funnel/inbox") updateInbox(@Body() body: AnyBody) {
+    return this.funnel.updateInbox(body as InboxInput);
+  }
+  @Post("funnel/inbox/sync") syncInbox() {
+    return this.funnel.syncInbox();
+  }
 
   // ---------- lists ----------
   @Get("lists") getLists() {
@@ -267,7 +305,16 @@ button{margin-top:18px;background:#1c6cf3;color:#fff;border:0;border-radius:24px
 @Controller("m")
 @Public()
 export class MailerPublicController {
-  constructor(private readonly campaigns: MailerCampaignsService) {}
+  constructor(
+    private readonly campaigns: MailerCampaignsService,
+    private readonly funnel: MailerFunnelService,
+  ) {}
+
+  // Read-only funnel for the share link (no e-mail addresses or mail texts).
+  @Get("funnel/:token")
+  publicFunnel(@Param("token") token: string, @Query("brand") brand?: string) {
+    return this.funnel.publicFunnel(token, brand || undefined);
+  }
 
   // Brevo transactional webhook: opens, clicks, bounces, complaints. The
   // secret in the path is the only auth Brevo's webhook can carry.

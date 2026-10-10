@@ -249,6 +249,7 @@ export const EVENT_TYPES = [
   "click",
   "unsubscribe",
   "bounce",
+  "reply",
   "test",
 ] as const;
 export type MailEventType = (typeof EVENT_TYPES)[number];
@@ -366,3 +367,100 @@ export class MailerSettings {
 }
 export const MailerSettingsSchema =
   SchemaFactory.createForClass(MailerSettings);
+
+// ---------- funnel: replies from the inbox + share link ----------
+
+// What a reply means for the funnel. "" = not classified yet; "auto" =
+// out-of-office / auto-reply (not counted as a reply).
+export const REPLY_CATEGORIES = [
+  "",
+  "interest",
+  "later",
+  "has_system",
+  "no",
+  "unsubscribe",
+  "auto",
+] as const;
+export type ReplyCategory = (typeof REPLY_CATEGORIES)[number];
+
+export type MailReplyDocument = MailReply & Document;
+
+@Schema({ timestamps: true })
+export class MailReply {
+  // Message-ID of the reply — one row per mail, however often we sync.
+  @Prop({ required: true, unique: true })
+  messageId: string;
+
+  @Prop({ type: Types.ObjectId, ref: "Campaign", default: null, index: true })
+  campaignId: Types.ObjectId | null;
+
+  @Prop({ type: Types.ObjectId, ref: "CampaignRecipient", default: null })
+  recipientId: Types.ObjectId | null;
+
+  @Prop({ default: "", lowercase: true })
+  email: string;
+
+  @Prop({ default: "" })
+  name: string;
+
+  @Prop({ default: "" })
+  company: string;
+
+  @Prop({ default: "" })
+  subject: string;
+
+  // First lines of the reply, quoted original stripped.
+  @Prop({ default: "" })
+  snippet: string;
+
+  @Prop({ type: Date, default: null })
+  receivedAt: Date | null;
+
+  @Prop({ type: String, enum: REPLY_CATEGORIES, default: "" })
+  category: ReplyCategory;
+
+  @Prop({ default: "" })
+  note: string;
+}
+export const MailReplySchema = SchemaFactory.createForClass(MailReply);
+
+// One doc ("main"): the IMAP inbox replies land in + the public share token.
+export type MailerFunnelConfigDocument = MailerFunnelConfig & Document;
+
+@Schema({ timestamps: true })
+export class MailerFunnelConfig {
+  @Prop({ default: "main", unique: true })
+  key: string;
+
+  @Prop({ default: "" })
+  imapHost: string;
+
+  @Prop({ default: 993 })
+  imapPort: number;
+
+  @Prop({ default: "" })
+  imapUser: string;
+
+  // AES-256-GCM, see mailer-crypto.ts. Never returned by the API.
+  @Prop({ default: "" })
+  imapPassEnc: string;
+
+  // Highest INBOX UID already read; UIDVALIDITY resets it.
+  @Prop({ default: 0 })
+  lastUid: number;
+
+  @Prop({ default: "" })
+  uidValidity: string;
+
+  @Prop({ type: Date, default: null })
+  lastSyncAt: Date | null;
+
+  @Prop({ default: "" })
+  lastError: string;
+
+  // Read-only public funnel link (/m/funnel/:token). "" = sharing off.
+  @Prop({ default: "" })
+  shareToken: string;
+}
+export const MailerFunnelConfigSchema =
+  SchemaFactory.createForClass(MailerFunnelConfig);

@@ -4,7 +4,10 @@ import {
   Newsletter,
   NewsletterSchema,
 } from "../newsletters/schemas/newsletter.schema";
+import { Company, CompanySchema } from "../company/schemas/company.schema";
+import { User, UserSchema } from "../users/schemas/user.schema";
 import { MailerCampaignsService } from "./mailer-campaigns.service";
+import { MailerFunnelService } from "./mailer-funnel.service";
 import { MailerListsService } from "./mailer-lists.service";
 import { MailerSettingsService } from "./mailer-settings.service";
 import { MailerController, MailerPublicController } from "./mailer.controller";
@@ -13,8 +16,12 @@ import {
   CampaignRecipient,
   CampaignRecipientSchema,
   CampaignSchema,
+  MailerFunnelConfig,
+  MailerFunnelConfigSchema,
   MailerSettings,
   MailerSettingsSchema,
+  MailReply,
+  MailReplySchema,
   MailEvent,
   MailEventSchema,
   MailingList,
@@ -36,6 +43,10 @@ import {
       { name: MailEvent.name, schema: MailEventSchema },
       { name: MailerSettings.name, schema: MailerSettingsSchema },
       { name: Newsletter.name, schema: NewsletterSchema },
+      { name: MailReply.name, schema: MailReplySchema },
+      { name: MailerFunnelConfig.name, schema: MailerFunnelConfigSchema },
+      { name: Company.name, schema: CompanySchema },
+      { name: User.name, schema: UserSchema },
     ]),
   ],
   controllers: [MailerController, MailerPublicController],
@@ -43,6 +54,7 @@ import {
     MailerListsService,
     MailerCampaignsService,
     MailerSettingsService,
+    MailerFunnelService,
   ],
 })
 export class MailerModule {}
