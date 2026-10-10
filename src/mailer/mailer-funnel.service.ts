@@ -545,7 +545,7 @@ export class MailerFunnelService {
   // interest / unsubscribe, plus a short note. Each reply is tried once.
   async classifyPending() {
     const pending = await this.replies
-      .find({ category: "", sortVersion: { $lt: REPLY_SORT_VERSION } })
+      .find({ category: "", sortVersion: { $not: { $gte: REPLY_SORT_VERSION } } })
       .sort({ receivedAt: 1 })
       .limit(40)
       .lean();
