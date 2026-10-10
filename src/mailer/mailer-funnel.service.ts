@@ -128,7 +128,7 @@ export class MailerFunnelService {
   // Funnel + per-campaign table + replies + sign-ups. `publicView` drops
   // e-mail addresses and reply texts (the share link is for colleagues).
   async funnel(
-    q: { brand?: string; campaignIds?: string[] },
+    q: { brand?: string; campaignIds?: string[]; from?: string; to?: string },
     publicView = false,
   ) {
     const [all, lists, senders] = await Promise.all([
@@ -151,9 +151,20 @@ export class MailerFunnelService {
     const brands = [...new Set(rows.map((r) => r.brand).filter(Boolean))];
 
     const wanted = new Set(q.campaignIds?.filter(Boolean) ?? []);
+    // Period = when the campaign started (a cohort), whole days, inclusive.
+    const day = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+    const from = day(q.from);
+    const to = day(q.to);
+    const startDay = (c: (typeof all)[number]) =>
+      new Date(c.startedAt || (c as { createdAt?: Date }).createdAt || 0)
+        .toISOString()
+        .slice(0, 10);
+    const inPeriod = (c: (typeof all)[number]) =>
+      (!from || startDay(c) >= from) && (!to || startDay(c) <= to);
     const picked = rows.filter(
       (r) =>
         (!q.brand || r.brand === q.brand) &&
+        inPeriod(r.c) &&
         (!wanted.size || wanted.has(String(r.c._id))),
     );
     const ids = picked.map((r) => r.c._id);
@@ -357,11 +368,14 @@ export class MailerFunnelService {
     return { token: c.shareToken };
   }
 
-  async publicFunnel(token: string, brand?: string) {
+  async publicFunnel(
+    token: string,
+    q: { brand?: string; from?: string; to?: string },
+  ) {
     const c = await this.cfg();
     if (!c.shareToken || token !== c.shareToken)
       throw new NotFoundException("Not found");
-    return this.funnel({ brand }, true);
+    return this.funnel(q, true);
   }
 
   // ---------- inbox (IMAP) ----------

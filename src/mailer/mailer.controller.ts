@@ -78,9 +78,13 @@ export class MailerController {
   @Get("funnel") getFunnel(
     @Query("brand") brand?: string,
     @Query("campaignIds") campaignIds?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
   ) {
     return this.funnel.funnel({
       brand: brand || undefined,
+      from,
+      to,
       campaignIds: campaignIds ? campaignIds.split(",") : undefined,
     });
   }
@@ -312,8 +316,17 @@ export class MailerPublicController {
 
   // Read-only funnel for the share link (no e-mail addresses or mail texts).
   @Get("funnel/:token")
-  publicFunnel(@Param("token") token: string, @Query("brand") brand?: string) {
-    return this.funnel.publicFunnel(token, brand || undefined);
+  publicFunnel(
+    @Param("token") token: string,
+    @Query("brand") brand?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+  ) {
+    return this.funnel.publicFunnel(token, {
+      brand: brand || undefined,
+      from,
+      to,
+    });
   }
 
   // Brevo transactional webhook: opens, clicks, bounces, complaints. The
