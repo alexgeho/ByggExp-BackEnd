@@ -21,6 +21,7 @@ import { decryptSecret, encryptSecret, newToken } from "./mailer-crypto";
 import {
   asksToUnsubscribe,
   domainOf,
+  guessCategory,
   isAutoReply,
   isCompanyDomain,
   isSystemSender,
@@ -464,9 +465,13 @@ export class MailerFunnelService {
     }
     c.lastSyncAt = new Date();
     await c.save();
-    await this.classifyPending().catch((err) =>
-      this.logger.warn(`Reply classification failed: ${err}`),
-    );
+    await this.classifyPending().catch(async (err) => {
+      this.logger.warn(`Reply classification failed: ${err}`);
+      await this.config.updateOne(
+        { key: "main" },
+        { lastError: `AI: ${String(err).slice(0, 250)}` },
+      );
+    });
     return { ...(await this.inbox()), added };
   }
 
@@ -538,13 +543,16 @@ export class MailerFunnelService {
   // Sorts new replies with Claude: no / uses another service / later /
   // interest / unsubscribe, plus a short note. Each reply is tried once.
   async classifyPending() {
-    if (!claudeEnabled()) return 0;
     const pending = await this.replies
       .find({ category: "", aiTried: { $ne: true } })
       .sort({ receivedAt: 1 })
       .limit(40)
       .lean();
     if (!pending.length) return 0;
+    if (!claudeEnabled()) {
+      for (const r of pending) await this.applyGuess(r, "", "");
+      return pending.length;
+    }
     const items = pending.map((r) => ({
       id: String(r._id),
       company: r.company,
@@ -567,29 +575,48 @@ Return only JSON: {"items":[{"id":"...","category":"...","note":"..."}]}
 
 Replies:
 ${JSON.stringify(items)}`;
-    const reply = await callClaude({
-      model: process.env.MAILER_REPLY_MODEL || "claude-haiku-5-5",
-      maxTokens: 4096,
-      content: [{ type: "text", text: prompt }],
-    });
-    const out = parseJsonObject<{
-      items?: { id?: string; category?: string; note?: string }[];
-    }>(reply);
+    let out: { items?: { id?: string; category?: string; note?: string }[] };
+    try {
+      const reply = await callClaude({
+        model: process.env.MAILER_REPLY_MODEL || "claude-haiku-5-5",
+        maxTokens: 4096,
+        content: [{ type: "text", text: prompt }],
+      });
+      out = parseJsonObject(reply);
+    } catch (err) {
+      // Still sort the obvious ones, then report why AI failed.
+      for (const r of pending) await this.applyGuess(r, "", "");
+      throw err;
+    }
     const byId = new Map((out.items || []).map((i) => [String(i.id), i]));
     for (const r of pending) {
       const ai = byId.get(String(r._id));
-      const category = (REPLY_CATEGORIES as readonly string[]).includes(
+      await this.applyGuess(
+        r,
         String(ai?.category ?? ""),
-      )
-        ? (String(ai?.category ?? "") as ReplyCategory)
-        : "";
-      const set: Partial<MailReply> = { aiTried: true };
-      if (category && category !== "auto") set.category = category;
-      if (ai?.note && !r.note) set.note = String(ai.note).slice(0, 120);
-      await this.replies.updateOne({ _id: r._id, category: "" }, set);
-      if (category === "unsubscribe")
-        await this.listsService.markEverywhere(r.email, "unsubscribed");
+        String(ai?.note ?? ""),
+      );
     }
     return pending.length;
+  }
+
+  // AI category if valid, else the keyword rules; note only if empty.
+  private async applyGuess(
+    r: { _id: Types.ObjectId; snippet: string; note: string; email: string },
+    aiCategory: string,
+    aiNote: string,
+  ) {
+    let category: ReplyCategory = (
+      REPLY_CATEGORIES as readonly string[]
+    ).includes(aiCategory)
+      ? (aiCategory as ReplyCategory)
+      : "";
+    if (!category || category === "auto") category = guessCategory(r.snippet);
+    const set: Partial<MailReply> = { aiTried: true };
+    if (category) set.category = category;
+    if (aiNote && !r.note) set.note = aiNote.slice(0, 120);
+    await this.replies.updateOne({ _id: r._id, category: "" }, set);
+    if (category === "unsubscribe")
+      await this.listsService.markEverywhere(r.email, "unsubscribed");
   }
 }

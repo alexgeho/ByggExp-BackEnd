@@ -75,3 +75,25 @@ export const replySnippet = (text: string, max = 400) => {
 const UNSUBSCRIBE =
   /(avregistrera|avsluta prenumeration|unsubscribe|ta bort mig|sluta skicka|stryk mig|vill inte (ha|få) (fler|mer|några))/i;
 export const asksToUnsubscribe = (snippet: string) => UNSUBSCRIBE.test(snippet);
+
+// Fallback when AI is off/failing: obvious Swedish/English phrasings only.
+const HAS_SYSTEM =
+  /(har redan|använder redan|vi använder|vi kör|kör med|eget system|egen app|annat system|nöjda med|already (use|have)|softone|fortnox|bygglet|visma|hantverksdata|entreprenörsappen|kvalitetsdokument|smartdok|tidrapport-?app)/i;
+const LATER =
+  /(senare|inte just nu|längre fram|hör av mig|återkommer|när vi anställer|inga anställda|later|not right now)/i;
+const INTEREST =
+  /(ring mig|ring på|kan du ringa|boka|demo|intresserad av|låter intressant|vill gärna|skicka mer info|call me|interested in)/i;
+const JUST_NO =
+  /^(nej|nej tack|no|no thanks|inte intresserad|ej intresserad|inte aktuellt|not interested)\b|inte intresserad|ej intresserad|inte aktuellt|nej tack|not interested|no thanks/i;
+
+export const guessCategory = (
+  snippet: string,
+): "" | "interest" | "later" | "has_system" | "no" | "unsubscribe" => {
+  const s = String(snippet || "");
+  if (asksToUnsubscribe(s)) return "unsubscribe";
+  if (HAS_SYSTEM.test(s)) return "has_system";
+  if (LATER.test(s)) return "later";
+  if (INTEREST.test(s)) return "interest";
+  if (JUST_NO.test(s)) return "no";
+  return "";
+};

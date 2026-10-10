@@ -42,3 +42,17 @@ describe("mailer funnel parsing", () => {
     expect(isCompanyDomain("sr-elteknik.se")).toBe(true);
   });
 });
+
+import { guessCategory } from "./mailer-funnel-parse";
+
+describe("guessCategory", () => {
+  it("sorts the usual replies", () => {
+    expect(guessCategory("Nej tack")).toBe("no");
+    expect(guessCategory("Vi använder Softone och är nöjda")).toBe(
+      "has_system",
+    );
+    expect(guessCategory("Ring mig på måndag")).toBe("interest");
+    expect(guessCategory("Inga anställda än, hör av mig senare")).toBe("later");
+    expect(guessCategory("Hej")).toBe("");
+  });
+});
