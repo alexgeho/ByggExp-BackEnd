@@ -23,6 +23,7 @@ import {
   asksToUnsubscribe,
   domainOf,
   guessCategory,
+  htmlToText,
   isAutoReply,
   isCompanyDomain,
   isSystemSender,
@@ -82,6 +83,7 @@ export type InboxInput = {
 
 const MIN_REAL_CAMPAIGN = 10;
 const REPLY_SORT_VERSION = 3;
+const PARSE_VERSION = 2;
 
 // "ByggExp (Brevo)" → "ByggExp"; campaigns of deleted senders fall back to
 // the first word of the campaign name ("Nordkod – utan hemsida").
@@ -464,7 +466,11 @@ export class MailerFunnelService {
       try {
         const box = client.mailbox;
         const validity = box ? String(box.uidValidity) : "";
-        const fromUid = validity === c.uidValidity ? c.lastUid + 1 : 1;
+        // Parser changed → read the whole inbox once more (existing replies
+        // only get their text refreshed).
+        const rescan = (c.parseVersion || 0) < PARSE_VERSION;
+        const fromUid =
+          validity === c.uidValidity && !rescan ? c.lastUid + 1 : 1;
         let range: string | number[] = `${fromUid}:*`;
         if (fromUid === 1) {
           // First read: only mail since the first campaign went out.
@@ -491,6 +497,7 @@ export class MailerFunnelService {
           }
         c.uidValidity = validity;
         c.lastUid = maxUid;
+        c.parseVersion = PARSE_VERSION;
       } finally {
         lock.release();
       }
@@ -533,7 +540,26 @@ export class MailerFunnelService {
     const received = mail.date || new Date();
     const messageId =
       mail.messageId || `${email}:${received.toISOString()}:${mail.subject}`;
-    if (await this.replies.exists({ messageId })) return false;
+    const text =
+      mail.text || htmlToText(typeof mail.html === "string" ? mail.html : "");
+    const existing = await this.replies
+      .findOne({ messageId }, { snippet: 1 })
+      .lean();
+    if (existing) {
+      // Re-read after a parser fix: fill a snippet that came out empty and
+      // let it be sorted again.
+      const snippet = replySnippet(text);
+      if (snippet && snippet !== existing.snippet)
+        await this.replies.updateOne(
+          { _id: existing._id },
+          {
+            snippet,
+            sortVersion: 0,
+            ...(existing.snippet ? {} : { category: "", note: "" }),
+          },
+        );
+      return false;
+    }
 
     // Same address first; else a colleague at the same firm domain.
     let r = await this.recipients
@@ -558,7 +584,7 @@ export class MailerFunnelService {
     for (const [k, v] of mail.headers)
       headers[k.toLowerCase()] = typeof v === "string" ? v : undefined;
     const subject = mail.subject || "";
-    const snippet = replySnippet(mail.text || "");
+    const snippet = replySnippet(text);
     let category: ReplyCategory = "";
     if (isAutoReply(subject, headers)) category = "auto";
     else if (asksToUnsubscribe(snippet)) category = "unsubscribe";

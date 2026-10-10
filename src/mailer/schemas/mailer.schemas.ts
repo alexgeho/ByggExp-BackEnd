@@ -464,6 +464,10 @@ export class MailerFunnelConfig {
   @Prop({ type: Date, default: null })
   lastSyncAt: Date | null;
 
+  // Reply-parser version the inbox was last read with (bump → full re-read).
+  @Prop({ default: 0 })
+  parseVersion: number;
+
   @Prop({ default: "" })
   lastError: string;
 

@@ -60,7 +60,7 @@ export const isAutoReply = (
 
 // Where the quoted original starts in a reply (Swedish + English clients).
 const QUOTE_START =
-  /^\s*(>|-{2,}\s*(original|ursprungligt|vidarebefordrat)|_{5,}|från:|from:|skickat:|sent:|den .+ skrev|on .+ wrote|.+ skrev:?\s*$|\d{4}-\d{2}-\d{2}.+skrev)/i;
+  /^\s*(>|on (mon|tue|wed|thu|fri|sat|sun)[a-z]*,|den \d{1,2} \w+\.? \d{4}|(mån|tis|ons|tors|fre|lör|sön)\w* \d{1,2} \w+ \d{4}|.*<[^>]*@tidrapportapp\.se>|-{2,}\s*(original|ursprungligt|vidarebefordrat)|_{5,}|från:|from:|skickat:|sent:|den .+ skrev|on .+ wrote|.+ skrev:?\s*$|\d{4}-\d{2}-\d{2}.+skrev)/i;
 
 // The person's own words: text before the quote, whitespace collapsed.
 export const replySnippet = (text: string, max = 400) => {
@@ -97,3 +97,16 @@ export const guessCategory = (
   if (JUST_NO.test(s)) return "no";
   return "";
 };
+
+// Plain text of an HTML-only mail (some clients send no text part).
+export const htmlToText = (html: string) =>
+  String(html || "")
+    .replace(/<(style|script)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<blockquote[\s\S]*$/i, "")
+    .replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)));

@@ -56,3 +56,24 @@ describe("guessCategory", () => {
     expect(guessCategory("Hej")).toBe("");
   });
 });
+
+import { htmlToText } from "./mailer-funnel-parse";
+
+describe("reply text", () => {
+  it("cuts English Gmail quotes", () => {
+    expect(
+      replySnippet(
+        "Tack men vi sköter det själva\nOn Sun, Oct 4, 2026 at 4:17 PM Alexander <a@b.se>\nwrote:",
+      ),
+    ).toBe("Tack men vi sköter det själva");
+  });
+  it("reads HTML-only mails", () => {
+    expect(
+      replySnippet(
+        htmlToText(
+          "<div>Vi kör Softone<br>Mvh</div><blockquote>Hej</blockquote>",
+        ),
+      ),
+    ).toBe("Vi kör Softone Mvh");
+  });
+});
