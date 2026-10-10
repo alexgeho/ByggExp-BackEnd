@@ -540,7 +540,7 @@ export class MailerFunnelService {
   async classifyPending() {
     if (!claudeEnabled()) return 0;
     const pending = await this.replies
-      .find({ category: "", aiTried: false })
+      .find({ category: "", aiTried: { $ne: true } })
       .sort({ receivedAt: 1 })
       .limit(40)
       .lean();
