@@ -73,6 +73,8 @@ export type InboxInput = {
   imapPass?: string;
 };
 
+const MIN_REAL_CAMPAIGN = 10;
+
 // "ByggExp (Brevo)" → "ByggExp"; campaigns of deleted senders fall back to
 // the first word of the campaign name ("Nordkod – utan hemsida").
 const brandOf = (senderLabel: string, campaignName: string) =>
@@ -131,10 +133,13 @@ export class MailerFunnelService {
     ]);
     const senderLabel = new Map(senders.map((s) => [s.key, s.label]));
     const listName = new Map(lists.map((l) => [String(l._id), l.name]));
-    const rows = all.map((c) => ({
-      c,
-      brand: brandOf(senderLabel.get(senderKeysOf(c)[0]) || "", c.name),
-    }));
+    // Tiny sends (a few mails to our own inboxes) are tests, not outreach.
+    const rows = all
+      .filter((c) => (c.stats?.total || 0) >= MIN_REAL_CAMPAIGN)
+      .map((c) => ({
+        c,
+        brand: brandOf(senderLabel.get(senderKeysOf(c)[0]) || "", c.name),
+      }));
     const brands = [...new Set(rows.map((r) => r.brand).filter(Boolean))];
 
     const wanted = new Set(q.campaignIds?.filter(Boolean) ?? []);
