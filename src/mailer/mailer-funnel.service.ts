@@ -31,6 +31,7 @@ import {
 } from "./mailer-funnel-parse";
 import { senderKeysOf } from "./mailer-campaigns.service";
 import { MailerListsService } from "./mailer-lists.service";
+import { mailerVisits } from "./mailer-ga";
 import { utmSlug } from "./mailer-personalize";
 import { MailerSettingsService } from "./mailer-settings.service";
 import {
@@ -174,12 +175,13 @@ export class MailerFunnelService {
     );
     const ids = picked.map((r) => r.c._id);
 
-    const [replies, signups] = await Promise.all([
+    const [replies, signups, ga] = await Promise.all([
       this.replies
         .find({ campaignId: { $in: ids } })
         .sort({ receivedAt: -1 })
         .lean(),
       this.signups(ids),
+      mailerVisits(),
     ]);
 
     const per = new Map<string, Counts>();
@@ -225,6 +227,12 @@ export class MailerFunnelService {
         brand: r.brand,
       })),
       totals,
+      visits: ga
+        ? picked.reduce(
+            (n, { c }) => n + (ga.get(utmSlug(c.name))?.sessions ?? 0),
+            0,
+          )
+        : null,
       replyMix,
       competitors: Object.entries(competitorMix)
         .sort((a, b) => b[1] - a[1])
@@ -244,6 +252,8 @@ export class MailerFunnelService {
         startedAt: c.startedAt,
         total: c.stats?.total || 0,
         ...per.get(String(c._id)),
+        visits: ga ? (ga.get(utmSlug(c.name))?.sessions ?? 0) : null,
+        avgSeconds: ga ? (ga.get(utmSlug(c.name))?.avgSeconds ?? null) : null,
       })),
       replies: replies
         .filter((r) => r.category !== "auto" || !publicView)
