@@ -156,9 +156,9 @@ export class MailerFunnelService {
     const from = day(q.from);
     const to = day(q.to);
     const startDay = (c: (typeof all)[number]) =>
-      new Date(c.startedAt || (c as { createdAt?: Date }).createdAt || 0)
-        .toISOString()
-        .slice(0, 10);
+      new Date(
+        c.startedAt || (c as { createdAt?: Date }).createdAt || 0,
+      ).toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" });
     const inPeriod = (c: (typeof all)[number]) =>
       (!from || startDay(c) >= from) && (!to || startDay(c) <= to);
     const picked = rows.filter(
