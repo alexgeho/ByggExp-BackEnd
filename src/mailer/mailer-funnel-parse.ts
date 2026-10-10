@@ -73,7 +73,7 @@ export const replySnippet = (text: string, max = 400) => {
 };
 
 const UNSUBSCRIBE =
-  /(avregistrera|avsluta prenumeration|unsubscribe|ta bort mig|sluta skicka|stryk mig|vill inte (ha|få) (fler|mer|några))/i;
+  /(behöver inte skicka|skicka inte (fler|mer|igen)|avregistrera|avsluta prenumeration|unsubscribe|ta bort mig|sluta skicka|stryk mig|vill inte (ha|få) (fler|mer|några))/i;
 export const asksToUnsubscribe = (snippet: string) => UNSUBSCRIBE.test(snippet);
 
 // Fallback when AI is off/failing: obvious Swedish/English phrasings only.

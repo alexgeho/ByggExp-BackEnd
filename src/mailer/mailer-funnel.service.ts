@@ -80,6 +80,7 @@ export type InboxInput = {
 };
 
 const MIN_REAL_CAMPAIGN = 10;
+const REPLY_SORT_VERSION = 2;
 
 // "ByggExp (Brevo)" → "ByggExp"; campaigns of deleted senders fall back to
 // the first word of the campaign name ("Nordkod – utan hemsida").
@@ -544,7 +545,7 @@ export class MailerFunnelService {
   // interest / unsubscribe, plus a short note. Each reply is tried once.
   async classifyPending() {
     const pending = await this.replies
-      .find({ category: "", aiTried: { $ne: true } })
+      .find({ category: "", sortVersion: { $lt: REPLY_SORT_VERSION } })
       .sort({ receivedAt: 1 })
       .limit(40)
       .lean();
@@ -566,7 +567,8 @@ Categories:
 - "later": maybe later, not now, no employees yet, will come back
 - "has_system": already uses another system/app/service for this (name it in the note if mentioned)
 - "no": just a no / not interested / no thanks, without a reason about another system
-- "unsubscribe": asks to be removed or unsubscribed
+- "unsubscribe": asks to be removed, unsubscribed or not to be mailed again (also an empty mail whose subject is "unsubscribe")
+- "auto": automatic reply (out of office, ticket received, "we answer in turn"), or an empty reply with no message
 - "": cannot tell
 
 For each reply also write "note": at most 6 words in Russian summarising it (e.g. "Softone, довольны", "Позвонить в понедельник", "Не интересно").
@@ -602,7 +604,13 @@ ${JSON.stringify(items)}`;
 
   // AI category if valid, else the keyword rules; note only if empty.
   private async applyGuess(
-    r: { _id: Types.ObjectId; snippet: string; note: string; email: string },
+    r: {
+      _id: Types.ObjectId;
+      subject: string;
+      snippet: string;
+      note: string;
+      email: string;
+    },
     aiCategory: string,
     aiNote: string,
   ) {
@@ -611,8 +619,8 @@ ${JSON.stringify(items)}`;
     ).includes(aiCategory)
       ? (aiCategory as ReplyCategory)
       : "";
-    if (!category || category === "auto") category = guessCategory(r.snippet);
-    const set: Partial<MailReply> = { aiTried: true };
+    if (!category) category = guessCategory(`${r.subject}\n${r.snippet}`);
+    const set: Partial<MailReply> = { sortVersion: REPLY_SORT_VERSION };
     if (category) set.category = category;
     if (aiNote && !r.note) set.note = aiNote.slice(0, 120);
     await this.replies.updateOne({ _id: r._id, category: "" }, set);

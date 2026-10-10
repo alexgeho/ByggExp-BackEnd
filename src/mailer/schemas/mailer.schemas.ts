@@ -422,9 +422,10 @@ export class MailReply {
   @Prop({ default: "" })
   note: string;
 
-  // Claude has tried to classify it (once — manual edits always win).
-  @Prop({ default: false })
-  aiTried: boolean;
+  // Sorting rules version this reply was last tried with (0 = never).
+  // Manual edits always win; bump REPLY_SORT_VERSION to re-sort unsorted ones.
+  @Prop({ default: 0 })
+  sortVersion: number;
 }
 export const MailReplySchema = SchemaFactory.createForClass(MailReply);
 
