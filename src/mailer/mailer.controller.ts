@@ -97,6 +97,12 @@ export class MailerController {
       note: typeof body.note === "string" ? body.note : undefined,
     });
   }
+  @Post("funnel/replies/:id/draft") draftReply(@Param("id") id: string) {
+    return this.funnel.draftReply(id);
+  }
+  @Post("funnel/insights") insights() {
+    return this.funnel.generateInsights();
+  }
   @Get("funnel/share") getShare() {
     return this.funnel.share();
   }

@@ -18,6 +18,7 @@ import { cronsDisabled } from "../common/cron.util";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import { User, UserDocument } from "../users/schemas/user.schema";
 import { decryptSecret, encryptSecret, newToken } from "./mailer-crypto";
+import { COMPETITORS, findCompetitor, savingsFor } from "./mailer-competitors";
 import {
   asksToUnsubscribe,
   domainOf,
@@ -80,7 +81,7 @@ export type InboxInput = {
 };
 
 const MIN_REAL_CAMPAIGN = 10;
-const REPLY_SORT_VERSION = 2;
+const REPLY_SORT_VERSION = 3;
 
 // "ByggExp (Brevo)" → "ByggExp"; campaigns of deleted senders fall back to
 // the first word of the campaign name ("Nordkod – utan hemsida").
@@ -131,13 +132,14 @@ export class MailerFunnelService {
     q: { brand?: string; campaignIds?: string[]; from?: string; to?: string },
     publicView = false,
   ) {
-    const [all, lists, senders] = await Promise.all([
+    const [all, lists, senders, cfg] = await Promise.all([
       this.campaigns
         .find({ status: { $ne: "draft" } }, { snapshot: 0 })
         .sort({ startedAt: -1, createdAt: -1 })
         .lean(),
       this.lists.find({}, { name: 1 }).lean(),
       this.settings.listSenders(),
+      this.cfg(),
     ]);
     const senderLabel = new Map(senders.map((s) => [s.key, s.label]));
     const listName = new Map(lists.map((l) => [String(l._id), l.name]));
@@ -189,10 +191,13 @@ export class MailerFunnelService {
       per.set(String(c._id), k);
     }
     const replyMix: Record<string, number> = {};
+    const competitorMix: Record<string, number> = {};
     for (const r of replies) {
       const k = per.get(String(r.campaignId));
       if (!k || r.category === "auto") continue;
       replyMix[r.category || ""] = (replyMix[r.category || ""] || 0) + 1;
+      if (r.competitor)
+        competitorMix[r.competitor] = (competitorMix[r.competitor] || 0) + 1;
       k.replied += 1;
       if (r.category === "interest") k.interest += 1;
     }
@@ -218,6 +223,15 @@ export class MailerFunnelService {
       })),
       totals,
       replyMix,
+      competitors: Object.entries(competitorMix)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, n]) => ({
+          name,
+          n,
+          saving5: savingsFor(name).find((x) => x.users === 5)?.saving ?? null,
+        })),
+      insights: cfg.insights,
+      insightsAt: cfg.insightsAt,
       rows: picked.map(({ c, brand }) => ({
         _id: String(c._id),
         name: c.name,
@@ -238,6 +252,7 @@ export class MailerFunnelService {
           snippet: publicView ? "" : r.snippet,
           note: r.note,
           category: r.category,
+          competitor: r.competitor,
           campaignName: nameOf.get(String(r.campaignId)) || "",
           receivedAt: r.receivedAt,
         })),
@@ -576,16 +591,13 @@ export class MailerFunnelService {
   // interest / unsubscribe, plus a short note. Each reply is tried once.
   async classifyPending() {
     const pending = await this.replies
-      .find({
-        category: "",
-        sortVersion: { $not: { $gte: REPLY_SORT_VERSION } },
-      })
+      .find({ sortVersion: { $not: { $gte: REPLY_SORT_VERSION } } })
       .sort({ receivedAt: 1 })
       .limit(40)
       .lean();
     if (!pending.length) return 0;
     if (!claudeEnabled()) {
-      for (const r of pending) await this.applyGuess(r, "", "");
+      for (const r of pending) await this.applyGuess(r, {});
       return pending.length;
     }
     const items = pending.map((r) => ({
@@ -599,19 +611,28 @@ export class MailerFunnelService {
 Categories:
 - "interest": wants to talk, try it, a call or a demo
 - "later": maybe later, not now, no employees yet, will come back
-- "has_system": already uses another system/app/service for this (name it in the note if mentioned)
+- "has_system": already uses another system/app/service for this
 - "no": just a no / not interested / no thanks, without a reason about another system
 - "unsubscribe": asks to be removed, unsubscribed or not to be mailed again (also an empty mail whose subject is "unsubscribe")
 - "auto": automatic reply (out of office, ticket received, "we answer in turn"), or an empty reply with no message
 - "": cannot tell
 
-For each reply also write "note": at most 6 words in Russian summarising it (e.g. "Softone, довольны", "Позвонить в понедельник", "Не интересно").
+Also return:
+- "competitor": the product they already use, as its usual name (e.g. "Softone", "Bygglet", "Fieldly", "Fortnox", "SmartDok"), "Eget system" if they built their own, else "".
+- "note": at most 6 words in Russian summarising the reply (e.g. "Softone, довольны", "Позвонить в понедельник", "Не интересно").
 
-Return only JSON: {"items":[{"id":"...","category":"...","note":"..."}]}
+Return only JSON: {"items":[{"id":"...","category":"...","competitor":"...","note":"..."}]}
 
 Replies:
 ${JSON.stringify(items)}`;
-    let out: { items?: { id?: string; category?: string; note?: string }[] };
+    let out: {
+      items?: {
+        id?: string;
+        category?: string;
+        competitor?: string;
+        note?: string;
+      }[];
+    };
     try {
       const reply = await callClaude({
         model: process.env.MAILER_REPLY_MODEL || "claude-haiku-5-5",
@@ -621,22 +642,23 @@ ${JSON.stringify(items)}`;
       out = parseJsonObject(reply);
     } catch (err) {
       // Still sort the obvious ones, then report why AI failed.
-      for (const r of pending) await this.applyGuess(r, "", "");
+      for (const r of pending) await this.applyGuess(r, {});
       throw err;
     }
     const byId = new Map((out.items || []).map((i) => [String(i.id), i]));
     for (const r of pending) {
-      const ai = byId.get(String(r._id));
-      await this.applyGuess(
-        r,
-        String(ai?.category ?? ""),
-        String(ai?.note ?? ""),
-      );
+      const ai = byId.get(String(r._id)) || {};
+      await this.applyGuess(r, {
+        category: String(ai.category ?? ""),
+        competitor: String(ai.competitor ?? ""),
+        note: String(ai.note ?? ""),
+      });
     }
     return pending.length;
   }
 
-  // AI category if valid, else the keyword rules; note only if empty.
+  // AI result if valid, else keyword rules. Never overwrites what is already
+  // set (a category or note picked by hand always wins).
   private async applyGuess(
     r: {
       _id: Types.ObjectId;
@@ -644,21 +666,147 @@ ${JSON.stringify(items)}`;
       snippet: string;
       note: string;
       email: string;
+      category: ReplyCategory;
+      competitor?: string;
     },
-    aiCategory: string,
-    aiNote: string,
+    ai: { category?: string; competitor?: string; note?: string },
   ) {
-    let category: ReplyCategory = (
-      REPLY_CATEGORIES as readonly string[]
-    ).includes(aiCategory)
-      ? (aiCategory as ReplyCategory)
-      : "";
-    if (!category) category = guessCategory(`${r.subject}\n${r.snippet}`);
+    const text = `${r.subject}\n${r.snippet}`;
     const set: Partial<MailReply> = { sortVersion: REPLY_SORT_VERSION };
-    if (category) set.category = category;
-    if (aiNote && !r.note) set.note = aiNote.slice(0, 120);
-    await this.replies.updateOne({ _id: r._id, category: "" }, set);
-    if (category === "unsubscribe")
-      await this.listsService.markEverywhere(r.email, "unsubscribed");
+    if (!r.category) {
+      let category: ReplyCategory = (
+        REPLY_CATEGORIES as readonly string[]
+      ).includes(ai.category || "")
+        ? (ai.category as ReplyCategory)
+        : "";
+      if (!category) category = guessCategory(text);
+      if (category) set.category = category;
+      if (category === "unsubscribe")
+        await this.listsService.markEverywhere(r.email, "unsubscribed");
+    }
+    if (!r.competitor) {
+      const known = findCompetitor(`${ai.competitor || ""} ${text} ${r.note}`);
+      const competitor = known?.name || (ai.competitor || "").trim();
+      if (competitor) set.competitor = competitor.slice(0, 60);
+    }
+    if (ai.note && !r.note) set.note = ai.note.slice(0, 120);
+    await this.replies.updateOne({ _id: r._id }, set);
+  }
+
+  // ---------- reply draft with a savings figure ----------
+
+  async draftReply(id: string) {
+    if (!isValidObjectId(id)) throw new NotFoundException("Not found");
+    const r = await this.replies.findById(id).lean();
+    if (!r) throw new NotFoundException("Not found");
+    const competitor =
+      r.competitor || findCompetitor(`${r.snippet} ${r.note}`)?.name || "";
+    const savings = competitor ? savingsFor(competitor) : [];
+    const facts = savings.length
+      ? `Their system: ${competitor}. List prices per month excl. VAT (theirs vs ByggExp Komplett): ${savings
+          .map(
+            (s) =>
+              `${s.users} users: ${s.theirs} kr vs ${s.ours} kr (saves ${s.saving} kr/month)`,
+          )
+          .join("; ")}. Note on their price: ${
+          COMPETITORS.find((c) => c.name === competitor)?.note || ""
+        }.`
+      : competitor
+        ? `Their system: ${competitor}; its price is not public, so ask what they pay today and offer to compare.`
+        : "No known system named.";
+    const prompt = `Write a short reply in Swedish (max 90 words, friendly, no hard sell) to this answer to our cold email about ByggExp.
+
+ByggExp Komplett: 990 kr/month incl. 10 users (+119 kr per extra user), time reports with GPS or manual, projects, ÄTA, egenkontroll/KMA, offers, invoices, payroll basis. No binding period, no setup fee, 2 weeks free trial, free 15-minute video demo.
+
+${facts}
+
+Rules: if savings are given, mention one concrete figure for a typical team (pick 5 users unless the reply says otherwise) and that it is list price. Never invent prices. Respect a "no" — offer to send the comparison or end politely. End with one simple question. Sign as "Alexander, ByggExp".
+
+Their reply (from ${r.name || r.company || r.email}, subject "${r.subject}"):
+"""${r.snippet}"""
+
+Return only JSON: {"subject":"Re: ...","body":"..."}`;
+    if (!claudeEnabled()) throw new BadRequestException("AI är inte aktiverat");
+    const out = parseJsonObject<{ subject?: string; body?: string }>(
+      await callClaude({
+        model: process.env.MAILER_DRAFT_MODEL || "claude-sonnet-5-5",
+        maxTokens: 1024,
+        content: [{ type: "text", text: prompt }],
+      }),
+    );
+    return {
+      to: r.email,
+      subject: String(out.subject || `Re: ${r.subject}`),
+      body: String(out.body || ""),
+      competitor,
+      savings,
+    };
+  }
+
+  // ---------- weekly conclusions ----------
+
+  @Cron("0 7 * * 1", { timeZone: "Europe/Stockholm" })
+  async weeklyInsights() {
+    if (cronsDisabled()) return;
+    await this.generateInsights().catch((err) =>
+      this.logger.warn(`Insights failed: ${err}`),
+    );
+  }
+
+  async generateInsights() {
+    if (!claudeEnabled()) throw new BadRequestException("AI är inte aktiverat");
+    const data = await this.funnel({});
+    const subjects = new Map(
+      (
+        await this.campaigns
+          .find({ _id: { $in: data.rows.map((r) => r._id) } }, { subject: 1 })
+          .lean()
+      ).map((c) => [String(c._id), c.subject]),
+    );
+    const rows = data.rows.map((r) => ({
+      campaign: r.name,
+      brand: r.brand,
+      list: r.listName,
+      subject: subjects.get(r._id) || "",
+      start: r.startedAt,
+      sent: r.sent,
+      delivered: r.delivered,
+      opened: r.opened,
+      clicked: r.clicked,
+      replied: r.replied,
+      interest: r.interest,
+      unsubscribed: r.unsubscribed,
+      signups: r.registered,
+    }));
+    const replies = data.replies
+      .filter((r) => r.category !== "auto")
+      .map((r) => ({
+        campaign: r.campaignName,
+        category: r.category,
+        competitor: r.competitor,
+        note: r.note,
+      }));
+    const prompt = `You analyse cold-email outreach of ByggExp (Swedish app for construction firms: time reports, projects, invoices; Komplett 990 kr/month for 10 users). Data below: per-campaign stats and classified replies.
+
+Write 3–5 conclusions in Russian for the owner. Each: one sentence with a concrete number from the data, then "→" and one concrete next step. Cover: which subject/text works best (open and reply rate), main objections and competitors, what to change next. No generic advice, no invented numbers.
+
+Return only JSON: {"items":["...","..."]}
+
+Campaigns: ${JSON.stringify(rows)}
+Replies: ${JSON.stringify(replies)}`;
+    const out = parseJsonObject<{ items?: string[] }>(
+      await callClaude({
+        model: process.env.MAILER_INSIGHTS_MODEL || "claude-sonnet-5-5",
+        maxTokens: 2048,
+        content: [{ type: "text", text: prompt }],
+      }),
+    );
+    const c = await this.cfg();
+    c.insights = (out.items || [])
+      .map((x) => String(x).slice(0, 400))
+      .slice(0, 6);
+    c.insightsAt = new Date();
+    await c.save();
+    return { insights: c.insights, insightsAt: c.insightsAt };
   }
 }

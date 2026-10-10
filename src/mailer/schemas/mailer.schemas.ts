@@ -422,6 +422,10 @@ export class MailReply {
   @Prop({ default: "" })
   note: string;
 
+  // System they already use ("Softone", "Bygglet", "Eget system"), if named.
+  @Prop({ default: "" })
+  competitor: string;
+
   // Sorting rules version this reply was last tried with (0 = never).
   // Manual edits always win; bump REPLY_SORT_VERSION to re-sort unsorted ones.
   @Prop({ default: 0 })
@@ -462,6 +466,13 @@ export class MailerFunnelConfig {
 
   @Prop({ default: "" })
   lastError: string;
+
+  // Weekly conclusions written by Claude (Russian, 3–5 points).
+  @Prop({ type: [String], default: [] })
+  insights: string[];
+
+  @Prop({ type: Date, default: null })
+  insightsAt: Date | null;
 
   // Read-only public funnel link (/m/funnel/:token). "" = sharing off.
   @Prop({ default: "" })
