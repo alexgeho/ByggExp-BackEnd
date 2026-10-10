@@ -9,6 +9,11 @@ import { Cron, CronExpression } from "@nestjs/schedule";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { isValidObjectId, Model, Types } from "mongoose";
+import {
+  callClaude,
+  claudeEnabled,
+  parseJsonObject,
+} from "../common/anthropic.client";
 import { cronsDisabled } from "../common/cron.util";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import { User, UserDocument } from "../users/schemas/user.schema";
@@ -169,9 +174,11 @@ export class MailerFunnelService {
       k.unsubscribed = s.unsubscribed || 0;
       per.set(String(c._id), k);
     }
+    const replyMix: Record<string, number> = {};
     for (const r of replies) {
       const k = per.get(String(r.campaignId));
       if (!k || r.category === "auto") continue;
+      replyMix[r.category || ""] = (replyMix[r.category || ""] || 0) + 1;
       k.replied += 1;
       if (r.category === "interest") k.interest += 1;
     }
@@ -196,6 +203,7 @@ export class MailerFunnelService {
         brand: r.brand,
       })),
       totals,
+      replyMix,
       rows: picked.map(({ c, brand }) => ({
         _id: String(c._id),
         name: c.name,
@@ -456,6 +464,9 @@ export class MailerFunnelService {
     }
     c.lastSyncAt = new Date();
     await c.save();
+    await this.classifyPending().catch((err) =>
+      this.logger.warn(`Reply classification failed: ${err}`),
+    );
     return { ...(await this.inbox()), added };
   }
 
@@ -522,5 +533,63 @@ export class MailerFunnelService {
       detail: snippet.slice(0, 500),
     });
     return true;
+  }
+
+  // Sorts new replies with Claude: no / uses another service / later /
+  // interest / unsubscribe, plus a short note. Each reply is tried once.
+  async classifyPending() {
+    if (!claudeEnabled()) return 0;
+    const pending = await this.replies
+      .find({ category: "", aiTried: false })
+      .sort({ receivedAt: 1 })
+      .limit(40)
+      .lean();
+    if (!pending.length) return 0;
+    const items = pending.map((r) => ({
+      id: String(r._id),
+      company: r.company,
+      subject: r.subject,
+      text: r.snippet,
+    }));
+    const prompt = `We sent Swedish construction firms a cold email about ByggExp (an app for time reports, invoices and projects). Classify each reply.
+
+Categories:
+- "interest": wants to talk, try it, a call or a demo
+- "later": maybe later, not now, no employees yet, will come back
+- "has_system": already uses another system/app/service for this (name it in the note if mentioned)
+- "no": just a no / not interested / no thanks, without a reason about another system
+- "unsubscribe": asks to be removed or unsubscribed
+- "": cannot tell
+
+For each reply also write "note": at most 6 words in Russian summarising it (e.g. "Softone, довольны", "Позвонить в понедельник", "Не интересно").
+
+Return only JSON: {"items":[{"id":"...","category":"...","note":"..."}]}
+
+Replies:
+${JSON.stringify(items)}`;
+    const reply = await callClaude({
+      model: process.env.MAILER_REPLY_MODEL || "claude-haiku-5-5",
+      maxTokens: 4096,
+      content: [{ type: "text", text: prompt }],
+    });
+    const out = parseJsonObject<{
+      items?: { id?: string; category?: string; note?: string }[];
+    }>(reply);
+    const byId = new Map((out.items || []).map((i) => [String(i.id), i]));
+    for (const r of pending) {
+      const ai = byId.get(String(r._id));
+      const category = (REPLY_CATEGORIES as readonly string[]).includes(
+        String(ai?.category ?? ""),
+      )
+        ? (String(ai?.category ?? "") as ReplyCategory)
+        : "";
+      const set: Partial<MailReply> = { aiTried: true };
+      if (category && category !== "auto") set.category = category;
+      if (ai?.note && !r.note) set.note = String(ai.note).slice(0, 120);
+      await this.replies.updateOne({ _id: r._id, category: "" }, set);
+      if (category === "unsubscribe")
+        await this.listsService.markEverywhere(r.email, "unsubscribed");
+    }
+    return pending.length;
   }
 }

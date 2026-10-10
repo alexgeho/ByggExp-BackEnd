@@ -421,6 +421,10 @@ export class MailReply {
 
   @Prop({ default: "" })
   note: string;
+
+  // Claude has tried to classify it (once — manual edits always win).
+  @Prop({ default: false })
+  aiTried: boolean;
 }
 export const MailReplySchema = SchemaFactory.createForClass(MailReply);
 
