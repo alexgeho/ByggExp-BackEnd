@@ -93,6 +93,7 @@ const brandOf = (senderLabel: string, campaignName: string) =>
 export class MailerFunnelService {
   private readonly logger = new Logger(MailerFunnelService.name);
   private syncing = false;
+  private syncStartedAt = 0;
 
   constructor(
     @InjectModel(Campaign.name)
@@ -405,10 +406,18 @@ export class MailerFunnelService {
   // Reads new mail in INBOX and stores the ones that answer a campaign.
   async syncInbox() {
     const c = await this.cfg();
-    if (!c.imapHost || !c.imapUser || !c.imapPassEnc)
+    if (!c.imapHost || !c.imapUser || !c.imapPassEnc) {
+      await this.sortReplies();
       return { ...(await this.inbox()), added: 0 };
-    if (this.syncing) return { ...(await this.inbox()), added: 0 };
+    }
+    // A sync older than 2 min is a hung connection — don't let it block all
+    // later syncs forever.
+    if (this.syncing && Date.now() - this.syncStartedAt < 120_000) {
+      await this.sortReplies();
+      return { ...(await this.inbox()), added: 0 };
+    }
     this.syncing = true;
+    this.syncStartedAt = Date.now();
     let added = 0;
     const client = new ImapFlow({
       host: c.imapHost,
@@ -416,7 +425,10 @@ export class MailerFunnelService {
       secure: (c.imapPort || 993) === 993,
       auth: { user: c.imapUser, pass: decryptSecret(c.imapPassEnc) },
       logger: false,
+      greetingTimeout: 20_000,
+      socketTimeout: 60_000,
     });
+    const timer = setTimeout(() => client.close(), 90_000);
     try {
       await client.connect();
       const lock = await client.getMailboxLock("INBOX");
@@ -462,10 +474,16 @@ export class MailerFunnelService {
       );
       client.close();
     } finally {
+      clearTimeout(timer);
       this.syncing = false;
     }
     c.lastSyncAt = new Date();
     await c.save();
+    await this.sortReplies();
+    return { ...(await this.inbox()), added };
+  }
+
+  private async sortReplies() {
     await this.classifyPending().catch(async (err) => {
       this.logger.warn(`Reply classification failed: ${err}`);
       await this.config.updateOne(
@@ -473,7 +491,6 @@ export class MailerFunnelService {
         { lastError: `AI: ${String(err).slice(0, 250)}` },
       );
     });
-    return { ...(await this.inbox()), added };
   }
 
   // true when the mail answers one of our campaigns and is new.
@@ -545,7 +562,10 @@ export class MailerFunnelService {
   // interest / unsubscribe, plus a short note. Each reply is tried once.
   async classifyPending() {
     const pending = await this.replies
-      .find({ category: "", sortVersion: { $not: { $gte: REPLY_SORT_VERSION } } })
+      .find({
+        category: "",
+        sortVersion: { $not: { $gte: REPLY_SORT_VERSION } },
+      })
       .sort({ receivedAt: 1 })
       .limit(40)
       .lean();
