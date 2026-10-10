@@ -788,7 +788,7 @@ Return only JSON: {"subject":"Re: ...","body":"..."}`;
       }));
     const prompt = `You analyse cold-email outreach of ByggExp (Swedish app for construction firms: time reports, projects, invoices; Komplett 990 kr/month for 10 users). Data below: per-campaign stats and classified replies.
 
-Write 3–5 conclusions in Russian for the owner. Each: one sentence with a concrete number from the data, then "→" and one concrete next step. Cover: which subject/text works best (open and reply rate), main objections and competitors, what to change next. No generic advice, no invented numbers.
+Write 3–5 conclusions in Russian for the owner. Each at most 22 words: the key number from the data, then "→" and one concrete next step. Plain words, no quotes of whole subjects, no lists of campaign names. Cover: which subject/text works best (open and reply rate), main objections and competitors, what to change next. No generic advice, no invented numbers.
 
 Return only JSON: {"items":["...","..."]}
 
