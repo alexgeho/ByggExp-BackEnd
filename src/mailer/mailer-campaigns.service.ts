@@ -21,6 +21,7 @@ import { newToken, verifyLink } from "./mailer-crypto";
 import { MailerListsService } from "./mailer-lists.service";
 import {
   addTracking,
+  addUtm,
   applyMergeTags,
   unsubscribeUrlFor,
 } from "./mailer-personalize";
@@ -373,11 +374,16 @@ export class MailerCampaignsService {
     subject: string,
     r: { email: string; name: string; company: string; token: string },
     tracking: { trackOpens: boolean; trackClicks: boolean } | null,
+    campaignName = "",
   ) {
     const unsub = unsubscribeUrlFor(apiBase(), r.token);
-    let html = applyMergeTags(
-      base.html.split(UNSUBSCRIBE_PLACEHOLDER).join(unsub),
-      r,
+    let html = addUtm(
+      applyMergeTags(
+        base.html.split(UNSUBSCRIBE_PLACEHOLDER).join(unsub),
+        r,
+        true,
+      ),
+      campaignName,
       true,
     );
     if (tracking)
@@ -388,9 +394,13 @@ export class MailerCampaignsService {
       });
     return {
       html,
-      text: applyMergeTags(
-        base.text.split(UNSUBSCRIBE_PLACEHOLDER).join(unsub),
-        r,
+      text: addUtm(
+        applyMergeTags(
+          base.text.split(UNSUBSCRIBE_PLACEHOLDER).join(unsub),
+          r,
+          false,
+        ),
+        campaignName,
         false,
       ),
       subject: applyMergeTags(subject, r, false),
@@ -419,6 +429,7 @@ export class MailerCampaignsService {
       c.subject,
       { email: to, name: "Test", company: "Testföretag AB", token: "test" },
       null,
+      c.name,
     );
     // Log what the SMTP server answered (or the error), so a test that never
     // arrives can be traced in the event log instead of guessed at.
@@ -576,10 +587,16 @@ export class MailerCampaignsService {
     t: Awaited<ReturnType<MailerSettingsService["transport"]>>,
     senderKey: string,
   ): Promise<boolean> {
-    const msg = this.personalize(base, c.subject, r, {
-      trackOpens: t.settings.trackOpens,
-      trackClicks: t.settings.trackClicks,
-    });
+    const msg = this.personalize(
+      base,
+      c.subject,
+      r,
+      {
+        trackOpens: t.settings.trackOpens,
+        trackClicks: t.settings.trackClicks,
+      },
+      c.name,
+    );
     const mailto = t.settings.replyTo || t.settings.fromEmail;
     try {
       await t.transporter.sendMail({

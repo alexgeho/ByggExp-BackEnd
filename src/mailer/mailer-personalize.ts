@@ -35,14 +35,58 @@ export function applyMergeTags(
   );
 }
 
+// Our own sites: links there get UTM tags so GA4 and the sign-up "Källa"
+// know the visit came from this campaign.
+const OWN_HOSTS =
+  /(^|\.)(byggexp\.se|nordkod\.se|kodholm\.se|tidrapportapp\.se)$/i;
+
+export const utmSlug = (name: string) =>
+  String(name || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+
+export function withUtm(url: string, campaign: string): string {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return url;
+  }
+  if (!/^https?:$/.test(u.protocol) || !OWN_HOSTS.test(u.hostname)) return url;
+  if (u.searchParams.has("utm_source")) return url; // set by hand — keep
+  u.searchParams.set("utm_source", "mailer");
+  u.searchParams.set("utm_medium", "email");
+  u.searchParams.set("utm_campaign", utmSlug(campaign));
+  return u.toString();
+}
+
+// Adds UTM to own-site links in HTML hrefs and in plain text.
+export function addUtm(content: string, campaign: string, html: boolean) {
+  if (!campaign) return content;
+  return html
+    ? content.replace(
+        /href="(https?:\/\/[^"]+)"/g,
+        (_, raw: string) =>
+          `href="${escapeHtml(withUtm(unescapeAttr(raw), campaign))}"`,
+      )
+    : content.replace(/https?:\/\/[^\s<>"')]*[^\s<>"').,!?;:]/g, (u) =>
+        withUtm(u, campaign),
+      );
+}
+
 export const unsubscribeUrlFor = (apiBase: string, token: string) =>
   `${apiBase}/m/u/${token}`;
 
-const unescapeAttr = (s: string) =>
-  s
+function unescapeAttr(s: string) {
+  return s
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
+}
 
 export function addTracking(
   html: string,

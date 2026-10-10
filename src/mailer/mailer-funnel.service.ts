@@ -31,6 +31,7 @@ import {
 } from "./mailer-funnel-parse";
 import { senderKeysOf } from "./mailer-campaigns.service";
 import { MailerListsService } from "./mailer-lists.service";
+import { utmSlug } from "./mailer-personalize";
 import { MailerSettingsService } from "./mailer-settings.service";
 import {
   Campaign,
@@ -301,6 +302,7 @@ export class MailerFunnelService {
           createdAt: 1,
           projects: 1,
           subscriptionStatus: 1,
+          signupSource: 1,
         },
       )
       .lean<
@@ -311,8 +313,15 @@ export class MailerFunnelService {
           createdAt: Date;
           projects: string[];
           subscriptionStatus?: string | null;
+          signupSource?: { utmSource?: string; utmCampaign?: string } | null;
         }[]
       >();
+    // Sign-up that came through a mail link (UTM) — exact attribution.
+    const bySlug = new Map(
+      (
+        await this.campaigns.find({ _id: { $in: ids } }, { name: 1 }).lean()
+      ).map((c) => [utmSlug(c.name), String(c._id)]),
+    );
     if (!companies.length) return [];
     const users = await this.users
       .find(
@@ -339,13 +348,18 @@ export class MailerFunnelService {
         const d = domainOf(email);
         if (isCompanyDomain(d)) keys.add(`@${d}`);
       }
+      const src = c.signupSource;
+      const viaUtm =
+        src?.utmSource === "mailer"
+          ? bySlug.get(String(src.utmCampaign || ""))
+          : undefined;
       const hits = [...keys]
         .flatMap((k) => byKey.get(k) ?? [])
         .filter((r) => r.sentAt && r.sentAt <= c.createdAt)
         .sort((a, b) => +b.sentAt! - +a.sentAt!);
-      if (!hits.length) continue;
+      if (!hits.length && !viaUtm) continue;
       out.push({
-        campaignId: String(hits[0].campaignId),
+        campaignId: viaUtm || String(hits[0].campaignId),
         company: c.name || c.email,
         createdAt: c.createdAt,
         active:

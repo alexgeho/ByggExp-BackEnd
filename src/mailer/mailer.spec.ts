@@ -126,3 +126,33 @@ describe("brevo webhook key", () => {
     expect(a.length).toBe(22);
   });
 });
+
+import { addUtm, utmSlug, withUtm } from "./mailer-personalize";
+
+describe("UTM on own-site links", () => {
+  it("tags our domains only", () => {
+    expect(withUtm("https://byggexp.se/sv?x=1", "ByggExp El – A2 (kort)")).toBe(
+      "https://byggexp.se/sv?x=1&utm_source=mailer&utm_medium=email&utm_campaign=byggexp-el-a2-kort",
+    );
+    expect(withUtm("https://admin.byggexp.se/register", "c")).toContain(
+      "utm_campaign=c",
+    );
+    expect(withUtm("https://google.com/", "c")).toBe("https://google.com/");
+    expect(withUtm("https://byggexp.se/?utm_source=x", "c")).toBe(
+      "https://byggexp.se/?utm_source=x",
+    );
+  });
+  it("works in html and text", () => {
+    expect(
+      addUtm('<a href="https://byggexp.se/?a=1&amp;b=2">x</a>', "c", true),
+    ).toBe(
+      '<a href="https://byggexp.se/?a=1&amp;b=2&amp;utm_source=mailer&amp;utm_medium=email&amp;utm_campaign=c">x</a>',
+    );
+    expect(addUtm("Läs mer: https://nordkod.se/sv.", "c", false)).toContain(
+      "utm_campaign=c",
+    );
+    expect(utmSlug("Nordkod – utan hemsida (Sverige)")).toBe(
+      "nordkod-utan-hemsida-sverige",
+    );
+  });
+});
