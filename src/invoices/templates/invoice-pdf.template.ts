@@ -127,7 +127,7 @@ body {
 }
 .invoice-header__meta dt { margin: 0; }
 .invoice-header__meta dd { margin: 0; white-space: nowrap; }
-.invoice-header__recipient { font-weight: bold; font-size: 13px; line-height: 1.3; }
+.invoice-header__recipient { font-weight: normal; font-size: 13px; line-height: 1.3; }
 
 .invoice-header__details {
   display: grid;
