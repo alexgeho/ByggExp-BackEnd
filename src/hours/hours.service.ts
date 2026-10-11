@@ -413,7 +413,7 @@ export class HoursService {
     );
     const users = await this.userModel
       .find({ _id: { $in: workerIds } })
-      .select("name email phoneAreaCode phoneNumber role profession avatarUrl")
+      .select("name role profession avatarUrl")
       .lean()
       .exec();
     const userById = new Map(users.map((u) => [this.getEntityId(u), u]));
@@ -486,7 +486,7 @@ export class HoursService {
 
       return {
         workerId,
-        name: u?.name || u?.email || (u?.phoneNumber ? `+${u.phoneAreaCode ?? ""}${u.phoneNumber}` : "—"),
+        name: u?.name || "Unknown",
         role: u?.role || null,
         profession: u?.profession || null,
         avatarUrl: u?.avatarUrl || null,
