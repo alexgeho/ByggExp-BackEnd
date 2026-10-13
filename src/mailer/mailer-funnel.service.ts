@@ -456,6 +456,15 @@ export class MailerFunnelService {
     await this.syncInbox().catch((err) =>
       this.logger.warn(`Inbox sync failed: ${err}`),
     );
+    // Monday 07:00 run can be missed (restart/deploy at that minute) —
+    // catch up when the conclusions are older than a week.
+    const c = await this.cfg();
+    const weekAgo = Date.now() - 7 * 24 * 3600_000;
+    if (claudeEnabled() && (!c.insightsAt || +c.insightsAt < weekAgo)) {
+      await this.generateInsights().catch((err) =>
+        this.logger.warn(`Insights catch-up failed: ${err}`),
+      );
+    }
   }
 
   // Reads new mail in INBOX and stores the ones that answer a campaign.
