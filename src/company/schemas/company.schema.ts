@@ -99,6 +99,10 @@ export class Company {
   @Prop({ default: "" })
   plusgiro: string;
 
+  // Bank account number (clearing + account, e.g. "8327-9 123 456 789-0").
+  @Prop({ default: "" })
+  bankAccount: string;
+
   // ISO country code of the company's home market (e.g. "SE", "NO"). Drives
   // market-specific behaviour in the admin: VAT rate options, ROT availability
   // (Sweden only) and the default currency. Defaults to Sweden for back-compat.

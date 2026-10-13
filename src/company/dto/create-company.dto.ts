@@ -55,6 +55,11 @@ export class CreateCompanyDto {
   @IsOptional()
   plusgiro?: string;
 
+  // Bank account number (clearing + account).
+  @IsString()
+  @IsOptional()
+  bankAccount?: string;
+
   // ISO country code of the company's home market (e.g. "SE", "NO").
   @IsString()
   @IsOptional()
