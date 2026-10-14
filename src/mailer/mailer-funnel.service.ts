@@ -16,6 +16,7 @@ import {
 } from "../common/anthropic.client";
 import { cronsDisabled } from "../common/cron.util";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
+import { DemoLead, DemoLeadDocument } from "../mail/schemas/demo-lead.schema";
 import { User, UserDocument } from "../users/schemas/user.schema";
 import { decryptSecret, encryptSecret, newToken } from "./mailer-crypto";
 import { COMPETITORS, findCompetitor, savingsFor } from "./mailer-competitors";
@@ -58,6 +59,7 @@ export const FUNNEL_STAGES = [
   "clicked",
   "replied",
   "interest",
+  "demo",
   "registered",
   "active",
 ] as const;
@@ -71,6 +73,7 @@ const zero = (): Counts => ({
   clicked: 0,
   replied: 0,
   interest: 0,
+  demo: 0,
   registered: 0,
   active: 0,
   unsubscribed: 0,
@@ -117,6 +120,8 @@ export class MailerFunnelService {
     private readonly companies: Model<CompanyDocument>,
     @InjectModel(User.name)
     private readonly users: Model<UserDocument>,
+    @InjectModel(DemoLead.name)
+    private readonly demoLeads: Model<DemoLeadDocument>,
     private readonly settings: MailerSettingsService,
     private readonly listsService: MailerListsService,
   ) {}
@@ -175,12 +180,14 @@ export class MailerFunnelService {
     );
     const ids = picked.map((r) => r.c._id);
 
-    const [replies, signups, ga] = await Promise.all([
+    const match = await this.matcher(ids);
+    const [replies, signups, demos, ga] = await Promise.all([
       this.replies
         .find({ campaignId: { $in: ids } })
         .sort({ receivedAt: -1 })
         .lean(),
-      this.signups(ids),
+      this.signups(match),
+      this.demos(match, !q.brand && !wanted.size, from, to),
       mailerVisits(),
     ]);
 
@@ -205,6 +212,10 @@ export class MailerFunnelService {
         competitorMix[r.competitor] = (competitorMix[r.competitor] || 0) + 1;
       k.replied += 1;
       if (r.category === "interest") k.interest += 1;
+    }
+    for (const d of demos) {
+      const k = d.campaignId ? per.get(d.campaignId) : undefined;
+      if (k) k.demo += 1;
     }
     for (const s of signups) {
       const k = per.get(s.campaignId);
@@ -269,6 +280,13 @@ export class MailerFunnelService {
           campaignName: nameOf.get(String(r.campaignId)) || "",
           receivedAt: r.receivedAt,
         })),
+      demos: demos.map((d) => ({
+        name: publicView ? "" : d.name,
+        email: publicView ? "" : d.email,
+        phone: publicView ? "" : d.phone,
+        campaignName: d.campaignId ? nameOf.get(d.campaignId) || "" : "",
+        createdAt: d.createdAt,
+      })),
       signups: signups.map((s) => ({
         company: s.company,
         campaignName: nameOf.get(s.campaignId) || "",
@@ -279,17 +297,17 @@ export class MailerFunnelService {
     };
   }
 
-  // Companies that signed up after getting one of these campaigns: same
-  // address, or same firm domain. Credited to the last mail before sign-up.
-  private async signups(ids: Types.ObjectId[]) {
-    if (!ids.length) return [];
-    const sent = await this.recipients
-      .find(
-        { campaignId: { $in: ids }, status: "sent" },
-        { email: 1, campaignId: 1, sentAt: 1 },
-      )
-      .lean();
-    if (!sent.length) return [];
+  // Finds the campaign a person came from: mail link UTM first, else the
+  // last mail sent to the same address or firm domain before `at`.
+  private async matcher(ids: Types.ObjectId[]) {
+    const sent = ids.length
+      ? await this.recipients
+          .find(
+            { campaignId: { $in: ids }, status: "sent" },
+            { email: 1, campaignId: 1, sentAt: 1 },
+          )
+          .lean()
+      : [];
     const first = sent.reduce(
       (m, r) => (r.sentAt && r.sentAt < m ? r.sentAt : m),
       new Date(),
@@ -302,7 +320,80 @@ export class MailerFunnelService {
       const d = domainOf(r.email);
       if (isCompanyDomain(d)) add(`@${d}`, r);
     }
+    const bySlug = new Map(
+      ids.length
+        ? (
+            await this.campaigns.find({ _id: { $in: ids } }, { name: 1 }).lean()
+          ).map((c) => [utmSlug(c.name), String(c._id)])
+        : [],
+    );
+    const find = (
+      emails: string[],
+      at: Date,
+      utm?: { utmSource?: string; utmCampaign?: string } | null,
+    ): string | undefined => {
+      if (utm?.utmSource === "mailer") {
+        const hit = bySlug.get(String(utm.utmCampaign || ""));
+        if (hit) return hit;
+      }
+      const keys = new Set<string>();
+      for (const e of emails) {
+        const email = String(e || "")
+          .toLowerCase()
+          .trim();
+        if (!email) continue;
+        keys.add(email);
+        const d = domainOf(email);
+        if (isCompanyDomain(d)) keys.add(`@${d}`);
+      }
+      const hits = [...keys]
+        .flatMap((k) => byKey.get(k) ?? [])
+        .filter((r) => r.sentAt && r.sentAt <= at)
+        .sort((a, b) => +b.sentAt! - +a.sentAt!);
+      return hits.length ? String(hits[0].campaignId) : undefined;
+    };
+    return { any: sent.length > 0, first, find };
+  }
 
+  // Demo requests from the site. Unfiltered view lists every request since
+  // the first mail (or in the period) — the ones not from a mail have no
+  // campaign; filtered views only show the matched ones.
+  private async demos(
+    match: Awaited<ReturnType<MailerFunnelService["matcher"]>>,
+    all: boolean,
+    from: string,
+    to: string,
+  ) {
+    if (!match.any) return [];
+    const leads = await this.demoLeads
+      .find({ createdAt: { $gte: match.first } })
+      .sort({ createdAt: -1 })
+      .lean<(DemoLead & { createdAt: Date })[]>();
+    const dayOf = (d: Date) =>
+      d.toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" });
+    return leads
+      .filter(
+        (l) =>
+          (!from || dayOf(l.createdAt) >= from) &&
+          (!to || dayOf(l.createdAt) <= to),
+      )
+      .map((l) => ({
+        name: l.name,
+        email: l.email.endsWith("@byggexp.se") ? "" : l.email,
+        phone: l.phone,
+        createdAt: l.createdAt,
+        campaignId: match.find([l.email], l.createdAt, l),
+      }))
+      .filter((l) => all || l.campaignId);
+  }
+
+  // Companies that signed up after getting one of these campaigns: same
+  // address, or same firm domain. Credited to the last mail before sign-up.
+  private async signups(
+    match: Awaited<ReturnType<MailerFunnelService["matcher"]>>,
+  ) {
+    if (!match.any) return [];
+    const first = match.first;
     const companies = await this.companies
       .find(
         { createdAt: { $gte: first }, label: { $nin: ["own", "test"] } },
@@ -326,12 +417,6 @@ export class MailerFunnelService {
           signupSource?: { utmSource?: string; utmCampaign?: string } | null;
         }[]
       >();
-    // Sign-up that came through a mail link (UTM) — exact attribution.
-    const bySlug = new Map(
-      (
-        await this.campaigns.find({ _id: { $in: ids } }, { name: 1 }).lean()
-      ).map((c) => [utmSlug(c.name), String(c._id)]),
-    );
     if (!companies.length) return [];
     const users = await this.users
       .find(
@@ -351,25 +436,14 @@ export class MailerFunnelService {
       active: boolean;
     }[] = [];
     for (const c of companies) {
-      const keys = new Set<string>();
-      for (const e of emailsOf.get(String(c._id)) ?? []) {
-        const email = e.toLowerCase().trim();
-        keys.add(email);
-        const d = domainOf(email);
-        if (isCompanyDomain(d)) keys.add(`@${d}`);
-      }
-      const src = c.signupSource;
-      const viaUtm =
-        src?.utmSource === "mailer"
-          ? bySlug.get(String(src.utmCampaign || ""))
-          : undefined;
-      const hits = [...keys]
-        .flatMap((k) => byKey.get(k) ?? [])
-        .filter((r) => r.sentAt && r.sentAt <= c.createdAt)
-        .sort((a, b) => +b.sentAt! - +a.sentAt!);
-      if (!hits.length && !viaUtm) continue;
+      const campaignId = match.find(
+        emailsOf.get(String(c._id)) ?? [],
+        c.createdAt,
+        c.signupSource,
+      );
+      if (!campaignId) continue;
       out.push({
-        campaignId: viaUtm || String(hits[0].campaignId),
+        campaignId,
         company: c.name || c.email,
         createdAt: c.createdAt,
         active:

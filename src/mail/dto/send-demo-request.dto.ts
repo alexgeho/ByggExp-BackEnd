@@ -39,4 +39,17 @@ export class SendDemoRequestDto {
   @IsString()
   @MaxLength(5000)
   ["f-message"]?: string;
+
+  // UTM of the visit (mail links: utm_source=mailer, utm_campaign=<slug>).
+  @Transform(trimString)
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  ["f-utm-source"]?: string;
+
+  @Transform(trimString)
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  ["f-utm-campaign"]?: string;
 }
