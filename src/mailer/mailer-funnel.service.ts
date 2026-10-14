@@ -187,7 +187,7 @@ export class MailerFunnelService {
         .sort({ receivedAt: -1 })
         .lean(),
       this.signups(match),
-      this.demos(match, !q.brand && !wanted.size, from, to),
+      this.demos(match, from, to),
       mailerVisits(),
     ]);
 
@@ -355,18 +355,15 @@ export class MailerFunnelService {
     return { any: sent.length > 0, first, find };
   }
 
-  // Demo requests from the site. Unfiltered view lists every request since
-  // the first mail (or in the period) — the ones not from a mail have no
-  // campaign; filtered views only show the matched ones.
+  // All demo requests from the site in the period. The ones that came from a
+  // mail get its campaign (funnel "Demo" stage); the rest are counted apart.
   private async demos(
     match: Awaited<ReturnType<MailerFunnelService["matcher"]>>,
-    all: boolean,
     from: string,
     to: string,
   ) {
-    if (!match.any) return [];
     const leads = await this.demoLeads
-      .find({ createdAt: { $gte: match.first } })
+      .find({})
       .sort({ createdAt: -1 })
       .lean<(DemoLead & { createdAt: Date })[]>();
     const dayOf = (d: Date) =>
@@ -383,8 +380,7 @@ export class MailerFunnelService {
         phone: l.phone,
         createdAt: l.createdAt,
         campaignId: match.find([l.email], l.createdAt, l),
-      }))
-      .filter((l) => all || l.campaignId);
+      }));
   }
 
   // Companies that signed up after getting one of these campaigns: same
