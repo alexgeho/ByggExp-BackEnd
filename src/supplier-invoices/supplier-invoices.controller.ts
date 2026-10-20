@@ -107,12 +107,16 @@ export class SupplierInvoicesController {
   setStatus(
     @Request() req,
     @Param("id") id: string,
-    @Body() body: { status: SupplierInvoiceStatus },
+    @Body()
+    body: { status: SupplierInvoiceStatus; paidAt?: string; bankRef?: string },
   ) {
     if (!Object.values(SupplierInvoiceStatus).includes(body?.status)) {
       throw new BadRequestException("Invalid status");
     }
-    return this.service.setStatus(id, req.user, body.status);
+    return this.service.setStatus(id, req.user, body.status, {
+      paidAt: body.paidAt,
+      bankRef: body.bankRef,
+    });
   }
 
   @Post(":id/attachment")

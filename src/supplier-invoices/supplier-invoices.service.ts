@@ -366,17 +366,29 @@ export class SupplierInvoicesService {
     }
   }
 
-  async setStatus(id: string, user: AuthUser, status: SupplierInvoiceStatus) {
+  async setStatus(
+    id: string,
+    user: AuthUser,
+    status: SupplierInvoiceStatus,
+    payment: { paidAt?: string; bankRef?: string } = {},
+  ) {
     const doc = await this.findOne(id, user);
     doc.status = status;
     if (status === SupplierInvoiceStatus.Approved) {
       doc.approvedAt = doc.approvedAt || new Date();
     } else if (status === SupplierInvoiceStatus.Paid) {
+      // A bank-statement match supplies the real payment date and line.
+      const bankDate = payment.paidAt ? new Date(payment.paidAt) : null;
       doc.approvedAt = doc.approvedAt || new Date();
-      doc.paidAt = doc.paidAt || new Date();
+      doc.paidAt =
+        bankDate && !Number.isNaN(bankDate.getTime())
+          ? bankDate
+          : doc.paidAt || new Date();
+      if (payment.bankRef) doc.paidBankRef = String(payment.bankRef).slice(0, 200);
     } else if (status === SupplierInvoiceStatus.Registered) {
       doc.approvedAt = null;
       doc.paidAt = null;
+      doc.paidBankRef = "";
     }
     // Re-opening a bill re-arms the payment reminders; paying it stops them.
     doc.lastReminderBucket = null;

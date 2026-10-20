@@ -130,6 +130,10 @@ export class SupplierInvoice {
 
   @Prop({ type: Date, default: null })
   paidAt?: Date | null;
+
+  // Bank-statement line the payment was matched to (date + text), if any.
+  @Prop({ default: "" })
+  paidBankRef?: string;
 }
 
 export const SupplierInvoiceSchema =
