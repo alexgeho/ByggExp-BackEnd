@@ -375,7 +375,10 @@ export class SupplierInvoicesService {
     const doc = await this.findOne(id, user);
     doc.status = status;
     if (status === SupplierInvoiceStatus.Approved) {
+      // Back from paid (Undo) — no longer paid.
       doc.approvedAt = doc.approvedAt || new Date();
+      doc.paidAt = null;
+      doc.paidBankRef = "";
     } else if (status === SupplierInvoiceStatus.Paid) {
       // A bank-statement match supplies the real payment date and line.
       const bankDate = payment.paidAt ? new Date(payment.paidAt) : null;
