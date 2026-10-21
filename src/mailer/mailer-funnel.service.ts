@@ -135,20 +135,20 @@ export class MailerFunnelService {
 
   // ---------- funnel ----------
 
-  // Funnel + per-campaign table + replies + sign-ups. `publicView` drops
-  // e-mail addresses and reply texts (the share link is for colleagues).
-  async funnel(
-    q: { brand?: string; campaignIds?: string[]; from?: string; to?: string },
-    publicView = false,
-  ) {
-    const [all, lists, senders, cfg] = await Promise.all([
+  // Campaigns behind the current tab: brand, period (start day) and picked ids.
+  private async pick(q: {
+    brand?: string;
+    campaignIds?: string[];
+    from?: string;
+    to?: string;
+  }) {
+    const [all, lists, senders] = await Promise.all([
       this.campaigns
         .find({ status: { $ne: "draft" } }, { snapshot: 0 })
         .sort({ startedAt: -1, createdAt: -1 })
         .lean(),
       this.lists.find({}, { name: 1 }).lean(),
       this.settings.listSenders(),
-      this.cfg(),
     ]);
     const senderLabel = new Map(senders.map((s) => [s.key, s.label]));
     const listName = new Map(lists.map((l) => [String(l._id), l.name]));
@@ -178,6 +178,17 @@ export class MailerFunnelService {
         inPeriod(r.c) &&
         (!wanted.size || wanted.has(String(r.c._id))),
     );
+    return { rows, picked, brands, listName, from, to };
+  }
+
+  // Funnel + per-campaign table + replies + sign-ups. `publicView` drops
+  // e-mail addresses and reply texts (the share link is for colleagues).
+  async funnel(
+    q: { brand?: string; campaignIds?: string[]; from?: string; to?: string },
+    publicView = false,
+  ) {
+    const [{ rows, picked, brands, listName, from, to }, cfg] =
+      await Promise.all([this.pick(q), this.cfg()]);
     const ids = picked.map((r) => r.c._id);
 
     const match = await this.matcher(ids);
@@ -252,8 +263,12 @@ export class MailerFunnelService {
           n,
           saving5: savingsFor(name).find((x) => x.users === 5)?.saving ?? null,
         })),
-      insights: cfg.insights,
-      insightsAt: cfg.insightsAt,
+      insights: q.brand
+        ? (cfg.brandInsights?.[q.brand]?.items ?? [])
+        : cfg.insights,
+      insightsAt: q.brand
+        ? (cfg.brandInsights?.[q.brand]?.at ?? null)
+        : cfg.insightsAt,
       rows: picked.map(({ c, brand }) => ({
         _id: String(c._id),
         name: c.name,
@@ -294,6 +309,100 @@ export class MailerFunnelService {
         active: s.active,
       })),
       updatedAt: new Date(),
+    };
+  }
+
+  // Every company the tab's campaigns went to, by delivery state:
+  // sent / queued (incl. being sent right now) / failed. Admin only.
+  async recipientList(q: {
+    brand?: string;
+    campaignIds?: string[];
+    from?: string;
+    to?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+  }) {
+    const { picked } = await this.pick(q);
+    const ids = picked.map((r) => r.c._id);
+    const nameOf = new Map(picked.map((r) => [String(r.c._id), r.c.name]));
+    const STATES: Record<string, string[]> = {
+      sent: ["sent"],
+      queued: ["queued", "sending"],
+      failed: ["failed"],
+    };
+    const status = STATES[q.status || ""] ? q.status! : "sent";
+    const search = String(q.search || "").trim();
+    const filter: Record<string, unknown> = {
+      campaignId: { $in: ids },
+      status: { $in: STATES[status] },
+    };
+    if (search) {
+      const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [{ email: re }, { company: re }, { name: re }];
+    }
+    const limit = 50;
+    const page = Math.max(1, Number(q.page) || 1);
+    const [byStatus, total, items] = await Promise.all([
+      this.recipients.aggregate<{ _id: string; n: number }>([
+        { $match: { campaignId: { $in: ids } } },
+        { $group: { _id: "$status", n: { $sum: 1 } } },
+      ]),
+      this.recipients.countDocuments(filter),
+      this.recipients
+        .find(filter, {
+          email: 1,
+          name: 1,
+          company: 1,
+          campaignId: 1,
+          sentAt: 1,
+          openedAt: 1,
+          clickedAt: 1,
+          error: 1,
+        })
+        .sort(status === "sent" ? { sentAt: -1 } : { _id: 1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+    ]);
+    const n = new Map(byStatus.map((x) => [x._id, x.n]));
+    const counts = Object.fromEntries(
+      Object.entries(STATES).map(([k, v]) => [
+        k,
+        v.reduce((sum, st) => sum + (n.get(st) || 0), 0),
+      ]),
+    );
+    const replied = new Set(
+      (
+        await this.replies
+          .find(
+            {
+              recipientId: { $in: items.map((r) => r._id) },
+              category: { $ne: "auto" },
+            },
+            { recipientId: 1 },
+          )
+          .lean()
+      ).map((r) => String(r.recipientId)),
+    );
+    return {
+      status,
+      counts,
+      total,
+      page,
+      limit,
+      items: items.map((r) => ({
+        _id: String(r._id),
+        company: r.company || domainOf(r.email),
+        name: r.name,
+        email: r.email,
+        campaignName: nameOf.get(String(r.campaignId)) || "",
+        sentAt: r.sentAt,
+        openedAt: r.openedAt,
+        clickedAt: r.clickedAt,
+        replied: replied.has(String(r._id)),
+        error: r.error,
+      })),
     };
   }
 
@@ -491,8 +600,38 @@ export class MailerFunnelService {
 
   // ---------- inbox (IMAP) ----------
 
-  async inbox() {
-    const c = await this.cfg();
+  // Reply mailboxes: "main" + one per brand whose reply address is another
+  // mailbox ("inbox:<brand>", e.g. Agry → alex@agry.se).
+  private async boxFor(brand?: string) {
+    const main = await this.cfg();
+    if (!brand) return main;
+    const own = await this.config.findOne({ key: `inbox:${brand}` });
+    if (own) return own;
+    const addr = await this.replyAddressOf(brand);
+    if (!addr || addr === main.imapUser) return main;
+    // Not saved yet — the form opens prefilled with the brand's reply address.
+    return new this.config({
+      key: `inbox:${brand}`,
+      imapHost: main.imapHost,
+      imapPort: main.imapPort,
+      imapUser: addr,
+    });
+  }
+
+  private async replyAddressOf(brand: string) {
+    for (const s of await this.settings.listSenders()) {
+      if (brandOf(s.label, "") !== brand) continue;
+      const p = await this.settings.getPublic(s.key);
+      return String(p.replyTo || p.fromEmail || "").toLowerCase();
+    }
+    return "";
+  }
+
+  async inbox(brand?: string) {
+    return this.boxStatus(await this.boxFor(brand));
+  }
+
+  private boxStatus(c: MailerFunnelConfigDocument) {
     return {
       imapHost: c.imapHost,
       imapPort: c.imapPort,
@@ -503,8 +642,8 @@ export class MailerFunnelService {
     };
   }
 
-  async updateInbox(input: InboxInput) {
-    const c = await this.cfg();
+  async updateInbox(input: InboxInput, brand?: string) {
+    const c = await this.boxFor(brand);
     const host = String(input.imapHost ?? c.imapHost).trim();
     const user = String(input.imapUser ?? c.imapUser).trim();
     // Another mailbox → read it from the start.
@@ -517,7 +656,9 @@ export class MailerFunnelService {
     if (input.imapPort) c.imapPort = Number(input.imapPort) || 993;
     if (input.imapPass) c.imapPassEnc = encryptSecret(String(input.imapPass));
     await c.save();
-    return this.syncInbox();
+    const added = await this.syncBox(c);
+    await this.sortReplies();
+    return { ...this.boxStatus(c), added };
   }
 
   @Cron(CronExpression.EVERY_10_MINUTES)
@@ -530,26 +671,31 @@ export class MailerFunnelService {
     // catch up when the conclusions are older than a week.
     const c = await this.cfg();
     const weekAgo = Date.now() - 7 * 24 * 3600_000;
-    if (claudeEnabled() && (!c.insightsAt || +c.insightsAt < weekAgo)) {
-      await this.generateInsights().catch((err) =>
-        this.logger.warn(`Insights catch-up failed: ${err}`),
-      );
-    }
+    const { brands } = await this.pick({});
+    const stale = (at?: Date | null) => !at || +new Date(at) < weekAgo;
+    if (
+      claudeEnabled() &&
+      (stale(c.insightsAt) ||
+        brands.some((b) => stale(c.brandInsights?.[b]?.at)))
+    )
+      await this.allInsights();
   }
 
-  // Reads new mail in INBOX and stores the ones that answer a campaign.
+  // Reads every reply mailbox and stores the mails that answer a campaign.
   async syncInbox() {
-    const c = await this.cfg();
-    if (!c.imapHost || !c.imapUser || !c.imapPassEnc) {
-      await this.sortReplies();
-      return { ...(await this.inbox()), added: 0 };
-    }
+    const main = await this.cfg();
+    const extra = await this.config.find({ key: /^inbox:/ });
+    let added = 0;
+    for (const c of [main, ...extra]) added += await this.syncBox(c);
+    await this.sortReplies();
+    return { ...this.boxStatus(main), added };
+  }
+
+  private async syncBox(c: MailerFunnelConfigDocument): Promise<number> {
+    if (!c.imapHost || !c.imapUser || !c.imapPassEnc) return 0;
     // A sync older than 2 min is a hung connection — don't let it block all
     // later syncs forever.
-    if (this.syncing && Date.now() - this.syncStartedAt < 120_000) {
-      await this.sortReplies();
-      return { ...(await this.inbox()), added: 0 };
-    }
+    if (this.syncing && Date.now() - this.syncStartedAt < 120_000) return 0;
     this.syncing = true;
     this.syncStartedAt = Date.now();
     let added = 0;
@@ -618,8 +764,7 @@ export class MailerFunnelService {
     }
     c.lastSyncAt = new Date();
     await c.save();
-    await this.sortReplies();
-    return { ...(await this.inbox()), added };
+    return added;
   }
 
   private async sortReplies() {
@@ -877,14 +1022,21 @@ Return only JSON: {"subject":"Re: ...","body":"..."}`;
   @Cron("0 7 * * 1", { timeZone: "Europe/Stockholm" })
   async weeklyInsights() {
     if (cronsDisabled()) return;
-    await this.generateInsights().catch((err) =>
-      this.logger.warn(`Insights failed: ${err}`),
-    );
+    await this.allInsights();
   }
 
-  async generateInsights() {
+  // "All" tab + one per brand tab.
+  private async allInsights() {
+    const { brands } = await this.pick({});
+    for (const brand of ["", ...brands])
+      await this.generateInsights(brand).catch((err) =>
+        this.logger.warn(`Insights ${brand || "all"} failed: ${err}`),
+      );
+  }
+
+  async generateInsights(brand = "") {
     if (!claudeEnabled()) throw new BadRequestException("AI är inte aktiverat");
-    const data = await this.funnel({});
+    const data = await this.funnel({ brand: brand || undefined });
     const subjects = new Map(
       (
         await this.campaigns
@@ -915,7 +1067,13 @@ Return only JSON: {"subject":"Re: ...","body":"..."}`;
         competitor: r.competitor,
         note: r.note,
       }));
-    const prompt = `You analyse cold-email outreach of ByggExp (Swedish app for construction firms: time reports, projects, invoices; Komplett 990 kr/month for 10 users). Data below: per-campaign stats and classified replies.
+    // Only ByggExp sells the app; other brands (Agry, Nordkod…) sell their
+    // own service — let the model read what from the subjects.
+    const what =
+      !brand || brand === "ByggExp"
+        ? "ByggExp (Swedish app for construction firms: time reports, projects, invoices; Komplett 990 kr/month for 10 users)"
+        : `the brand "${brand}" (work out what it offers from the subjects; do not mention ByggExp)`;
+    const prompt = `You analyse cold-email outreach of ${what}. Data below: per-campaign stats and classified replies.
 
 Write 3–5 conclusions in Russian for the owner. Each at most 22 words: the key number from the data, then "→" and one concrete next step. Plain words, no quotes of whole subjects, no lists of campaign names. Cover: which subject/text works best (open and reply rate), main objections and competitors, what to change next. No generic advice, no invented numbers.
 
@@ -930,12 +1088,16 @@ Replies: ${JSON.stringify(replies)}`;
         content: [{ type: "text", text: prompt }],
       }),
     );
-    const c = await this.cfg();
-    c.insights = (out.items || [])
+    const items = (out.items || [])
       .map((x) => String(x).slice(0, 400))
       .slice(0, 6);
-    c.insightsAt = new Date();
-    await c.save();
-    return { insights: c.insights, insightsAt: c.insightsAt };
+    const at = new Date();
+    await this.config.updateOne(
+      { key: "main" },
+      brand
+        ? { [`brandInsights.${brand}`]: { items, at } }
+        : { insights: items, insightsAt: at },
+    );
+    return { insights: items, insightsAt: at };
   }
 }

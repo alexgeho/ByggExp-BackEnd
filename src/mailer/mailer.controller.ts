@@ -100,8 +100,27 @@ export class MailerController {
   @Post("funnel/replies/:id/draft") draftReply(@Param("id") id: string) {
     return this.funnel.draftReply(id);
   }
-  @Post("funnel/insights") insights() {
-    return this.funnel.generateInsights();
+  @Get("funnel/recipients") getRecipients(
+    @Query("brand") brand?: string,
+    @Query("campaignIds") campaignIds?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("status") status?: string,
+    @Query("search") search?: string,
+    @Query("page") page?: string,
+  ) {
+    return this.funnel.recipientList({
+      brand: brand || undefined,
+      from,
+      to,
+      campaignIds: campaignIds ? campaignIds.split(",") : undefined,
+      status,
+      search,
+      page: Number(page),
+    });
+  }
+  @Post("funnel/insights") insights(@Query("brand") brand?: string) {
+    return this.funnel.generateInsights(brand || "");
   }
   @Get("funnel/share") getShare() {
     return this.funnel.share();
@@ -109,11 +128,15 @@ export class MailerController {
   @Put("funnel/share") setShare(@Body() body: AnyBody) {
     return this.funnel.setShare(Boolean(body.enabled));
   }
-  @Get("funnel/inbox") getInbox() {
-    return this.funnel.inbox();
+  // `brand` = that brand's own reply mailbox (empty = the main one).
+  @Get("funnel/inbox") getInbox(@Query("brand") brand?: string) {
+    return this.funnel.inbox(brand || undefined);
   }
-  @Put("funnel/inbox") updateInbox(@Body() body: AnyBody) {
-    return this.funnel.updateInbox(body as InboxInput);
+  @Put("funnel/inbox") updateInbox(
+    @Body() body: AnyBody,
+    @Query("brand") brand?: string,
+  ) {
+    return this.funnel.updateInbox(body as InboxInput, brand || undefined);
   }
   @Post("funnel/inbox/sync") syncInbox() {
     return this.funnel.syncInbox();

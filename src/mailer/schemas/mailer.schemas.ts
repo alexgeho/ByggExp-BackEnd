@@ -478,6 +478,10 @@ export class MailerFunnelConfig {
   @Prop({ type: Date, default: null })
   insightsAt: Date | null;
 
+  // Conclusions per brand tab (Agry, Nordkod…); `insights` above = all brands.
+  @Prop({ type: Object, default: {} })
+  brandInsights: Record<string, { items: string[]; at: Date }>;
+
   // Read-only public funnel link (/m/funnel/:token). "" = sharing off.
   @Prop({ default: "" })
   shareToken: string;
