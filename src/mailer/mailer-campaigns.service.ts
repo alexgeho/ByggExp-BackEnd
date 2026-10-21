@@ -333,12 +333,23 @@ export class MailerCampaignsService {
       campaignId: c._id,
       status: { $in: ["queued", "sending"] },
     });
-    if (hasQueue)
+    if (hasQueue) {
+      // Nothing went out yet: pick up edits made to the newsletter meanwhile.
+      const nl =
+        !c.stats?.sent && c.newsletterId
+          ? await this.newsletters.findById(c.newsletterId).lean()
+          : null;
       await this.campaigns.updateOne(
         { _id: c._id },
-        { status: "sending", lastError: "" },
+        {
+          status: "sending",
+          lastError: "",
+          ...(nl
+            ? { snapshot: { settings: nl.settings, blocks: nl.blocks } }
+            : {}),
+        },
       );
-    else await this.beginSending(c._id); // paused before any recipients were created
+    } else await this.beginSending(c._id); // paused before any recipients were created
     return this.get(id);
   }
 
