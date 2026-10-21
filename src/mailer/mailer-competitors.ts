@@ -98,9 +98,8 @@ export const COMPETITORS: Competitor[] = [
   },
 ];
 
-// ByggExp Komplett: 990 kr incl. 10 users, then 119 kr per extra user.
-export const byggexpMonthly = (users: number) =>
-  990 + Math.max(0, users - 10) * 119;
+// ByggExp: 299 kr/month for the office + 69 kr per worker (site prices 2026-10-21).
+export const byggexpMonthly = (users: number) => 299 + Math.max(0, users) * 69;
 
 export const findCompetitor = (text: string): Competitor | null =>
   COMPETITORS.find((c) => c.match.test(String(text || ""))) || null;

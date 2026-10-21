@@ -977,7 +977,7 @@ ${JSON.stringify(items)}`;
       r.competitor || findCompetitor(`${r.snippet} ${r.note}`)?.name || "";
     const savings = competitor ? savingsFor(competitor) : [];
     const facts = savings.length
-      ? `Their system: ${competitor}. List prices per month excl. VAT (theirs vs ByggExp Komplett): ${savings
+      ? `Their system: ${competitor}. List prices per month excl. VAT (theirs vs ByggExp): ${savings
           .map(
             (s) =>
               `${s.users} users: ${s.theirs} kr vs ${s.ours} kr (saves ${s.saving} kr/month)`,
@@ -990,7 +990,7 @@ ${JSON.stringify(items)}`;
         : "No known system named.";
     const prompt = `Write a short reply in Swedish (max 90 words, friendly, no hard sell) to this answer to our cold email about ByggExp.
 
-ByggExp Komplett: 990 kr/month incl. 10 users (+119 kr per extra user), time reports with GPS or manual, projects, ÄTA, egenkontroll/KMA, offers, invoices, payroll basis. No binding period, no setup fee, 2 weeks free trial, free 15-minute video demo.
+ByggExp: 299 kr/month for the office (offers, invoices, receipt scanning, incoming invoices by e-mail with due-date reminders, payroll, project economy) + 69 kr/month per worker (time reports with GPS or manual, live attendance, planning, egenkontroll, tasks with reminders, photo reports, tools via QR). Solo firms pay only 299 kr. No binding period, no setup fee, 2 weeks free trial, free 15-minute video demo.
 
 ${facts}
 
@@ -1071,7 +1071,7 @@ Return only JSON: {"subject":"Re: ...","body":"..."}`;
     // own service — let the model read what from the subjects.
     const what =
       !brand || brand === "ByggExp"
-        ? "ByggExp (Swedish app for construction firms: time reports, projects, invoices; Komplett 990 kr/month for 10 users)"
+        ? "ByggExp (Swedish app for construction firms: time reports, projects, invoices; 299 kr/month for the office + 69 kr per worker)"
         : `the brand "${brand}" (work out what it offers from the subjects; do not mention ByggExp)`;
     const prompt = `You analyse cold-email outreach of ${what}. Data below: per-campaign stats and classified replies.
 
