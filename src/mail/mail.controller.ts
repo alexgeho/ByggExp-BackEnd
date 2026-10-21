@@ -11,6 +11,7 @@ import { Model } from "mongoose";
 import { MailService } from "./mail.service";
 import { DemoLead, DemoLeadDocument } from "./schemas/demo-lead.schema";
 import { SendDemoRequestDto } from "./dto/send-demo-request.dto";
+import { leadChannel } from "./lead-channel";
 import { Public } from "../common/decorators/public.decorator";
 
 @Public()
@@ -37,6 +38,9 @@ export class MailController {
         message: dto["f-message"] || "",
         utmSource: dto["f-utm-source"] || "",
         utmCampaign: dto["f-utm-campaign"] || "",
+        utmMedium: dto["f-utm-medium"] || "",
+        referrer: dto["f-referrer"] || "",
+        landing: dto["f-landing"] || "",
       })
       .catch((err) => this.logger.warn(`Demo lead not saved: ${err}`));
     await this.mailService.sendDemoRequestEmail({
@@ -45,6 +49,13 @@ export class MailController {
       phone: dto["f-phone"],
       source: dto["f-source"],
       message: dto["f-message"],
+      channel: leadChannel({
+        utmSource: dto["f-utm-source"],
+        utmMedium: dto["f-utm-medium"],
+        utmCampaign: dto["f-utm-campaign"],
+        referrer: dto["f-referrer"],
+        landing: dto["f-landing"],
+      }),
     });
 
     return { success: true };

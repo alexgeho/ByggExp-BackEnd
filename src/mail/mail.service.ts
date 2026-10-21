@@ -22,6 +22,8 @@ type DemoRequestPayload = {
   source?: string;
   /** Free-text message from the form ("Berätta mer …"). */
   message?: string;
+  /** Where the visitor came from, e.g. "google.se → /sv" (see leadChannel). */
+  channel?: string;
 };
 
 @Injectable()
@@ -778,6 +780,7 @@ export class MailService {
     const recipients = this.getDemoRequestRecipients();
     const source = payload.source?.trim() || "byggexp.se";
     const message = payload.message?.trim();
+    const channel = payload.channel?.trim();
     const subject = `New demo request from ${source}`;
     const text = [
       `New demo request submitted from ${source}`,
@@ -785,6 +788,7 @@ export class MailService {
       `Name: ${payload.name}`,
       `Email: ${payload.email}`,
       `Phone: ${payload.phone}`,
+      ...(channel ? [`Came from: ${channel}`] : []),
       ...(message ? ["", `Message: ${message}`] : []),
     ].join("\n");
     const html = `
@@ -792,6 +796,7 @@ export class MailService {
       <p><strong>Name:</strong> ${this.escapeHtml(payload.name)}</p>
       <p><strong>Email:</strong> ${this.escapeHtml(payload.email)}</p>
       <p><strong>Phone:</strong> ${this.escapeHtml(payload.phone)}</p>
+      ${channel ? `<p><strong>Came from:</strong> ${this.escapeHtml(channel)}</p>` : ""}
       ${message ? `<p><strong>Message:</strong> ${this.escapeHtml(message)}</p>` : ""}
     `;
 

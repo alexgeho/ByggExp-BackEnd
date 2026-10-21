@@ -17,6 +17,7 @@ import {
 import { cronsDisabled } from "../common/cron.util";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import { DemoLead, DemoLeadDocument } from "../mail/schemas/demo-lead.schema";
+import { leadChannel } from "../mail/lead-channel";
 import { User, UserDocument } from "../users/schemas/user.schema";
 import { decryptSecret, encryptSecret, newToken } from "./mailer-crypto";
 import { COMPETITORS, findCompetitor, savingsFor } from "./mailer-competitors";
@@ -300,6 +301,7 @@ export class MailerFunnelService {
         email: publicView ? "" : d.email,
         phone: publicView ? "" : d.phone,
         campaignName: d.campaignId ? nameOf.get(d.campaignId) || "" : "",
+        channel: d.channel,
         createdAt: d.createdAt,
       })),
       signups: signups.map((s) => ({
@@ -489,6 +491,7 @@ export class MailerFunnelService {
         phone: l.phone,
         createdAt: l.createdAt,
         campaignId: match.find([l.email], l.createdAt, l),
+        channel: leadChannel(l),
       }));
   }
 

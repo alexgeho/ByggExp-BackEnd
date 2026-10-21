@@ -52,4 +52,24 @@ export class SendDemoRequestDto {
   @IsString()
   @MaxLength(200)
   ["f-utm-campaign"]?: string;
+
+  @Transform(trimString)
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  ["f-utm-medium"]?: string;
+
+  // External page that sent the visitor (search engine, ad, other site).
+  @Transform(trimString)
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  ["f-referrer"]?: string;
+
+  // First page of the visit on the site.
+  @Transform(trimString)
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  ["f-landing"]?: string;
 }

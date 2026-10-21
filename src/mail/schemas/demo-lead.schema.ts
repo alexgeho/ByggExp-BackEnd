@@ -27,6 +27,17 @@ export class DemoLead {
 
   @Prop({ default: "" })
   utmCampaign: string;
+
+  @Prop({ default: "" })
+  utmMedium: string;
+
+  // External page that sent the visitor; "" = direct or not tracked.
+  @Prop({ default: "" })
+  referrer: string;
+
+  // First page of the visit; "" = lead from before tracking.
+  @Prop({ default: "" })
+  landing: string;
 }
 
 export const DemoLeadSchema = SchemaFactory.createForClass(DemoLead);
