@@ -186,6 +186,16 @@ export class User {
   @Prop({ type: Number, default: null })
   taxColumn?: number | null;
 
+  // Byggavtalet wage category (yrkesarbetare | ny_i_branschen | larling |
+  // other) — decides which minimum wage the lönerunderlag checks against.
+  @Prop({ type: String, default: null })
+  wageCategory?: string | null;
+
+  // Anställningsnummer in the company's Fortnox Lön; the PAXml export keys
+  // every transaction on it.
+  @Prop({ default: "" })
+  fortnoxEmployeeId?: string;
+
   // Swedish personnummer / samordningsnummer. Sensitive PII, stored only to
   // build the legally required electronic personalliggare (attendance log).
   @Prop({ default: "" })

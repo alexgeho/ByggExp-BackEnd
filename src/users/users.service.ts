@@ -23,7 +23,9 @@ import {
 import { MailService } from "../mail/mail.service";
 import {
   ALL_PERMISSIONS,
+  PERMISSIONS,
   getEffectivePermissions,
+  userHasPermission,
 } from "../common/permissions/permissions.constants";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { CreateCertificateDto } from "./dto/create-certificate.dto";
@@ -53,6 +55,7 @@ type AuthUser = {
   userId?: string;
   role?: UserRole;
   companyId?: string | null;
+  permissions?: { granted?: string[]; revoked?: string[] } | null;
 };
 
 type AccessTargetUser = {
@@ -1721,6 +1724,20 @@ export class UsersService {
         isSuper || isCompanyAdmin || actor.role === UserRole.ProjectAdmin;
       if (!mayAssignProjects) {
         delete cleaned.projectIds;
+      }
+    }
+
+    // Pay and tax data feed payroll directly, so only someone who handles
+    // finances may set them — a worker must not raise their own hourly wage.
+    if (!userHasPermission(actor, PERMISSIONS.FINANCE_MANAGE)) {
+      for (const key of [
+        "hourlyRate",
+        "taxTable",
+        "taxColumn",
+        "wageCategory",
+        "fortnoxEmployeeId",
+      ] as const) {
+        delete cleaned[key];
       }
     }
 

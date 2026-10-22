@@ -10,6 +10,7 @@ import {
   IsObject,
   IsBoolean,
   ValidateIf,
+  IsIn,
 } from "class-validator";
 import { Transform } from "class-transformer";
 import { UserRole } from "../schemas/user.schema";
@@ -57,6 +58,14 @@ export class CreateUserDto {
   @IsNumber()
   @IsOptional()
   taxColumn?: number;
+
+  @IsIn(["yrkesarbetare", "ny_i_branschen", "larling", "other"])
+  @IsOptional()
+  wageCategory?: string | null;
+
+  @IsString()
+  @IsOptional()
+  fortnoxEmployeeId?: string;
 
   @IsString()
   @IsOptional()
