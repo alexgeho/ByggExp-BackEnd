@@ -125,7 +125,7 @@ offers, reminders) goes through **Brevo SMTP**, not the Inleed mailbox:
   CNAMEs at Inleed DNS). Keep exactly **one** `_dmarc` record.
 * **The SMTP key expires 28.09.2027**, and after 90 days without sending. Generate a new
   one in Brevo → SMTP & API → SMTP before that, put it in `SMTP_PASS`, re-run the deploy.
-* Free plan: 300 mails/day across everything.
+* Starter plan: 5 000 mails/month (renews the 3rd) + prepaid credits (9 948 bought 22.10.2026), shared by app mail AND cold campaigns. At 0 everything (login codes too) waits in a 36 h backlog — watch the balance.
 
 Why: on 28.09.2026 the mailbox password was changed while setting up newsletters, the
 server kept the old one, and every mail failed with `535` while the admin still said
