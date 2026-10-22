@@ -35,7 +35,8 @@ import {
   WorkerWageBasis,
   buildWorkerWageBasis,
 } from './wage-basis';
-import { PaxmlSkipped, buildPaxml } from './paxml';
+import { ExportSkipped, buildCsv, buildPaxml } from './wage-export';
+import { ExportFormat } from './schemas/payroll-settings.schema';
 
 type AuthUser = {
   role: UserRole;
@@ -181,6 +182,8 @@ export class WageBasisService {
     return {
       companyId,
       agreement: settings?.agreement || 'byggavtalet',
+      payrollSystem: settings?.payrollSystem || 'fortnox',
+      exportFormat: settings?.exportFormat || 'paxml',
       salaryCodes: settings?.salaryCodes || {},
       absenceCodes: { ...DEFAULT_ABSENCE_CODES, ...(settings?.absenceCodes || {}) },
       onlyApprovedShifts: settings?.onlyApprovedShifts ?? true,
@@ -207,6 +210,8 @@ export class WageBasisService {
     if (dto.onlyApprovedShifts != null) {
       update.onlyApprovedShifts = dto.onlyApprovedShifts;
     }
+    if (dto.payrollSystem) update.payrollSystem = dto.payrollSystem;
+    if (dto.exportFormat) update.exportFormat = dto.exportFormat;
     await this.settingsModel
       .findOneAndUpdate({ companyId }, { $set: update }, { upsert: true })
       .exec();
@@ -236,7 +241,7 @@ export class WageBasisService {
 
     const workers = await this.userModel
       .find({ companyId, erasedAt: null })
-      .select('name hourlyRate wageCategory fortnoxEmployeeId')
+      .select('name hourlyRate wageCategory payrollEmployeeId fortnoxEmployeeId')
       .lean()
       .exec();
     const workerIds = workers.map((w) => String(w._id));
@@ -265,7 +270,7 @@ export class WageBasisService {
       .lean()
       .exec();
 
-    const result: Array<WorkerWageBasis & { fortnoxEmployeeId: string }> = [];
+    const result: Array<WorkerWageBasis & { payrollEmployeeId: string }> = [];
     for (const w of workers) {
       const id = String(w._id);
       const own = shifts.filter((s) => String(s.workerId) === id);
@@ -300,19 +305,20 @@ export class WageBasisService {
         ruleSets,
         { from, to },
       );
-      if (!w.fortnoxEmployeeId) {
+      const employeeId = (w.payrollEmployeeId || w.fortnoxEmployeeId || '').trim();
+      if (!employeeId) {
         basis.warnings.push({
           code: 'missing_employee_id',
           message:
-            'Anställningsnummer i Fortnox saknas — personen kommer inte med i exporten.',
+            'Anställningsnummer i lönesystemet saknas — personen kommer inte med i exporten.',
         });
       }
-      result.push({ ...basis, fortnoxEmployeeId: w.fortnoxEmployeeId || '' });
+      result.push({ ...basis, payrollEmployeeId: employeeId });
     }
 
     result.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
 
-    // Items the company hasn't mapped to a Fortnox code would silently vanish
+    // Items the company hasn't mapped to a löneart would silently vanish
     // from the export — surface them once for the whole period.
     const unmapped = new Set<string>();
     for (const w of result) {
@@ -336,11 +342,19 @@ export class WageBasisService {
     };
   }
 
-  async exportPaxml(
+  // Writes the lönerunderlag in the company's chosen format (or `format` when
+  // the caller asks for one explicitly).
+  async exportBasis(
     from: string,
     to: string,
     user: AuthUser,
-  ): Promise<{ xml: string; skipped: PaxmlSkipped[]; filename: string }> {
+    format?: ExportFormat,
+  ): Promise<{
+    content: string;
+    contentType: string;
+    skipped: ExportSkipped[];
+    filename: string;
+  }> {
     const basis = await this.buildBasis(from, to, user);
     const settings = await this.getSettings(user);
     const company = await this.companyModel
@@ -349,7 +363,7 @@ export class WageBasisService {
       .lean()
       .exec();
 
-    const { xml, skipped } = buildPaxml({
+    const input = {
       companyName: company?.name || '',
       orgNumber: company?.orgNumber || '',
       generatedAt: new Date(),
@@ -357,12 +371,19 @@ export class WageBasisService {
         userId: w.userId,
         name: w.name,
         items: w.items,
-        employeeId: w.fortnoxEmployeeId,
+        employeeId: w.payrollEmployeeId,
       })),
       salaryCodes: settings.salaryCodes,
       absenceCodes: settings.absenceCodes,
-    });
-    return { xml, skipped, filename: `lonerunderlag-${from}-${to}.xml` };
+    };
+    const csv = (format || settings.exportFormat) === 'csv';
+    const { content, skipped } = csv ? buildCsv(input) : buildPaxml(input);
+    return {
+      content,
+      contentType: csv ? 'text/csv; charset=utf-8' : 'application/xml; charset=utf-8',
+      skipped,
+      filename: `lonerunderlag-${from}-${to}.${csv ? 'csv' : 'xml'}`,
+    };
   }
 
   private assertPeriod(from: string, to: string) {

@@ -1,5 +1,5 @@
 import { WageRuleSet, buildWorkerWageBasis, ruleSetForDate } from './wage-basis';
-import { buildPaxml } from './paxml';
+import { buildCsv, buildPaxml } from './wage-export';
 
 // Test figures are made up to keep the arithmetic readable — they are not the
 // agreement's real numbers.
@@ -146,7 +146,7 @@ describe('buildPaxml', () => {
       [rules({ vacationPayPercent: null })],
       period,
     );
-    const { xml, skipped, salaryCount, absenceCount } = buildPaxml({
+    const { content: xml, skipped, salaryCount, absenceCount } = buildPaxml({
       companyName: 'Bygg & Co',
       orgNumber: '556000-0000',
       generatedAt: new Date('2026-10-22T10:00:00Z'),
@@ -166,7 +166,7 @@ describe('buildPaxml', () => {
     ]);
   });
 
-  it('skips a worker without a Fortnox employee number', () => {
+  it('skips a worker without an employee number in the payroll system', () => {
     const { skipped, salaryCount } = buildPaxml({
       companyName: 'X',
       orgNumber: '',
@@ -196,5 +196,41 @@ describe('buildPaxml', () => {
     });
     expect(salaryCount).toBe(0);
     expect(skipped[0].reason).toBe('no_employee_id');
+  });
+});
+
+describe('buildCsv', () => {
+  it('writes a Swedish-Excel spreadsheet with the same mapped rows', () => {
+    const b = buildWorkerWageBasis(
+      { ...worker, name: 'Anna; "Ann" Svensson' },
+      [{ shiftDate: '2026-10-05', hours: 7.5, travelKm: 10 }],
+      [{ type: 'vab', startDate: '2026-10-06', endDate: '2026-10-06' }],
+      [rules({ vacationPayPercent: 10 })],
+      period,
+    );
+    const { content, skipped, salaryCount, absenceCount } = buildCsv({
+      companyName: 'X',
+      orgNumber: '',
+      generatedAt: new Date(),
+      workers: [{ ...b, employeeId: '7' }],
+      salaryCodes: { hours_normal: '11', vacation_pay: '41', mileage_taxfree: '61' },
+      absenceCodes: { absence_vab: 'VAB' },
+    });
+    const lines = content.replace(/^﻿/, '').trim().split('\r\n');
+    expect(content.startsWith('﻿')).toBe(true);
+    expect(lines[0]).toBe(
+      'Anställningsnr;Namn;Datum;Typ;Löneart/Frånvarokod;Benämning;Antal;Enhet;À-pris;Belopp',
+    );
+    expect(lines).toContain(
+      '7;"Anna; ""Ann"" Svensson";2026-10-05;Lön;11;Timlön;7,50;tim;250,00;1875,00',
+    );
+    expect(lines).toContain(
+      '7;"Anna; ""Ann"" Svensson";2026-10-06;Frånvaro;VAB;VAB;8,00;tim;;',
+    );
+    // Semesterersättning is an amount only: 1875 × 10 %.
+    expect(lines.some((l) => l.includes(';41;') && l.endsWith(';;;187,50'))).toBe(true);
+    expect(salaryCount).toBe(3);
+    expect(absenceCount).toBe(1);
+    expect(skipped.map((s) => s.code)).toEqual(['mileage_taxable']);
   });
 });

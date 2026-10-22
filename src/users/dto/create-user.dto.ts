@@ -65,7 +65,7 @@ export class CreateUserDto {
 
   @IsString()
   @IsOptional()
-  fortnoxEmployeeId?: string;
+  payrollEmployeeId?: string;
 
   @IsString()
   @IsOptional()

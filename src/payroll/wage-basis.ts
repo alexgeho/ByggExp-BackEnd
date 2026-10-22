@@ -84,7 +84,7 @@ export type WorkerWageBasis = {
   };
 };
 
-// Wage-basis item codes. These are the keys the company maps to Fortnox
+// Wage-basis item codes. These are the keys the company maps to the
 // lönearter / frånvarokoder in PayrollSettings.
 export const SALARY_ITEM_LABELS: Record<string, string> = {
   hours_normal: 'Timlön',
@@ -333,7 +333,7 @@ export function buildWorkerWageBasis(
   }
 
   // Absence: one item per weekday inside the period. Sick pay, karens and
-  // vacation days are calculated by Fortnox Lön from the frånvarokod, so
+  // vacation days are calculated by the payroll system from the frånvarokod, so
   // ByggExp only reports the time.
   for (const leave of leaves) {
     const code = `absence_${leave.type}`;

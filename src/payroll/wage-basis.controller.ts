@@ -21,11 +21,13 @@ import {
   AgreementRuleSetDto,
   PayrollSettingsDto,
   WageBasisQueryDto,
+  WageExportQueryDto,
 } from './dto/agreement-rule-set.dto';
 import { WageBasisService } from './wage-basis.service';
 
-// Lönerunderlag enligt kollektivavtal + Fortnox export. Its own prefix so the
-// routes never collide with PayrollController's `payroll/:id`.
+// Lönerunderlag enligt kollektivavtal + export to the company's payroll system.
+// Its own prefix so the routes never collide with PayrollController's
+// `payroll/:id`.
 @Controller('payroll-basis')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
@@ -37,25 +39,27 @@ export class WageBasisController {
     return this.wageBasisService.buildBasis(query.from, query.to, req.user);
   }
 
-  @Get('paxml')
-  async paxml(
+  @Get('export')
+  async export(
     @Request() req,
-    @Query() query: WageBasisQueryDto,
+    @Query() query: WageExportQueryDto,
     @Res() res: Response,
   ) {
-    const { xml, skipped, filename } = await this.wageBasisService.exportPaxml(
-      query.from,
-      query.to,
-      req.user,
-    );
+    const { content, contentType, skipped, filename } =
+      await this.wageBasisService.exportBasis(
+        query.from,
+        query.to,
+        req.user,
+        query.format,
+      );
     res.set({
-      'Content-Type': 'application/xml; charset=utf-8',
+      'Content-Type': contentType,
       'Content-Disposition': `attachment; filename=${filename}`,
       // Lets the admin warn about people/items left out without a second call.
-      'X-Paxml-Skipped': encodeURIComponent(JSON.stringify(skipped)),
-      'Access-Control-Expose-Headers': 'X-Paxml-Skipped, Content-Disposition',
+      'X-Export-Skipped': encodeURIComponent(JSON.stringify(skipped)),
+      'Access-Control-Expose-Headers': 'X-Export-Skipped, Content-Disposition',
     });
-    res.end(xml);
+    res.end(content);
   }
 
   @Get('settings')

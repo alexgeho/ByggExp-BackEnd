@@ -13,6 +13,14 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { WageCategory } from '../schemas/agreement-rule-set.schema';
+import {
+  EXPORT_FORMATS,
+  PAYROLL_SYSTEMS,
+} from '../schemas/payroll-settings.schema';
+import type {
+  ExportFormat,
+  PayrollSystem,
+} from '../schemas/payroll-settings.schema';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -125,6 +133,14 @@ export class AgreementRuleSetDto {
 }
 
 export class PayrollSettingsDto {
+  @IsIn(PAYROLL_SYSTEMS)
+  @IsOptional()
+  payrollSystem?: PayrollSystem;
+
+  @IsIn(EXPORT_FORMATS)
+  @IsOptional()
+  exportFormat?: ExportFormat;
+
   @IsObject()
   @IsOptional()
   salaryCodes?: Record<string, string>;
@@ -144,4 +160,11 @@ export class WageBasisQueryDto {
 
   @Matches(DATE)
   to: string;
+}
+
+export class WageExportQueryDto extends WageBasisQueryDto {
+  // Overrides the company's saved format for this download.
+  @IsIn(EXPORT_FORMATS)
+  @IsOptional()
+  format?: ExportFormat;
 }

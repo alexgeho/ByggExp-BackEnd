@@ -1735,7 +1735,7 @@ export class UsersService {
         "taxTable",
         "taxColumn",
         "wageCategory",
-        "fortnoxEmployeeId",
+        "payrollEmployeeId",
       ] as const) {
         delete cleaned[key];
       }

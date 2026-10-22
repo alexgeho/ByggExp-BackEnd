@@ -191,8 +191,13 @@ export class User {
   @Prop({ type: String, default: null })
   wageCategory?: string | null;
 
-  // Anställningsnummer in the company's Fortnox Lön; the PAXml export keys
-  // every transaction on it.
+  // Anställningsnummer in the company's payroll system (Fortnox, Visma …);
+  // the lönerunderlag export keys every transaction on it.
+  @Prop({ default: "" })
+  payrollEmployeeId?: string;
+
+  // Legacy name of payrollEmployeeId (Fortnox-only first release); read as a
+  // fallback, never written.
   @Prop({ default: "" })
   fortnoxEmployeeId?: string;
 

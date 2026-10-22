@@ -92,7 +92,7 @@ export class AgreementRuleSet {
   hourTypeSupplements: HourTypeSupplement[];
 
   // Semesterlön/semesterersättning as a percentage of earned pay. null = not
-  // calculated by ByggExp (Fortnox computes it from the employee's settings).
+  // calculated by ByggExp (the payroll system computes it from the employee's settings).
   @Prop({ type: Number, default: null })
   vacationPayPercent: number | null;
 
