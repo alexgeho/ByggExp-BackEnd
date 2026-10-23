@@ -1,4 +1,6 @@
 import {
+  MaxLength,
+  IsString,
   IsIn,
   IsInt,
   IsNumber,
@@ -51,4 +53,10 @@ export class SetManualHoursDto {
   @IsIn(["none", "half", "full"])
   @IsOptional()
   perDiem?: string;
+
+  // The day's comment, written in the same card as the hours.
+  @IsString()
+  @MaxLength(2000)
+  @IsOptional()
+  dayNote?: string;
 }

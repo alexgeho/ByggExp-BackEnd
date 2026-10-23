@@ -486,16 +486,11 @@ export class ShiftsService {
     shift.completionNotifiedAt = null;
     await shift.save();
 
-    this.recordEvent(
-      shift,
-      ShiftEventType.Completed,
-      ShiftEventSource.Manual,
-      {
-        reason: "switched_project",
-        byUserId: user.userId,
-        occurredAt: now,
-      },
-    );
+    this.recordEvent(shift, ShiftEventType.Completed, ShiftEventSource.Manual, {
+      reason: "switched_project",
+      byUserId: user.userId,
+      occurredAt: now,
+    });
 
     return shift;
   }
@@ -721,13 +716,22 @@ export class ShiftsService {
     }
   }
 
-  // Restid, Bil and Traktamente from the day card; a field left out keeps its
+  // Restid, Bil, Traktamente and the comment from the day card; a field left out keeps its
   // value so older apps don't wipe Dagens rapport.
   private applyDayExtras(
     shift: ShiftDocument,
-    dto: { travelMinutes?: number; travelKm?: number; perDiem?: string },
+    dto: {
+      travelMinutes?: number;
+      travelKm?: number;
+      perDiem?: string;
+      dayNote?: string;
+    },
   ) {
     let changed = false;
+    if (dto.dayNote !== undefined) {
+      shift.dayNote = String(dto.dayNote).trim();
+      changed = true;
+    }
     if (dto.travelKm !== undefined) {
       shift.travelKm = Math.max(0, Number(dto.travelKm) || 0);
       changed = true;
@@ -1011,9 +1015,7 @@ export class ShiftsService {
 
       const overlaps = sameDayShifts.some((other) => {
         const otherStart = new Date(other.startedAt).getTime();
-        const otherEnd = new Date(
-          other.endedAt || other.startedAt,
-        ).getTime();
+        const otherEnd = new Date(other.endedAt || other.startedAt).getTime();
         return startedAt.getTime() < otherEnd && otherStart < endedAt.getTime();
       });
 
