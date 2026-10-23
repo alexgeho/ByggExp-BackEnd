@@ -42,6 +42,11 @@ import {
   UserActivityLogLevel,
 } from "./schemas/user-activity-log.schema";
 import { WorkerNote, WorkerNoteDocument } from "./schemas/worker-note.schema";
+import {
+  WageRate,
+  WageRateDocument,
+} from "../payroll/schemas/wage-rate.schema";
+import { recordWageRate, swedishToday } from "../payroll/wage-history";
 import { Tool, ToolDocument } from "../tools/schemas/tool.schema";
 import { languageCode } from "../common/language";
 
@@ -196,6 +201,8 @@ export class UsersService {
     private userActivityLogModel: Model<UserActivityLogDocument>,
     @InjectModel(WorkerNote.name)
     private workerNoteModel: Model<WorkerNoteDocument>,
+    @InjectModel(WageRate.name)
+    private wageRateModel: Model<WageRateDocument>,
     private readonly mailService: MailService,
   ) {}
 
@@ -1781,11 +1788,37 @@ export class UsersService {
       });
     }
 
+    // A changed hourly wage is kept in the wage history from today, so
+    // earlier payroll periods stay paid at the rate that applied then.
+    const rateChange =
+      safeDto.hourlyRate != null
+        ? await this.userModel
+            .findById(id)
+            .select("hourlyRate companyId")
+            .lean()
+            .exec()
+        : null;
+
     const updatedUser = await this.userModel
       .findByIdAndUpdate(id, normalizedUpdate, { new: true })
       .exec();
     if (!updatedUser) {
       throw new NotFoundException(`User with ID "${id}" not found`);
+    }
+
+    if (
+      rateChange?.companyId &&
+      Number(rateChange.hourlyRate ?? -1) !== Number(safeDto.hourlyRate)
+    ) {
+      await recordWageRate(this.wageRateModel, {
+        companyId: String(rateChange.companyId),
+        userId: id,
+        hourlyRate: Number(safeDto.hourlyRate),
+        validFrom: swedishToday(),
+        reason: "manual",
+        previousRate: rateChange.hourlyRate ?? null,
+        createdByUserId: actor?.userId ?? null,
+      });
     }
 
     await this.syncUserProjectAssignments(

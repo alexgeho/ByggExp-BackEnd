@@ -120,10 +120,24 @@ export class AgreementRuleSet {
   @Prop({ type: Number, default: 0 })
   perDiemTaxFreeHalf: number;
 
+  // General raise of every covered worker's own hourly wage from validFrom
+  // (Byggavtalet: e.g. "+6,85 kr/tim from 1 May"). kind null = no raise in this
+  // version. Applied per company through raise proposals, never silently.
+  @Prop({ type: String, enum: ['percent', 'fixed'], default: null })
+  wageRaiseKind: 'percent' | 'fixed' | null;
+
+  @Prop({ type: Number, default: 0 })
+  wageRaiseValue: number;
+
   // Arbetstidsförkortning (ATK) accrued as a percentage of earned pay.
   // null = not accrued by ByggExp.
   @Prop({ type: Number, default: null })
   atkPercent: number | null;
+
+  // Figures were read from a document by AI; publishing then requires an
+  // explicit "I have checked every figure" confirmation.
+  @Prop({ type: Boolean, default: false })
+  aiDraft: boolean;
 
   @Prop({ type: String, ref: 'User', default: null })
   publishedByUserId?: string | null;

@@ -1,5 +1,9 @@
 import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
+import {
+  WageRate,
+  WageRateSchema,
+} from "../payroll/schemas/wage-rate.schema";
 import { User, UserSchema } from "./schemas/user.schema";
 import { UsersController } from "./users.controller";
 import { UsersService } from "./users.service";
@@ -30,6 +34,7 @@ import { ScanningModule } from "../scanning/scanning.module";
       { name: UserActivityLog.name, schema: UserActivityLogSchema },
       { name: WorkerNote.name, schema: WorkerNoteSchema },
       { name: Tool.name, schema: ToolSchema },
+      { name: WageRate.name, schema: WageRateSchema },
     ]),
   ],
   controllers: [UsersController],

@@ -109,10 +109,12 @@ export class PayrollService {
           );
           // Prefer the worker's Skatteverket tax table when set (and available);
           // otherwise fall back to the flat percentage.
+          // Tax tables are per income year: the year the period ends in.
           const tableTax = await this.taxTableService.lookupMonthlyTax(
             u?.taxTable,
             u?.taxColumn,
             gross,
+            Number(String(dto.periodTo).slice(0, 4)) || undefined,
           );
           const tax = tableTax == null ? pctTax : round2(tableTax);
           const net = round2(gross - tax);

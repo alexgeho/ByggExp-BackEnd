@@ -37,6 +37,7 @@ import {
 } from './wage-basis';
 import { ExportSkipped, buildCsv, buildPaxml } from './wage-export';
 import { ExportFormat } from './schemas/payroll-settings.schema';
+import { WageRate, WageRateDocument } from './schemas/wage-rate.schema';
 
 type AuthUser = {
   role: UserRole;
@@ -59,6 +60,8 @@ export class WageBasisService {
     @InjectModel(Shift.name) private shiftModel: Model<ShiftDocument>,
     @InjectModel(LeaveRequest.name)
     private leaveModel: Model<LeaveRequestDocument>,
+    @InjectModel(WageRate.name)
+    private wageRateModel: Model<WageRateDocument>,
   ) {}
 
   // ---- Avtalsregler -------------------------------------------------------
@@ -131,9 +134,15 @@ export class WageBasisService {
   async publishRuleSet(
     id: string,
     user: AuthUser,
+    confirmed = false,
   ): Promise<AgreementRuleSetDocument> {
     const ruleSet = await this.getRuleSet(id);
     if (ruleSet.status === AgreementRuleSetStatus.Published) return ruleSet;
+    if (ruleSet.aiDraft && !confirmed) {
+      throw new BadRequestException(
+        'This draft was read by AI — confirm that every figure has been checked against the source',
+      );
+    }
     if (!ruleSet.sourceNote?.trim()) {
       throw new BadRequestException(
         'Add the source (agreement section / circular) before publishing',
@@ -187,6 +196,7 @@ export class WageBasisService {
       salaryCodes: settings?.salaryCodes || {},
       absenceCodes: { ...DEFAULT_ABSENCE_CODES, ...(settings?.absenceCodes || {}) },
       onlyApprovedShifts: settings?.onlyApprovedShifts ?? true,
+      handledRaises: settings?.handledRaises || [],
       salaryItems: SALARY_ITEM_LABELS,
       absenceItems: ABSENCE_ITEM_LABELS,
     };
@@ -246,6 +256,12 @@ export class WageBasisService {
       .exec();
     const workerIds = workers.map((w) => String(w._id));
 
+    const rateDocs = await this.wageRateModel
+      .find({ userId: { $in: workerIds }, validFrom: { $lte: to } })
+      .select('userId validFrom hourlyRate')
+      .lean()
+      .exec();
+
     const shifts = await this.shiftModel
       .find({
         workerId: { $in: workerIds },
@@ -282,6 +298,9 @@ export class WageBasisService {
           name: w.name || '',
           hourlyRate: w.hourlyRate ?? null,
           wageCategory: w.wageCategory ?? null,
+          rates: rateDocs
+            .filter((r) => String(r.userId) === id)
+            .map((r) => ({ validFrom: r.validFrom, hourlyRate: r.hourlyRate })),
         },
         own.map((s) => ({
           shiftDate: s.shiftDate,
@@ -337,6 +356,22 @@ export class WageBasisService {
         validFrom: r.validFrom,
         validTo: r.validTo || '',
       })),
+      // Agreement raises in force in this period that the company hasn't
+      // applied to its workers' wages yet.
+      pendingRaises: ruleSets
+        .filter(
+          (r) =>
+            r.wageRaiseKind &&
+            Number(r.wageRaiseValue) > 0 &&
+            !settings.handledRaises.includes(r.id),
+        )
+        .map((r) => ({
+          ruleSetId: r.id,
+          name: r.name,
+          validFrom: r.validFrom,
+          kind: r.wageRaiseKind,
+          value: r.wageRaiseValue,
+        })),
       unmappedCodes: [...unmapped].sort(),
       workers: result,
     };

@@ -25,6 +25,8 @@ export type WageRuleSet = {
   perDiemTaxFreeFull: number;
   perDiemTaxFreeHalf: number;
   atkPercent: number | null;
+  wageRaiseKind?: 'percent' | 'fixed' | null;
+  wageRaiseValue?: number;
 };
 
 export type WageShift = {
@@ -44,12 +46,42 @@ export type WageLeave = {
   halfDay?: boolean;
 };
 
+export type WageRateEntry = { validFrom: string; hourlyRate: number };
+
 export type WageWorker = {
   userId: string;
   name: string;
+  // Today's rate; used for any day the history doesn't cover.
   hourlyRate: number | null;
   wageCategory?: string | null;
+  // Lönehistorik, any order.
+  rates?: WageRateEntry[];
 };
+
+// The worker's hourly wage on `date`: the latest history entry from that day
+// or earlier, else the current rate.
+export function rateOn(worker: WageWorker, date: string): number {
+  let best: WageRateEntry | null = null;
+  for (const r of worker.rates || []) {
+    if (r.validFrom <= date && (!best || r.validFrom > best.validFrom)) best = r;
+  }
+  return round2(Number(best ? best.hourlyRate : worker.hourlyRate) || 0);
+}
+
+// The wage an agreement version's general raise gives a worker: the old wage
+// plus the raise, and never below the version's minimum for the category.
+export function proposeRaisedRate(
+  currentRate: number,
+  rules: Pick<WageRuleSet, 'wageRaiseKind' | 'wageRaiseValue' | 'minimumWages'>,
+  category?: string | null,
+): number {
+  const value = Number(rules.wageRaiseValue) || 0;
+  let raised = currentRate;
+  if (rules.wageRaiseKind === 'fixed') raised = currentRate + value;
+  else if (rules.wageRaiseKind === 'percent') raised = currentRate * (1 + value / 100);
+  const minimum = rules.minimumWages.find((m) => m.category === category)?.hourly;
+  return round2(Math.max(raised, minimum ?? 0));
+}
 
 export type WageItemKind = 'salary' | 'absence';
 
@@ -170,7 +202,8 @@ export function buildWorkerWageBasis(
 ): WorkerWageBasis {
   const items: WageItem[] = [];
   const warnings: WageWarning[] = [];
-  const rate = round2(Number(worker.hourlyRate) || 0);
+  // The rate shown for the period; each day is paid at its own rate (rateOn).
+  const rate = rateOn(worker, period.to);
   const category = worker.wageCategory || null;
 
   if (!rate) {
@@ -211,6 +244,7 @@ export function buildWorkerWageBasis(
 
     const hours = round2(Number(shift.hours) || 0);
     const type = hourTypeKey(shift.hourType);
+    const dayRate = rateOn(worker, date);
     const base = {
       kind: 'salary' as const,
       date,
@@ -225,8 +259,8 @@ export function buildWorkerWageBasis(
         code: `hours_${type}`,
         quantity: hours,
         unit: 'h',
-        unitPrice: rate,
-        amount: round2(hours * rate),
+        unitPrice: dayRate,
+        amount: round2(hours * dayRate),
       });
 
       if (type !== 'normal') {
@@ -237,7 +271,7 @@ export function buildWorkerWageBasis(
           const perHour =
             supplement.kind === 'fixed'
               ? round2(supplement.value)
-              : round2((rate * supplement.value) / 100);
+              : round2((dayRate * supplement.value) / 100);
           push({
             ...base,
             code: `supplement_${type}`,
@@ -394,10 +428,12 @@ export function buildWorkerWageBasis(
         message: `Avtalsversionen "${rules.name}" saknar minimilön för kategorin "${category}".`,
       });
     }
-    if (minimum && rate > 0 && rate < minimum.hourly) {
+    // Checked at the last day this version covers in the period.
+    const versionRate = rateOn(worker, date);
+    if (minimum && versionRate > 0 && versionRate < minimum.hourly) {
       warnings.push({
         code: 'below_minimum_wage',
-        message: `Timlönen ${rate} kr är lägre än avtalets minimilön ${minimum.hourly} kr (${rules.name}).`,
+        message: `Timlönen ${versionRate} kr är lägre än avtalets minimilön ${minimum.hourly} kr (${rules.name}).`,
       });
     }
   }

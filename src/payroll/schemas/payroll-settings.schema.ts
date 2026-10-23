@@ -44,6 +44,12 @@ export class PayrollSettings {
   @Prop({ type: MongooseSchema.Types.Mixed, default: {} })
   absenceCodes: Record<string, string>;
 
+  // Agreement versions whose general wage raise this company has handled
+  // (applied through raise proposals, or marked as handled). Others with a
+  // raise show as pending in the lönerunderlag.
+  @Prop({ type: [String], default: [] })
+  handledRaises: string[];
+
   // Only attested shifts (approvedAt set) count towards the lönerunderlag.
   @Prop({ type: Boolean, default: true })
   onlyApprovedShifts: boolean;

@@ -130,6 +130,73 @@ export class AgreementRuleSetDto {
   @Min(0)
   @IsOptional()
   atkPercent?: number | null;
+
+  @IsIn(['percent', 'fixed'])
+  @IsOptional()
+  wageRaiseKind?: 'percent' | 'fixed' | null;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  wageRaiseValue?: number;
+}
+
+export class WageRateDto {
+  @IsString()
+  userId: string;
+
+  @IsNumber()
+  @Min(0)
+  hourlyRate: number;
+
+  @Matches(DATE)
+  validFrom: string;
+}
+
+export class ApplyRaiseItemDto {
+  @IsString()
+  userId: string;
+
+  @IsNumber()
+  @Min(0)
+  hourlyRate: number;
+}
+
+export class ApplyRaiseDto {
+  @IsString()
+  ruleSetId: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ApplyRaiseItemDto)
+  items: ApplyRaiseItemDto[];
+}
+
+export class TaxTableImportDto {
+  @IsNumber()
+  year: number;
+
+  @IsString()
+  @IsOptional()
+  url?: string;
+}
+
+export class RuleSourceDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  url?: string;
+
+  @IsString()
+  @IsOptional()
+  area?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  enabled?: boolean;
 }
 
 export class PayrollSettingsDto {
