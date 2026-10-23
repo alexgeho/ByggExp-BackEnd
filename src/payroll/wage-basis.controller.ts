@@ -133,6 +133,14 @@ export class WageBasisController {
     return this.ruleWatchService.markReviewed(id, req.user?.userId);
   }
 
+  // Fetches the Byggavtalet PDFs from the watched Byggnads pages and reads
+  // them into drafts in the background.
+  @Post('watch/fetch-agreement')
+  @Roles(UserRole.SuperAdmin)
+  fetchAgreement() {
+    return this.agreementDraftService.discoverDocuments(true);
+  }
+
   @Get('tax-tables')
   @Roles(UserRole.SuperAdmin)
   listTaxTables() {

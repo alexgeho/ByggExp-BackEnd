@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -7,139 +8,227 @@ import {
   claudeEnabled,
   parseJsonObject,
 } from '../common/anthropic.client';
+import { cronsDisabled } from '../common/cron.util';
 import {
   AgreementRuleSet,
   AgreementRuleSetDocument,
   AgreementRuleSetStatus,
-  WageCategory,
 } from './schemas/agreement-rule-set.schema';
+import { RuleSource, RuleSourceDocument } from './schemas/rule-source.schema';
 import { RuleWatchService } from './rule-watch.service';
+import { textHash } from './rule-watch.util';
+import {
+  Extracted,
+  agreementPdfLinks,
+  draftsFromExtraction,
+} from './agreement-draft.util';
+import { swedishToday } from './wage-history';
 
-// Reads an agreement text or circular (Byggnads / Byggföretagen PDF, or pasted
-// text) and turns the figures it states into a DRAFT agreement version. The
-// draft starts from the latest published version, overrides only what the
-// document states, and lists where each figure was found. A superadmin checks
-// every number against the document before publishing — nothing here is ever
-// published automatically.
+// Reads agreement documents (Byggavtalet, a Byggnads / Byggföretagen circular,
+// or pasted text) and turns the figures they state into DRAFT agreement
+// versions, one per wage period. The documents are either uploaded by a
+// superadmin or found on the watched Byggnads pages. A draft starts from the
+// latest published version, overrides only what the documents state, and
+// lists where each figure was found. A superadmin checks every number before
+// publishing — nothing here is ever published automatically.
 
 const MODEL = process.env.PAYROLL_RULES_MODEL || 'claude-opus-5-5';
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_PDF_BYTES = 25 * 1024 * 1024;
 
-type Extracted = {
-  name?: string | null;
-  validFrom?: string | null;
-  validTo?: string | null;
-  wageRaise?: { kind?: string | null; value?: number | null; quote?: string } | null;
-  minimumWages?: Array<{
-    category?: string;
-    label?: string;
-    hourly?: number;
-    quote?: string;
-  }>;
-  hourTypeSupplements?: Array<{
-    hourType?: string;
-    label?: string;
-    kind?: string;
-    value?: number;
-    quote?: string;
-  }>;
-  vacationPayPercent?: { value?: number | null; quote?: string } | null;
-  travelTimeRatePerHour?: { value?: number | null; quote?: string } | null;
-  notes?: string[];
-};
+type PdfInput = { buffer: Buffer; name: string };
 
-const PROMPT = `You read a Swedish construction collective agreement document (Byggavtalet, a Byggnads or Byggföretagen circular, or a wage table) and extract ONLY figures that the document states explicitly. Never estimate, never carry over numbers you remember from other years. When a figure is not stated, use null or leave it out.
+const PROMPT = `You read Swedish construction collective agreement documents (Byggavtalet, a Byggnads or Byggföretagen circular such as "hängavtalsinformation", or a wage table) and extract ONLY figures that the documents state explicitly. Never estimate, never carry over numbers you remember from other years. When a figure is not stated, use null or leave it out. When several documents are given, combine them: e.g. the agreement gives minimum wages and the circular gives the yearly raises.
 
 Return one JSON object, no prose:
 {
-  "name": "short name, e.g. \\"Byggavtalet 2026-05-01\\"" or null,
-  "validFrom": "YYYY-MM-DD" (the date the wages/rules in the document start applying) or null,
-  "validTo": "YYYY-MM-DD" or null,
-  "wageRaise": { "kind": "fixed" (kr per hour) | "percent", "value": number, "quote": "exact sentence from the document" } or null,
-  "minimumWages": [ { "category": "yrkesarbetare" | "ny_i_branschen" | "larling", "label": "the document's own wording", "hourly": number (kr per hour), "quote": "exact text" } ],
-  "hourTypeSupplements": [ { "hourType": "overtime" | "ob", "label": "e.g. Övertid kvalificerad / OB 1", "kind": "percent" (of hourly wage) | "fixed" (kr per hour), "value": number, "quote": "exact text" } ],
+  "name": "short name of the agreement period, e.g. \\"Byggavtalet 2025–2027\\"" or null,
+  "periods": [
+    {
+      "validFrom": "YYYY-MM-DD" (the date these wages start applying),
+      "validTo": "YYYY-MM-DD" or null,
+      "wageRaise": { "kind": "fixed" (kr per hour) | "percent", "value": number, "quote": "exact sentence" } or null,
+      "minimumWages": [ { "category": "yrkesarbetare" | "ny_i_branschen" | "larling", "label": "the document's own wording", "hourly": number (kr per hour), "quote": "exact text" } ]
+    }
+  ],
+  "hourTypeSupplements": [ { "hourType": "overtime" | "ob", "label": "e.g. Övertid A / OB 1", "kind": "percent" (of hourly wage) | "fixed" (kr per hour), "value": number, "quote": "exact text" } ],
   "vacationPayPercent": { "value": number, "quote": "exact text" } or null,
   "travelTimeRatePerHour": { "value": number, "quote": "exact text" } or null,
-  "notes": ["anything a payroll admin must know that does not fit above, e.g. several minimum-wage steps for new workers, or monthly-paid amounts"]
+  "notes": ["anything a payroll admin must know that does not fit above"]
 }
 
 Rules:
+- One period per date the wages change (Byggavtalet usually raises wages every 1 May), in date order. A period ends the day before the next one starts.
 - Amounts in Swedish format ("7,54 kronor") become numbers (7.54).
-- If the document gives a raise both per hour and per month, use the per-hour figure.
-- If there are several steps for new workers or apprentices, put the lowest relevant step in minimumWages and describe all steps in notes.
-- Every figure must have a quote copied from the document.`;
+- If a raise is given both per hour and per month, use the per-hour figure.
+- "yrkesarbetare" is the minimum wage for a skilled worker (yrkesarbetare / grundlön).
+- "ny_i_branschen" is the step for adult workers (19 years or older) new to the trade ("Övriga arbetstagare"), not the steps for workers under 19. "larling" is the first apprentice step (företagslärling steg 1). Describe all other steps in notes.
+- List supplements from the lowest level up (OB 1 before OB 2, Övertid A before B).
+- Every figure must have a quote copied from the documents.`;
 
 @Injectable()
 export class AgreementDraftService {
   private readonly logger = new Logger(AgreementDraftService.name);
+  private discovering = false;
 
   constructor(
     @InjectModel(AgreementRuleSet.name)
     private ruleSetModel: Model<AgreementRuleSetDocument>,
+    @InjectModel(RuleSource.name)
+    private sourceModel: Model<RuleSourceDocument>,
     private readonly ruleWatch: RuleWatchService,
   ) {}
 
   // Reading a full agreement takes longer than the proxy in front of the API
   // waits for a response, so the work runs in the background: the request is
-  // checked and accepted at once, the draft appears in the list when done,
+  // checked and accepted at once, the drafts appear in the list when done,
   // and a failure is e-mailed to superadmins.
   startDraftFromDocument(input: {
     file?: { buffer: Buffer; mimetype: string; originalname: string };
     text?: string;
     sourceLabel?: string;
   }): { accepted: true; startedAt: string } {
-    if (!claudeEnabled()) {
-      throw new BadRequestException('AI is not configured on this server');
-    }
+    this.assertEnabled();
     if (input.file && input.file.mimetype !== 'application/pdf') {
       throw new BadRequestException('Upload a PDF, or paste the text instead');
     }
     if (!input.file && !input.text?.trim()) {
       throw new BadRequestException('Provide a PDF file or the document text');
     }
-    const startedAt = new Date().toISOString();
+    const pdfs = input.file
+      ? [{ buffer: input.file.buffer, name: input.file.originalname }]
+      : [];
     const source = input.sourceLabel || input.file?.originalname || 'inklistrad text';
-    void this.draftFromDocument(input).catch(async (error) => {
-      this.logger.error(`Draft from ${source} failed`, error);
-      await this.ruleWatch
-        .alertSuperadmins(
-          'Utkast från dokument misslyckades',
-          `ByggExp kunde inte skapa ett avtalsutkast från ${source}: ${String((error as Error)?.message || error)}`,
-        )
-        .catch(() => undefined);
-    });
-    return { accepted: true, startedAt };
+    return this.runInBackground(source, () =>
+      this.draftFromDocuments({ pdfs, text: input.text, source }),
+    );
   }
 
-  async draftFromDocument(input: {
-    file?: { buffer: Buffer; mimetype: string; originalname: string };
-    text?: string;
-    sourceLabel?: string;
-  }): Promise<AgreementRuleSetDocument> {
-    if (!claudeEnabled()) {
-      throw new BadRequestException('AI is not configured on this server');
-    }
-    const content: ClaudeBlock[] = [];
-    if (input.file) {
-      if (input.file.mimetype !== 'application/pdf') {
-        throw new BadRequestException('Upload a PDF, or paste the text instead');
+  // Looks for Byggavtalet PDFs on the watched Byggnads pages. Documents not
+  // seen before are read into drafts; with `all`, every document currently
+  // published is read again (the "fetch the agreement now" button). The first
+  // look at a page only records what is there, so documents that were already
+  // published when watching started do not produce drafts on their own.
+  async discoverDocuments(all: boolean): Promise<{
+    accepted: boolean;
+    startedAt: string;
+    documents: string[];
+    errors: string[];
+  }> {
+    if (all) this.assertEnabled();
+    const startedAt = new Date().toISOString();
+    const sources = await this.sourceModel
+      .find({ enabled: true, area: 'agreement' })
+      .exec();
+    const errors: string[] = [];
+    const found = new Map<string, RuleSourceDocument>();
+    for (const source of sources) {
+      try {
+        const res = await fetch(source.url, {
+          headers: { 'User-Agent': 'ByggExp regelbevakning' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        for (const url of agreementPdfLinks(await res.text(), source.url)) {
+          if (!found.has(url)) found.set(url, source);
+        }
+      } catch (error) {
+        errors.push(`${source.name}: ${String((error as Error)?.message || error)}`);
       }
-      content.push({
-        type: 'document',
-        source: {
-          type: 'base64',
-          media_type: 'application/pdf',
-          data: input.file.buffer.toString('base64'),
-        },
-      });
-    } else if (input.text?.trim()) {
+    }
+
+    const pdfs: PdfInput[] = [];
+    for (const [url, source] of found) {
+      const known = (source.documents || []).find((d) => d.url === url);
+      const firstLook = !source.documentsBaselinedAt;
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'ByggExp regelbevakning' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const buffer = Buffer.from(await res.arrayBuffer());
+        if (buffer.length > MAX_PDF_BYTES) throw new Error('file is larger than 25 MB');
+        const hash = textHash(buffer.toString('base64'));
+        const isNew = !known || known.hash !== hash;
+        if (all || (isNew && !firstLook)) {
+          pdfs.push({ buffer, name: url });
+        }
+        if (isNew) {
+          source.documents = [
+            ...(source.documents || []).filter((d) => d.url !== url),
+            { url, hash, seenAt: new Date() },
+          ];
+        }
+      } catch (error) {
+        errors.push(`${url}: ${String((error as Error)?.message || error)}`);
+      }
+    }
+    for (const source of sources) {
+      if (!source.documentsBaselinedAt) source.documentsBaselinedAt = new Date();
+      await source.save();
+    }
+
+    if (!pdfs.length) {
+      return { accepted: false, startedAt, documents: [], errors };
+    }
+    this.assertEnabled();
+    const label = pdfs.map((p) => p.name).join(', ');
+    this.runInBackground(label, async () => {
+      const drafts = await this.draftFromDocuments({ pdfs, source: label });
+      if (!all) {
+        await this.ruleWatch.alertSuperadmins(
+          'Nytt avtalsutkast från Byggnads',
+          [
+            'Byggnads har publicerat nya avtalsdokument. ByggExp har läst dem och skapat utkast:',
+            ...drafts.map((d) => `• ${d.name} (från ${d.validFrom})`),
+            '',
+            'Kontrollera varje belopp mot dokumenten och publicera i Avtalsregler:',
+            ...pdfs.map((p) => p.name),
+          ].join('\n'),
+        );
+      }
+    });
+    return { accepted: true, startedAt, documents: pdfs.map((p) => p.name), errors };
+  }
+
+  // Weekly, Monday 05:45 (after the page check at 05:15).
+  @Cron('45 5 * * 1')
+  async discoverScheduled(): Promise<void> {
+    if (cronsDisabled() || this.discovering || !claudeEnabled()) return;
+    this.discovering = true;
+    try {
+      const result = await this.discoverDocuments(false);
+      if (result.errors.length) {
+        this.logger.warn(`Agreement discovery: ${result.errors.join('; ')}`);
+      }
+    } catch (error) {
+      this.logger.error('Agreement discovery failed', error);
+    } finally {
+      this.discovering = false;
+    }
+  }
+
+  async draftFromDocuments(input: {
+    pdfs: PdfInput[];
+    text?: string;
+    source: string;
+  }): Promise<AgreementRuleSetDocument[]> {
+    this.assertEnabled();
+    const content: ClaudeBlock[] = input.pdfs.map((pdf) => ({
+      type: 'document',
+      source: {
+        type: 'base64',
+        media_type: 'application/pdf',
+        data: pdf.buffer.toString('base64'),
+      },
+    }));
+    if (input.text?.trim()) {
       content.push({ type: 'text', text: `DOCUMENT:\n${input.text.trim()}` });
-    } else {
+    }
+    if (!content.length) {
       throw new BadRequestException('Provide a PDF file or the document text');
     }
     content.push({ type: 'text', text: PROMPT });
 
-    const reply = await callClaude({ model: MODEL, maxTokens: 8000, content });
+    const reply = await callClaude({ model: MODEL, maxTokens: 12000, content });
     let data: Extracted;
     try {
       data = parseJsonObject<Extracted>(reply);
@@ -154,89 +243,39 @@ export class AgreementDraftService {
       .sort({ validFrom: -1 })
       .lean()
       .exec();
-    const baseCopy: Record<string, unknown> = base ? { ...base } : {};
-    for (const key of ['_id', 'createdAt', 'updatedAt', '__v', 'publishedAt', 'publishedByUserId']) {
-      delete baseCopy[key];
-    }
-
-    const num = (v: unknown) =>
-      typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
-    const quotes: string[] = [];
-    const draft: Record<string, unknown> = {
-      ...baseCopy,
-      agreement: 'byggavtalet',
-      status: AgreementRuleSetStatus.Draft,
-      aiDraft: true,
-    };
-
-    const validFrom =
-      data.validFrom && DATE.test(data.validFrom) ? data.validFrom : null;
-    draft.validFrom = validFrom || (base?.validFrom ?? new Date().toISOString().slice(0, 10));
-    draft.validTo = data.validTo && DATE.test(data.validTo) ? data.validTo : '';
-    draft.name =
-      (data.name || '').trim() ||
-      `Byggavtalet från ${draft.validFrom as string}`;
-
-    const raiseValue = num(data.wageRaise?.value);
-    if (data.wageRaise && raiseValue && ['fixed', 'percent'].includes(String(data.wageRaise.kind))) {
-      draft.wageRaiseKind = data.wageRaise.kind;
-      draft.wageRaiseValue = raiseValue;
-      quotes.push(`Lönehöjning: "${data.wageRaise.quote || ''}"`);
-    } else {
-      draft.wageRaiseKind = null;
-      draft.wageRaiseValue = 0;
-    }
-
-    const categories = Object.values(WageCategory) as string[];
-    const minimums = (data.minimumWages || []).filter(
-      (m) => categories.includes(String(m.category)) && num(m.hourly),
+    const drafts = draftsFromExtraction(
+      data,
+      base as Record<string, unknown> | null,
+      input.source,
+      swedishToday(),
     );
-    if (minimums.length) {
-      draft.minimumWages = minimums.map((m) => ({
-        category: m.category,
-        label: m.label || '',
-        hourly: m.hourly,
-      }));
-      minimums.forEach((m) => quotes.push(`Minimilön ${m.category}: "${m.quote || ''}"`));
+    const saved: AgreementRuleSetDocument[] = [];
+    for (const draft of drafts) {
+      saved.push(await new this.ruleSetModel(draft).save());
     }
+    return saved;
+  }
 
-    const supplements = (data.hourTypeSupplements || []).filter(
-      (s) =>
-        ['overtime', 'ob'].includes(String(s.hourType)) &&
-        ['percent', 'fixed'].includes(String(s.kind)) &&
-        num(s.value),
-    );
-    if (supplements.length) {
-      draft.hourTypeSupplements = supplements.map((s) => ({
-        hourType: s.hourType,
-        label: s.label || '',
-        kind: s.kind,
-        value: s.value,
-      }));
-      supplements.forEach((s) => quotes.push(`${s.label || s.hourType}: "${s.quote || ''}"`));
+  private assertEnabled() {
+    if (!claudeEnabled()) {
+      throw new BadRequestException('AI is not configured on this server');
     }
+  }
 
-    const vacation = num(data.vacationPayPercent?.value);
-    if (vacation != null) {
-      draft.vacationPayPercent = vacation;
-      quotes.push(`Semester: "${data.vacationPayPercent?.quote || ''}"`);
-    }
-    const travel = num(data.travelTimeRatePerHour?.value);
-    if (travel != null) {
-      draft.travelTimeRatePerHour = travel;
-      quotes.push(`Restid: "${data.travelTimeRatePerHour?.quote || ''}"`);
-    }
-
-    const source = input.sourceLabel || input.file?.originalname || 'inklistrad text';
-    draft.sourceNote = [
-      `UTKAST skapat med AI från ${source} — kontrollera varje belopp mot dokumentet innan publicering.`,
-      base ? `Övriga regler kopierade från "${base.name}".` : '',
-      ...quotes,
-      ...(data.notes || []).map((n) => `Obs: ${n}`),
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    return new this.ruleSetModel(draft).save();
+  private runInBackground(
+    source: string,
+    work: () => Promise<unknown>,
+  ): { accepted: true; startedAt: string } {
+    const startedAt = new Date().toISOString();
+    void work().catch(async (error) => {
+      this.logger.error(`Draft from ${source} failed`, error);
+      await this.ruleWatch
+        .alertSuperadmins(
+          'Utkast från dokument misslyckades',
+          `ByggExp kunde inte skapa ett avtalsutkast från ${source}: ${String((error as Error)?.message || error)}`,
+        )
+        .catch(() => undefined);
+    });
+    return { accepted: true, startedAt };
   }
 }

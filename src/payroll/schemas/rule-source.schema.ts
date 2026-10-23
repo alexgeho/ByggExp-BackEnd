@@ -57,6 +57,19 @@ export class RuleSource {
 
   @Prop({ type: String, ref: 'User', default: null })
   reviewedByUserId?: string | null;
+
+  // Agreement PDFs linked from the page, so a new or changed document is
+  // read into a draft once.
+  @Prop({
+    type: [{ url: String, hash: String, seenAt: Date, _id: false }],
+    default: [],
+  })
+  documents: { url: string; hash: string; seenAt: Date }[];
+
+  // Set after the first look at the page's documents (that look only records
+  // them).
+  @Prop({ type: Date, default: null })
+  documentsBaselinedAt?: Date | null;
 }
 
 export const RuleSourceSchema = SchemaFactory.createForClass(RuleSource);
