@@ -13,6 +13,7 @@ import {
   AgreementRuleSetStatus,
   WageCategory,
 } from './schemas/agreement-rule-set.schema';
+import { RuleWatchService } from './rule-watch.service';
 
 // Reads an agreement text or circular (Byggnads / Byggföretagen PDF, or pasted
 // text) and turns the figures it states into a DRAFT agreement version. The
@@ -75,7 +76,40 @@ export class AgreementDraftService {
   constructor(
     @InjectModel(AgreementRuleSet.name)
     private ruleSetModel: Model<AgreementRuleSetDocument>,
+    private readonly ruleWatch: RuleWatchService,
   ) {}
+
+  // Reading a full agreement takes longer than the proxy in front of the API
+  // waits for a response, so the work runs in the background: the request is
+  // checked and accepted at once, the draft appears in the list when done,
+  // and a failure is e-mailed to superadmins.
+  startDraftFromDocument(input: {
+    file?: { buffer: Buffer; mimetype: string; originalname: string };
+    text?: string;
+    sourceLabel?: string;
+  }): { accepted: true; startedAt: string } {
+    if (!claudeEnabled()) {
+      throw new BadRequestException('AI is not configured on this server');
+    }
+    if (input.file && input.file.mimetype !== 'application/pdf') {
+      throw new BadRequestException('Upload a PDF, or paste the text instead');
+    }
+    if (!input.file && !input.text?.trim()) {
+      throw new BadRequestException('Provide a PDF file or the document text');
+    }
+    const startedAt = new Date().toISOString();
+    const source = input.sourceLabel || input.file?.originalname || 'inklistrad text';
+    void this.draftFromDocument(input).catch(async (error) => {
+      this.logger.error(`Draft from ${source} failed`, error);
+      await this.ruleWatch
+        .alertSuperadmins(
+          'Utkast från dokument misslyckades',
+          `ByggExp kunde inte skapa ett avtalsutkast från ${source}: ${String((error as Error)?.message || error)}`,
+        )
+        .catch(() => undefined);
+    });
+    return { accepted: true, startedAt };
+  }
 
   async draftFromDocument(input: {
     file?: { buffer: Buffer; mimetype: string; originalname: string };

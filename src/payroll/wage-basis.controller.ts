@@ -162,7 +162,7 @@ export class WageBasisController {
     @UploadedFile() file: UploadedPdf | undefined,
     @Body() body: { text?: string; sourceLabel?: string },
   ) {
-    return this.agreementDraftService.draftFromDocument({
+    return this.agreementDraftService.startDraftFromDocument({
       file,
       text: body?.text,
       sourceLabel: body?.sourceLabel,
