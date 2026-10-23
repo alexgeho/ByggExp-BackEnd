@@ -47,16 +47,19 @@ export type StoredWageShift = {
   hourType?: string;
   overtimeMs?: number;
   overtimeStatus?: string | null;
+  obMs?: number;
+  obStatus?: string | null;
   travelKm?: number;
   travelMinutes?: number;
   perDiem?: string;
   projectId?: string;
 };
 
-// One shift becomes one or two wage shifts. Approved övertid inside the day
-// ("8 h normal + 2 h övertid") is paid as its own overtime part; pending or
-// denied övertid stays in the day's own hour type. Travel and per diem stay on
-// the first part only, so they are paid once.
+// One shift becomes up to three wage shifts. Approved övertid inside the day
+// ("8 h normal + 2 h övertid") is paid as its own overtime part, approved OB
+// as its own OB part; pending or denied övertid/OB stays in the day's own
+// hour type. Travel and per diem stay on the first part only, so they are
+// paid once.
 export function toWageShifts(shift: StoredWageShift): WageShift[] {
   // Worker-entered hours win over GPS-measured, as in the hours grid.
   const totalMs =
@@ -67,25 +70,37 @@ export function toWageShifts(shift: StoredWageShift): WageShift[] {
     shift.overtimeStatus === 'approved'
       ? Math.min(Math.max(0, Number(shift.overtimeMs) || 0), totalMs)
       : 0;
+  const obMs =
+    shift.obStatus === 'approved'
+      ? Math.min(Math.max(0, Number(shift.obMs) || 0), totalMs - overtimeMs)
+      : 0;
   const main: WageShift = {
     shiftDate: shift.shiftDate,
-    hours: (totalMs - overtimeMs) / 3_600_000,
+    hours: (totalMs - overtimeMs - obMs) / 3_600_000,
     hourType: shift.hourType,
     travelKm: shift.travelKm,
     travelMinutes: shift.travelMinutes,
     perDiem: shift.perDiem,
     projectId: shift.projectId,
   };
-  if (!overtimeMs) return [main];
-  return [
-    main,
-    {
+  const parts: WageShift[] = [main];
+  if (overtimeMs) {
+    parts.push({
       shiftDate: shift.shiftDate,
       hours: overtimeMs / 3_600_000,
       hourType: 'overtime',
       projectId: shift.projectId,
-    },
-  ];
+    });
+  }
+  if (obMs) {
+    parts.push({
+      shiftDate: shift.shiftDate,
+      hours: obMs / 3_600_000,
+      hourType: 'ob',
+      projectId: shift.projectId,
+    });
+  }
+  return parts;
 }
 
 export type WageLeave = {

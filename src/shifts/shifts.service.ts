@@ -90,6 +90,8 @@ type SerializedShiftRecord = {
   hourType?: string;
   overtimeMs?: number;
   overtimeStatus?: string | null;
+  obMs?: number;
+  obStatus?: string | null;
   travelKm?: number;
   travelMinutes?: number;
   perDiem?: string;
@@ -124,6 +126,8 @@ type ShiftDayRecord = {
   manualDurationMs: number;
   // The day's övertid (any status) inside those hours.
   overtimeMs: number;
+  // The day's OB hours (any status) inside those hours.
+  obMs: number;
   shifts: SerializedShiftRecord[];
 };
 
@@ -686,6 +690,61 @@ export class ShiftsService {
     }
   }
 
+  // OB inside a day, set with the day's hours: same rules as övertid, inside
+  // the hours that are not övertid. Runs after applyOvertime.
+  private applyOb(
+    shift: ShiftDocument,
+    obMs: number | undefined,
+    user: AuthenticatedUser,
+  ) {
+    const hoursMs =
+      shift.manualDurationMs != null
+        ? shift.manualDurationMs
+        : shift.durationMs || 0;
+    const previousStatus = shift.obStatus || null;
+    const next = nextOvertime({
+      hoursMs: Math.max(0, hoursMs - (shift.overtimeMs || 0)),
+      previousMs: shift.obMs || 0,
+      previousStatus,
+      requestedMs: obMs,
+      byManager: user.role !== UserRole.Worker,
+    });
+
+    shift.obMs = next.overtimeMs;
+    shift.obStatus = next.overtimeStatus;
+    if (next.decidedByManager) {
+      shift.obDecidedAt = new Date();
+      shift.obDecidedByUserId = user.userId;
+    } else if (next.overtimeStatus !== previousStatus || !next.overtimeMs) {
+      shift.obDecidedAt = null;
+      shift.obDecidedByUserId = null;
+    }
+  }
+
+  // Restid, Bil and Traktamente from the day card; a field left out keeps its
+  // value so older apps don't wipe Dagens rapport.
+  private applyDayExtras(
+    shift: ShiftDocument,
+    dto: { travelMinutes?: number; travelKm?: number; perDiem?: string },
+  ) {
+    let changed = false;
+    if (dto.travelKm !== undefined) {
+      shift.travelKm = Math.max(0, Number(dto.travelKm) || 0);
+      changed = true;
+    }
+    if (dto.travelMinutes !== undefined) {
+      shift.travelMinutes = Math.max(0, Math.round(dto.travelMinutes) || 0);
+      changed = true;
+    }
+    if (dto.perDiem !== undefined) {
+      shift.perDiem = dto.perDiem;
+      changed = true;
+    }
+    if (changed) {
+      shift.reportedAt = new Date();
+    }
+  }
+
   // Godkänn / Neka a day's övertid. Approved is paid as overtime; denied turns
   // those hours into normal hours, so the day's total stays the same. Same
   // access rule as attest.
@@ -728,6 +787,50 @@ export class ShiftsService {
         ...accessFilter,
         overtimeStatus: OvertimeStatus.Pending,
         overtimeMs: { $gt: 0 },
+      })
+      .sort({ shiftDate: 1 })
+      .limit(500)
+      .exec();
+
+    return this.serializeShifts(shifts);
+  }
+
+  // Godkänn / Neka a day's OB. Approved is paid as OB; denied turns those
+  // hours into normal hours, so the day's total stays the same.
+  async decideOb(user: AuthenticatedUser, shiftId: string, approved: boolean) {
+    const accessFilter = await this.buildAccessibleShiftFilter(user, {});
+    const shift = await this.shiftModel
+      .findOne({ ...accessFilter, _id: shiftId })
+      .exec();
+
+    if (!shift) {
+      throw new NotFoundException("Shift not found");
+    }
+    if (!shift.obMs) {
+      throw new BadRequestException("This day has no OB hours.");
+    }
+
+    if (approved) {
+      shift.obStatus = OvertimeStatus.Approved;
+    } else {
+      shift.obMs = 0;
+      shift.obStatus = null;
+    }
+    shift.obDecidedAt = new Date();
+    shift.obDecidedByUserId = user.userId;
+    await shift.save();
+
+    return this.serializeShift(shift);
+  }
+
+  // Days whose OB waits for a manager, oldest first, for the approvals queue.
+  async getPendingOb(user: AuthenticatedUser) {
+    const accessFilter = await this.buildAccessibleShiftFilter(user, {});
+    const shifts = await this.shiftModel
+      .find({
+        ...accessFilter,
+        obStatus: OvertimeStatus.Pending,
+        obMs: { $gt: 0 },
       })
       .sort({ shiftDate: 1 })
       .limit(500)
@@ -820,6 +923,8 @@ export class ShiftsService {
     shift.manualDurationMs =
       dto.durationMs == null ? null : Math.max(0, Math.round(dto.durationMs));
     this.applyOvertime(shift, dto.overtimeMs, user);
+    this.applyOb(shift, dto.obMs, user);
+    this.applyDayExtras(shift, dto);
     await shift.save();
 
     this.recordEvent(
@@ -888,6 +993,8 @@ export class ShiftsService {
     if (existing) {
       existing.manualDurationMs = durationMs;
       this.applyOvertime(existing, dto.overtimeMs, user);
+      this.applyOb(existing, dto.obMs, user);
+      this.applyDayExtras(existing, dto);
       await existing.save();
       target = existing;
     } else {
@@ -932,6 +1039,8 @@ export class ShiftsService {
         photos: [],
       });
       this.applyOvertime(target, dto.overtimeMs, user);
+      this.applyOb(target, dto.obMs, user);
+      this.applyDayExtras(target, dto);
       await target.save();
     }
 
@@ -947,8 +1056,16 @@ export class ShiftsService {
         shiftDate: dto.date,
         manualDurationMs: { $gt: 0 },
       },
-      // The day's övertid lives with its hours, so it moves with them.
-      { $set: { manualDurationMs: 0, overtimeMs: 0, overtimeStatus: null } },
+      // The day's övertid and OB live with its hours, so they move with them.
+      {
+        $set: {
+          manualDurationMs: 0,
+          overtimeMs: 0,
+          overtimeStatus: null,
+          obMs: 0,
+          obStatus: null,
+        },
+      },
     );
 
     this.recordEvent(
@@ -1781,12 +1898,14 @@ export class ShiftsService {
         plannedDurationMs: 0,
         manualDurationMs: 0,
         overtimeMs: 0,
+        obMs: 0,
         shifts: [],
       };
 
       current.totalDurationMs += shift.durationMs;
       current.manualDurationMs += shift.manualDurationMs || 0;
       current.overtimeMs += shift.overtimeMs || 0;
+      current.obMs += shift.obMs || 0;
       current.shifts.push(shift);
       grouped.set(key, current);
     }
@@ -1905,6 +2024,9 @@ export class ShiftsService {
       // Övertid inside the day's duration; only "approved" is paid as overtime.
       { header: "Overtime h", key: "overtimeHours", width: 12 },
       { header: "Overtime", key: "overtimeStatus", width: 12 },
+      // OB inside the day's duration; only "approved" is paid as OB.
+      { header: "OB h", key: "obHours", width: 10 },
+      { header: "OB", key: "obStatus", width: 12 },
       { header: "Travel km", key: "travelKm", width: 12 },
       { header: "Travel h", key: "travelHours", width: 12 },
       { header: "Per diem", key: "perDiem", width: 12 },
@@ -1913,7 +2035,7 @@ export class ShiftsService {
     ];
 
     worksheet.addRow(["Shift report"]);
-    worksheet.mergeCells("A1:Q1");
+    worksheet.mergeCells("A1:S1");
     worksheet.getCell("A1").font = { size: 16, bold: true };
 
     worksheet.addRow(["Generated at", this.formatDateTimeValue(new Date())]);
@@ -1939,6 +2061,8 @@ export class ShiftsService {
       hourType: "Hour type",
       overtimeHours: "Overtime h",
       overtimeStatus: "Overtime",
+      obHours: "OB h",
+      obStatus: "OB",
       travelKm: "Travel km",
       travelHours: "Travel h",
       perDiem: "Per diem",
@@ -1982,6 +2106,8 @@ export class ShiftsService {
           hourType: shift.hourType || "normal",
           overtimeHours: this.msToHours(shift.overtimeMs || 0),
           overtimeStatus: shift.overtimeMs ? shift.overtimeStatus || "" : "",
+          obHours: this.msToHours(shift.obMs || 0),
+          obStatus: shift.obMs ? shift.obStatus || "" : "",
           travelKm: shift.travelKm || 0,
           travelHours: shift.travelMinutes
             ? Math.round((shift.travelMinutes / 60) * 100) / 100
@@ -2139,6 +2265,8 @@ export class ShiftsService {
       hourType: shift.hourType || "normal",
       overtimeMs: shift.overtimeMs || 0,
       overtimeStatus: shift.overtimeStatus || null,
+      obMs: shift.obMs || 0,
+      obStatus: shift.obStatus || null,
       travelKm: shift.travelKm || 0,
       travelMinutes: shift.travelMinutes || 0,
       perDiem: shift.perDiem || "none",

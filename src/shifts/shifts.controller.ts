@@ -201,6 +201,17 @@ export class ShiftsController {
     return this.shiftsService.decideOvertime(req.user, id, dto.approved);
   }
 
+  // Godkänn / Neka a day's OB.
+  @Patch(":id/ob")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  decideOb(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() dto: OvertimeDecisionDto,
+  ) {
+    return this.shiftsService.decideOb(req.user, id, dto.approved);
+  }
+
   @Get(":id/ata-options")
   @Roles(
     UserRole.SuperAdmin,
@@ -295,6 +306,13 @@ export class ShiftsController {
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
   getPendingOvertime(@Request() req) {
     return this.shiftsService.getPendingOvertime(req.user);
+  }
+
+  // Days whose OB waits for a manager — the admin's approvals queue.
+  @Get("ob/pending")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  getPendingOb(@Request() req) {
+    return this.shiftsService.getPendingOb(req.user);
   }
 
   @Get("history")

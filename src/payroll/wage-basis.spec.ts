@@ -192,6 +192,45 @@ describe('toWageShifts', () => {
     });
     expect(parts.map((p) => p.hours)).toEqual([0, 3]);
   });
+
+  it('pays approved OB inside the day as its own OB part, next to övertid', () => {
+    const parts = toWageShifts({
+      shiftDate: '2026-10-21',
+      manualDurationMs: 10 * H,
+      overtimeMs: 2 * H,
+      overtimeStatus: 'approved',
+      obMs: 3 * H,
+      obStatus: 'approved',
+      perDiem: 'half',
+    });
+    expect(parts).toEqual([
+      expect.objectContaining({ hours: 5, perDiem: 'half' }),
+      expect.objectContaining({ hours: 2, hourType: 'overtime' }),
+      expect.objectContaining({ hours: 3, hourType: 'ob' }),
+    ]);
+    expect(parts[2].perDiem).toBeUndefined();
+  });
+
+  it('keeps pending OB in the day and caps OB to the hours left after övertid', () => {
+    expect(
+      toWageShifts({
+        shiftDate: '2026-10-21',
+        manualDurationMs: 8 * H,
+        obMs: 2 * H,
+        obStatus: 'pending',
+      }).map((p) => p.hours),
+    ).toEqual([8]);
+    expect(
+      toWageShifts({
+        shiftDate: '2026-10-21',
+        manualDurationMs: 8 * H,
+        overtimeMs: 6 * H,
+        overtimeStatus: 'approved',
+        obMs: 5 * H,
+        obStatus: 'approved',
+      }).map((p) => p.hours),
+    ).toEqual([0, 6, 2]);
+  });
 });
 
 describe('buildPaxml', () => {

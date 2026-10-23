@@ -117,6 +117,22 @@ export class Shift {
   @Prop({ type: String, ref: "User", default: null })
   overtimeDecidedByUserId?: string | null;
 
+  // OB (obekväm arbetstid) inside the day: the part of the hours worked in the
+  // evening, at night or at the weekend, entered by the worker in the day card.
+  // Same approval flow as övertid; only approved OB is paid as OB. Never more
+  // than the day's hours minus its övertid.
+  @Prop({ type: Number, default: 0 })
+  obMs?: number;
+
+  @Prop({ type: String, default: null, index: true }) // null | pending | approved
+  obStatus?: OvertimeStatus | null;
+
+  @Prop({ type: Date, default: null })
+  obDecidedAt?: Date | null;
+
+  @Prop({ type: String, ref: "User", default: null })
+  obDecidedByUserId?: string | null;
+
   // Travel the worker is owed for: distance driven and time spent travelling,
   // plus the per-diem bracket for the day.
   @Prop({ type: Number, default: 0 })

@@ -1,5 +1,7 @@
 import {
+  IsIn,
   IsInt,
+  IsNumber,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -38,4 +40,30 @@ export class AddManualHoursDto {
   @Max(24 * 60 * 60 * 1000, { message: "overtimeMs cannot exceed 24 hours" })
   @IsOptional()
   overtimeMs?: number;
+
+  // OB hours inside the day (part of durationMs, never overlapping övertid).
+  // Left out, the day keeps the OB it had.
+  @IsInt({ message: "obMs must be an integer number of milliseconds" })
+  @Min(0)
+  @Max(24 * 60 * 60 * 1000, { message: "obMs cannot exceed 24 hours" })
+  @IsOptional()
+  obMs?: number;
+
+  // Restid, Bil and Traktamente from the day card — same fields as Dagens
+  // rapport. Left out, the day keeps what it had.
+  @IsInt()
+  @Min(0)
+  @Max(24 * 60)
+  @IsOptional()
+  travelMinutes?: number;
+
+  @IsNumber()
+  @Min(0)
+  @Max(2000)
+  @IsOptional()
+  travelKm?: number;
+
+  @IsIn(["none", "half", "full"])
+  @IsOptional()
+  perDiem?: string;
 }

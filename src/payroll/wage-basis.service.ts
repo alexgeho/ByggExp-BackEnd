@@ -271,7 +271,7 @@ export class WageBasisService {
         ...(settings.onlyApprovedShifts ? { approvedAt: { $ne: null } } : {}),
       })
       .select(
-        'workerId projectId shiftDate durationMs manualDurationMs hourType overtimeMs overtimeStatus travelKm travelMinutes perDiem',
+        'workerId projectId shiftDate durationMs manualDurationMs hourType overtimeMs overtimeStatus obMs obStatus travelKm travelMinutes perDiem',
       )
       .lean()
       .exec();
@@ -310,6 +310,8 @@ export class WageBasisService {
             manualDurationMs: s.manualDurationMs,
             hourType: s.hourType,
             overtimeMs: s.overtimeMs,
+            obMs: s.obMs,
+            obStatus: s.obStatus,
             overtimeStatus: s.overtimeStatus,
             travelKm: s.travelKm,
             travelMinutes: s.travelMinutes,
