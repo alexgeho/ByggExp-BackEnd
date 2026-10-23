@@ -10,4 +10,11 @@ export class SetManualHoursDto {
   @Max(24 * 60 * 60 * 1000, { message: "durationMs cannot exceed 24 hours" })
   @IsOptional()
   durationMs?: number | null;
+
+  // The part of the hours that is övertid; see AddManualHoursDto.
+  @IsInt({ message: "overtimeMs must be an integer number of milliseconds" })
+  @Min(0)
+  @Max(24 * 60 * 60 * 1000, { message: "overtimeMs cannot exceed 24 hours" })
+  @IsOptional()
+  overtimeMs?: number;
 }

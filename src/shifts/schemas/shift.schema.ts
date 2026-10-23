@@ -9,6 +9,11 @@ export enum ShiftStatus {
   Completed = "completed",
 }
 
+export enum OvertimeStatus {
+  Pending = "pending",
+  Approved = "approved",
+}
+
 export class ShiftSegment {
   startedAt: Date;
   endedAt?: Date;
@@ -95,6 +100,22 @@ export class Shift {
   // type, so this closes the path from the worker's tap to the payslip.
   @Prop({ default: "normal" }) // normal | overtime | ob
   hourType?: string;
+
+  // Övertid inside the day: how much of the day's hours (manual when entered,
+  // otherwise GPS) is overtime, so "8 h normal + 2 h övertid" is one shift
+  // instead of the whole day flipping to overtime. Only approved overtime is
+  // paid as overtime; pending and denied hours count as normal.
+  @Prop({ type: Number, default: 0 })
+  overtimeMs?: number;
+
+  @Prop({ type: String, default: null, index: true }) // null | pending | approved
+  overtimeStatus?: OvertimeStatus | null;
+
+  @Prop({ type: Date, default: null })
+  overtimeDecidedAt?: Date | null;
+
+  @Prop({ type: String, ref: "User", default: null })
+  overtimeDecidedByUserId?: string | null;
 
   // Travel the worker is owed for: distance driven and time spent travelling,
   // plus the per-diem bracket for the day.

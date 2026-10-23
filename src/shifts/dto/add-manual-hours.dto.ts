@@ -1,4 +1,12 @@
-import { IsInt, IsNotEmpty, IsString, Matches, Max, Min } from "class-validator";
+import {
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  Min,
+} from "class-validator";
 
 // An admin records the hours a worker actually worked on a given day/project
 // (the "Manual" hours source) — used when the worker forgot to clock in on the
@@ -22,4 +30,12 @@ export class AddManualHoursDto {
   @Min(0)
   @Max(24 * 60 * 60 * 1000, { message: "durationMs cannot exceed 24 hours" })
   durationMs: number;
+
+  // The part of durationMs that is övertid. Left out, the day keeps the split
+  // it had (trimmed to the new hours) — older apps never send it.
+  @IsInt({ message: "overtimeMs must be an integer number of milliseconds" })
+  @Min(0)
+  @Max(24 * 60 * 60 * 1000, { message: "overtimeMs cannot exceed 24 hours" })
+  @IsOptional()
+  overtimeMs?: number;
 }

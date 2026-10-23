@@ -27,6 +27,7 @@ import { ListShiftsDto } from "./dto/list-shifts.dto";
 import { DayReportDto } from "./dto/day-report.dto";
 import { SetManualHoursDto } from "./dto/set-manual-hours.dto";
 import { AddManualHoursDto } from "./dto/add-manual-hours.dto";
+import { OvertimeDecisionDto } from "./dto/overtime-decision.dto";
 import { PauseShiftDto } from "./dto/pause-shift.dto";
 import { ResumeShiftDto } from "./dto/resume-shift.dto";
 import { StartShiftDto } from "./dto/start-shift.dto";
@@ -189,6 +190,17 @@ export class ShiftsController {
     );
   }
 
+  // Godkänn / Neka a day's övertid.
+  @Patch(":id/overtime")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  decideOvertime(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() dto: OvertimeDecisionDto,
+  ) {
+    return this.shiftsService.decideOvertime(req.user, id, dto.approved);
+  }
+
   @Get(":id/ata-options")
   @Roles(
     UserRole.SuperAdmin,
@@ -276,6 +288,13 @@ export class ShiftsController {
   )
   getMonths(@Request() req, @Query() query: ListShiftsDto) {
     return this.shiftsService.getMonths(req.user, query);
+  }
+
+  // Days whose övertid waits for a manager — the admin's approvals queue.
+  @Get("overtime/pending")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  getPendingOvertime(@Request() req) {
+    return this.shiftsService.getPendingOvertime(req.user);
   }
 
   @Get("history")

@@ -34,6 +34,7 @@ import {
   WageRuleSet,
   WorkerWageBasis,
   buildWorkerWageBasis,
+  toWageShifts,
 } from './wage-basis';
 import { ExportSkipped, buildCsv, buildPaxml } from './wage-export';
 import { ExportFormat } from './schemas/payroll-settings.schema';
@@ -270,7 +271,7 @@ export class WageBasisService {
         ...(settings.onlyApprovedShifts ? { approvedAt: { $ne: null } } : {}),
       })
       .select(
-        'workerId projectId shiftDate durationMs manualDurationMs hourType travelKm travelMinutes perDiem',
+        'workerId projectId shiftDate durationMs manualDurationMs hourType overtimeMs overtimeStatus travelKm travelMinutes perDiem',
       )
       .lean()
       .exec();
@@ -302,19 +303,20 @@ export class WageBasisService {
             .filter((r) => String(r.userId) === id)
             .map((r) => ({ validFrom: r.validFrom, hourlyRate: r.hourlyRate })),
         },
-        own.map((s) => ({
-          shiftDate: s.shiftDate,
-          // Worker-entered hours win over GPS-measured, as in the hours grid.
-          hours:
-            (s.manualDurationMs != null
-              ? Number(s.manualDurationMs)
-              : Number(s.durationMs) || 0) / 3_600_000,
-          hourType: s.hourType,
-          travelKm: s.travelKm,
-          travelMinutes: s.travelMinutes,
-          perDiem: s.perDiem,
-          projectId: String(s.projectId),
-        })),
+        own.flatMap((s) =>
+          toWageShifts({
+            shiftDate: s.shiftDate,
+            durationMs: s.durationMs,
+            manualDurationMs: s.manualDurationMs,
+            hourType: s.hourType,
+            overtimeMs: s.overtimeMs,
+            overtimeStatus: s.overtimeStatus,
+            travelKm: s.travelKm,
+            travelMinutes: s.travelMinutes,
+            perDiem: s.perDiem,
+            projectId: String(s.projectId),
+          }),
+        ),
         ownLeaves.map((l) => ({
           type: l.type,
           startDate: l.startDate,

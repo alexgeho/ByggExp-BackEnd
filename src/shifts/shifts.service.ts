@@ -37,6 +37,7 @@ import { PauseShiftDto } from "./dto/pause-shift.dto";
 import { ResumeShiftDto } from "./dto/resume-shift.dto";
 import { StartShiftDto } from "./dto/start-shift.dto";
 import {
+  OvertimeStatus,
   Shift,
   ShiftDocument,
   ShiftPhotoFile,
@@ -49,6 +50,7 @@ import {
   ShiftEventSource,
   ShiftEventType,
 } from "./schemas/shift-event.schema";
+import { nextOvertime } from "./overtime.util";
 import {
   getCompleteWindowErrorMessage,
   getScheduledShiftDeadline,
@@ -86,6 +88,8 @@ type SerializedShiftRecord = {
   // Dagens rapport — sent back with the shift, otherwise the app reopens the
   // report empty and the day looks unreported however often it is saved.
   hourType?: string;
+  overtimeMs?: number;
+  overtimeStatus?: string | null;
   travelKm?: number;
   travelMinutes?: number;
   perDiem?: string;
@@ -118,6 +122,8 @@ type ShiftDayRecord = {
   // and value days by "Planned" or "Manual" as well as GPS (totalDurationMs).
   plannedDurationMs: number;
   manualDurationMs: number;
+  // The day's övertid (any status) inside those hours.
+  overtimeMs: number;
   shifts: SerializedShiftRecord[];
 };
 
@@ -650,6 +656,86 @@ export class ShiftsService {
     return shift;
   }
 
+  // Övertid inside a day: "8 h normal + 2 h övertid" on one shift, set with
+  // the day's hours (rules in nextOvertime).
+  private applyOvertime(
+    shift: ShiftDocument,
+    overtimeMs: number | undefined,
+    user: AuthenticatedUser,
+  ) {
+    const previousStatus = shift.overtimeStatus || null;
+    const next = nextOvertime({
+      hoursMs:
+        shift.manualDurationMs != null
+          ? shift.manualDurationMs
+          : shift.durationMs || 0,
+      previousMs: shift.overtimeMs || 0,
+      previousStatus,
+      requestedMs: overtimeMs,
+      byManager: user.role !== UserRole.Worker,
+    });
+
+    shift.overtimeMs = next.overtimeMs;
+    shift.overtimeStatus = next.overtimeStatus;
+    if (next.decidedByManager) {
+      shift.overtimeDecidedAt = new Date();
+      shift.overtimeDecidedByUserId = user.userId;
+    } else if (next.overtimeStatus !== previousStatus || !next.overtimeMs) {
+      shift.overtimeDecidedAt = null;
+      shift.overtimeDecidedByUserId = null;
+    }
+  }
+
+  // Godkänn / Neka a day's övertid. Approved is paid as overtime; denied turns
+  // those hours into normal hours, so the day's total stays the same. Same
+  // access rule as attest.
+  async decideOvertime(
+    user: AuthenticatedUser,
+    shiftId: string,
+    approved: boolean,
+  ) {
+    const accessFilter = await this.buildAccessibleShiftFilter(user, {});
+    const shift = await this.shiftModel
+      .findOne({ ...accessFilter, _id: shiftId })
+      .exec();
+
+    if (!shift) {
+      throw new NotFoundException("Shift not found");
+    }
+    if (!shift.overtimeMs) {
+      throw new BadRequestException("This day has no overtime.");
+    }
+
+    if (approved) {
+      shift.overtimeStatus = OvertimeStatus.Approved;
+    } else {
+      shift.overtimeMs = 0;
+      shift.overtimeStatus = null;
+    }
+    shift.overtimeDecidedAt = new Date();
+    shift.overtimeDecidedByUserId = user.userId;
+    await shift.save();
+
+    return this.serializeShift(shift);
+  }
+
+  // Days whose övertid waits for a manager, oldest first, for the approvals
+  // queue.
+  async getPendingOvertime(user: AuthenticatedUser) {
+    const accessFilter = await this.buildAccessibleShiftFilter(user, {});
+    const shifts = await this.shiftModel
+      .find({
+        ...accessFilter,
+        overtimeStatus: OvertimeStatus.Pending,
+        overtimeMs: { $gt: 0 },
+      })
+      .sort({ shiftDate: 1 })
+      .limit(500)
+      .exec();
+
+    return this.serializeShifts(shifts);
+  }
+
   // The ÄTA options for the project of one of the worker's own shifts. The ÄTA
   // list itself is management-only and carries amounts, so this returns just
   // enough to tag the day — number and title — and only for a shift the caller
@@ -733,6 +819,7 @@ export class ShiftsService {
 
     shift.manualDurationMs =
       dto.durationMs == null ? null : Math.max(0, Math.round(dto.durationMs));
+    this.applyOvertime(shift, dto.overtimeMs, user);
     await shift.save();
 
     this.recordEvent(
@@ -800,6 +887,7 @@ export class ShiftsService {
     let target: ShiftDocument;
     if (existing) {
       existing.manualDurationMs = durationMs;
+      this.applyOvertime(existing, dto.overtimeMs, user);
       await existing.save();
       target = existing;
     } else {
@@ -827,7 +915,7 @@ export class ShiftsService {
           "Those hours overlap another shift that day.",
         );
       }
-      target = await new this.shiftModel({
+      target = new this.shiftModel({
         workerId: dto.workerId,
         projectId: dto.projectId,
         projectNameSnapshot: project.name,
@@ -842,7 +930,9 @@ export class ShiftsService {
         completionSource: user.role === UserRole.Worker ? "worker" : "admin",
         segments: [],
         photos: [],
-      }).save();
+      });
+      this.applyOvertime(target, dto.overtimeMs, user);
+      await target.save();
     }
 
     // Manual hours are a single value per worker/day. The calendar day cell SUMS
@@ -857,7 +947,8 @@ export class ShiftsService {
         shiftDate: dto.date,
         manualDurationMs: { $gt: 0 },
       },
-      { $set: { manualDurationMs: 0 } },
+      // The day's övertid lives with its hours, so it moves with them.
+      { $set: { manualDurationMs: 0, overtimeMs: 0, overtimeStatus: null } },
     );
 
     this.recordEvent(
@@ -1689,11 +1780,13 @@ export class ShiftsService {
         totalDurationMs: 0,
         plannedDurationMs: 0,
         manualDurationMs: 0,
+        overtimeMs: 0,
         shifts: [],
       };
 
       current.totalDurationMs += shift.durationMs;
       current.manualDurationMs += shift.manualDurationMs || 0;
+      current.overtimeMs += shift.overtimeMs || 0;
       current.shifts.push(shift);
       grouped.set(key, current);
     }
@@ -1809,6 +1902,9 @@ export class ShiftsService {
       { header: "Photos", key: "photos", width: 10 },
       // Dagens rapport — the columns payroll actually needs out of the app.
       { header: "Hour type", key: "hourType", width: 14 },
+      // Övertid inside the day's duration; only "approved" is paid as overtime.
+      { header: "Overtime h", key: "overtimeHours", width: 12 },
+      { header: "Overtime", key: "overtimeStatus", width: 12 },
       { header: "Travel km", key: "travelKm", width: 12 },
       { header: "Travel h", key: "travelHours", width: 12 },
       { header: "Per diem", key: "perDiem", width: 12 },
@@ -1817,7 +1913,7 @@ export class ShiftsService {
     ];
 
     worksheet.addRow(["Shift report"]);
-    worksheet.mergeCells("A1:O1");
+    worksheet.mergeCells("A1:Q1");
     worksheet.getCell("A1").font = { size: 16, bold: true };
 
     worksheet.addRow(["Generated at", this.formatDateTimeValue(new Date())]);
@@ -1841,6 +1937,8 @@ export class ShiftsService {
       status: "Status",
       photos: "Photos",
       hourType: "Hour type",
+      overtimeHours: "Overtime h",
+      overtimeStatus: "Overtime",
       travelKm: "Travel km",
       travelHours: "Travel h",
       perDiem: "Per diem",
@@ -1882,6 +1980,8 @@ export class ShiftsService {
           status: shift.status,
           photos: shift.photos?.length || 0,
           hourType: shift.hourType || "normal",
+          overtimeHours: this.msToHours(shift.overtimeMs || 0),
+          overtimeStatus: shift.overtimeMs ? shift.overtimeStatus || "" : "",
           travelKm: shift.travelKm || 0,
           travelHours: shift.travelMinutes
             ? Math.round((shift.travelMinutes / 60) * 100) / 100
@@ -2037,6 +2137,8 @@ export class ShiftsService {
       // Dagens rapport — sent back with the shift, otherwise the app reopens the
       // report empty and the day looks unreported however often it is saved.
       hourType: shift.hourType || "normal",
+      overtimeMs: shift.overtimeMs || 0,
+      overtimeStatus: shift.overtimeStatus || null,
       travelKm: shift.travelKm || 0,
       travelMinutes: shift.travelMinutes || 0,
       perDiem: shift.perDiem || "none",

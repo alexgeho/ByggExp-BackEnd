@@ -1,4 +1,9 @@
-import { WageRuleSet, buildWorkerWageBasis, ruleSetForDate } from './wage-basis';
+import {
+  WageRuleSet,
+  buildWorkerWageBasis,
+  ruleSetForDate,
+  toWageShifts,
+} from './wage-basis';
 import { buildCsv, buildPaxml } from './wage-export';
 
 // Test figures are made up to keep the arithmetic readable — they are not the
@@ -134,6 +139,58 @@ describe('buildWorkerWageBasis', () => {
     expect(amount(none.items, 'hours_overtime')).toBe(2000);
     expect(none.items.some((i) => i.code.startsWith('per_diem'))).toBe(false);
     expect(none.items.some((i) => i.code.startsWith('supplement'))).toBe(false);
+  });
+});
+
+describe('toWageShifts', () => {
+  const H = 3_600_000;
+
+  it('pays approved övertid inside the day as its own overtime part', () => {
+    const parts = toWageShifts({
+      shiftDate: '2026-10-20',
+      manualDurationMs: 10 * H,
+      overtimeMs: 2 * H,
+      overtimeStatus: 'approved',
+      travelKm: 30,
+    });
+    expect(parts).toEqual([
+      expect.objectContaining({ hours: 8, hourType: undefined, travelKm: 30 }),
+      expect.objectContaining({ hours: 2, hourType: 'overtime' }),
+    ]);
+    expect(parts[1].travelKm).toBeUndefined();
+
+    const b = buildWorkerWageBasis(
+      worker,
+      parts,
+      [],
+      [rules({ vacationPayPercent: null })],
+      period,
+    );
+    expect(amount(b.items, 'hours_normal')).toBe(2000); // 8 × 250
+    expect(amount(b.items, 'hours_overtime')).toBe(500); // 2 × 250
+    expect(amount(b.items, 'supplement_overtime')).toBe(250); // 2 × 125
+  });
+
+  it('keeps pending övertid in the day, as normal hours', () => {
+    const parts = toWageShifts({
+      shiftDate: '2026-10-21',
+      manualDurationMs: 9.5 * H,
+      overtimeMs: 1.5 * H,
+      overtimeStatus: 'pending',
+    });
+    expect(parts).toHaveLength(1);
+    expect(parts[0].hours).toBe(9.5);
+  });
+
+  it('falls back to GPS hours and never splits off more than the day has', () => {
+    const parts = toWageShifts({
+      shiftDate: '2026-10-22',
+      durationMs: 3 * H,
+      manualDurationMs: null,
+      overtimeMs: 5 * H,
+      overtimeStatus: 'approved',
+    });
+    expect(parts.map((p) => p.hours)).toEqual([0, 3]);
   });
 });
 
