@@ -21,6 +21,10 @@ import {
   PayrollSettingsSchema,
 } from './schemas/payroll-settings.schema';
 import { WageRate, WageRateSchema } from './schemas/wage-rate.schema';
+import {
+  PayrollExport,
+  PayrollExportSchema,
+} from './schemas/payroll-export.schema';
 import { RuleSource, RuleSourceSchema } from './schemas/rule-source.schema';
 import {
   TaxTableYear,
@@ -44,6 +48,7 @@ import { AgreementDraftService } from './agreement-draft.service';
       { name: AgreementRuleSet.name, schema: AgreementRuleSetSchema },
       { name: PayrollSettings.name, schema: PayrollSettingsSchema },
       { name: WageRate.name, schema: WageRateSchema },
+      { name: PayrollExport.name, schema: PayrollExportSchema },
       { name: RuleSource.name, schema: RuleSourceSchema },
       { name: TaxTableYear.name, schema: TaxTableYearSchema },
     ]),

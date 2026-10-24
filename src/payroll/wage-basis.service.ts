@@ -39,6 +39,10 @@ import {
 import { ExportSkipped, buildCsv, buildPaxml } from './wage-export';
 import { ExportFormat } from './schemas/payroll-settings.schema';
 import { WageRate, WageRateDocument } from './schemas/wage-rate.schema';
+import {
+  PayrollExport,
+  PayrollExportDocument,
+} from './schemas/payroll-export.schema';
 
 type AuthUser = {
   role: UserRole;
@@ -63,6 +67,8 @@ export class WageBasisService {
     private leaveModel: Model<LeaveRequestDocument>,
     @InjectModel(WageRate.name)
     private wageRateModel: Model<WageRateDocument>,
+    @InjectModel(PayrollExport.name)
+    private exportModel: Model<PayrollExportDocument>,
   ) {}
 
   // ---- Avtalsregler -------------------------------------------------------
@@ -231,7 +237,14 @@ export class WageBasisService {
 
   // ---- Lönerunderlag ------------------------------------------------------
 
-  async buildBasis(from: string, to: string, user: AuthUser) {
+  // `userIds` narrows the basis to those workers (one person's page, or the
+  // people ticked for export); empty means the whole company.
+  async buildBasis(
+    from: string,
+    to: string,
+    user: AuthUser,
+    userIds: string[] = [],
+  ) {
     const companyId = this.resolveCompanyId(user);
     this.assertPeriod(from, to);
     const settings = await this.getSettings(user);
@@ -251,7 +264,11 @@ export class WageBasisService {
     }));
 
     const workers = await this.userModel
-      .find({ companyId, erasedAt: null })
+      .find({
+        companyId,
+        erasedAt: null,
+        ...(userIds.length ? { _id: { $in: userIds } } : {}),
+      })
       .select('name hourlyRate wageCategory payrollEmployeeId fortnoxEmployeeId')
       .lean()
       .exec();
@@ -287,12 +304,100 @@ export class WageBasisService {
       .lean()
       .exec();
 
-    const result: Array<WorkerWageBasis & { payrollEmployeeId: string }> = [];
+    // Days the worker reported but nobody has attested yet. Shown per person
+    // so the admin sees what is missing before exporting.
+    const unattested = await this.shiftModel
+      .find({
+        workerId: { $in: workerIds },
+        shiftDate: { $gte: from, $lte: to },
+        status: 'completed',
+        approvedAt: null,
+      })
+      .select('workerId shiftDate')
+      .lean()
+      .exec();
+
+    // Earlier files covering this period, newest first.
+    const exports = await this.exportModel
+      .find({ companyId, from: { $lte: to }, to: { $gte: from } })
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+    const exportedAtByUser = new Map<string, Date>();
+    for (const e of exports) {
+      for (const uid of e.userIds || []) {
+        if (!exportedAtByUser.has(uid) && e.createdAt) {
+          exportedAtByUser.set(uid, new Date(e.createdAt));
+        }
+      }
+    }
+    // Shifts or absence touched after the person's last export: the file in
+    // the payroll system no longer matches.
+    const changedAfterExport = new Set<string>();
+    if (exportedAtByUser.size) {
+      const oldest = new Date(
+        Math.min(...[...exportedAtByUser.values()].map((d) => d.getTime())),
+      );
+      const [touchedShifts, touchedLeaves] = await Promise.all([
+        this.shiftModel
+          .find({
+            workerId: { $in: [...exportedAtByUser.keys()] },
+            shiftDate: { $gte: from, $lte: to },
+            updatedAt: { $gt: oldest },
+          })
+          .select('workerId updatedAt')
+          .lean()
+          .exec(),
+        this.leaveModel
+          .find({
+            companyId,
+            userId: { $in: [...exportedAtByUser.keys()] },
+            startDate: { $lte: to },
+            endDate: { $gte: from },
+            updatedAt: { $gt: oldest },
+          })
+          .select('userId updatedAt')
+          .lean()
+          .exec(),
+      ]);
+      const touched = [
+        ...touchedShifts.map((d) => ({
+          id: String(d.workerId),
+          at: (d as { updatedAt?: Date }).updatedAt,
+        })),
+        ...touchedLeaves.map((d) => ({
+          id: String(d.userId),
+          at: (d as { updatedAt?: Date }).updatedAt,
+        })),
+      ];
+      for (const { id, at } of touched) {
+        const exportedAt = exportedAtByUser.get(id);
+        if (exportedAt && at && new Date(at) > exportedAt) {
+          changedAfterExport.add(id);
+        }
+      }
+    }
+
+    const result: Array<
+      WorkerWageBasis & {
+        payrollEmployeeId: string;
+        unattestedDates: string[];
+        exportedAt: Date | null;
+        changedAfterExport: boolean;
+      }
+    > = [];
     for (const w of workers) {
       const id = String(w._id);
       const own = shifts.filter((s) => String(s.workerId) === id);
       const ownLeaves = leaves.filter((l) => String(l.userId) === id);
-      if (!own.length && !ownLeaves.length) continue;
+      const unattestedDates = [
+        ...new Set(
+          unattested
+            .filter((s) => String(s.workerId) === id)
+            .map((s) => s.shiftDate),
+        ),
+      ].sort();
+      if (!own.length && !ownLeaves.length && !unattestedDates.length) continue;
       const basis = buildWorkerWageBasis(
         {
           userId: id,
@@ -336,7 +441,13 @@ export class WageBasisService {
             'Anställningsnummer i lönesystemet saknas — personen kommer inte med i exporten.',
         });
       }
-      result.push({ ...basis, payrollEmployeeId: employeeId });
+      result.push({
+        ...basis,
+        payrollEmployeeId: employeeId,
+        unattestedDates,
+        exportedAt: exportedAtByUser.get(id) || null,
+        changedAfterExport: changedAfterExport.has(id),
+      });
     }
 
     result.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
@@ -388,13 +499,14 @@ export class WageBasisService {
     to: string,
     user: AuthUser,
     format?: ExportFormat,
+    userIds: string[] = [],
   ): Promise<{
     content: string;
     contentType: string;
     skipped: ExportSkipped[];
     filename: string;
   }> {
-    const basis = await this.buildBasis(from, to, user);
+    const basis = await this.buildBasis(from, to, user, userIds);
     const settings = await this.getSettings(user);
     const company = await this.companyModel
       .findById(settings.companyId)
@@ -417,6 +529,22 @@ export class WageBasisService {
     };
     const csv = (format || settings.exportFormat) === 'csv';
     const { content, skipped } = csv ? buildCsv(input) : buildPaxml(input);
+
+    // Remember who is in the file (people with an employee number and rows).
+    const exportedIds = input.workers
+      .filter((w) => w.employeeId && w.items.length)
+      .map((w) => w.userId);
+    if (exportedIds.length) {
+      await this.exportModel.create({
+        companyId: settings.companyId,
+        from,
+        to,
+        userIds: exportedIds,
+        format: csv ? 'csv' : 'paxml',
+        exportedByUserId: user.userId || null,
+      });
+    }
+
     return {
       content,
       contentType: csv ? 'text/csv; charset=utf-8' : 'application/xml; charset=utf-8',

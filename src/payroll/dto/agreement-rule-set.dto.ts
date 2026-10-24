@@ -227,6 +227,11 @@ export class WageBasisQueryDto {
 
   @Matches(DATE)
   to: string;
+
+  // Comma-separated user ids: only these workers (empty = everyone).
+  @Matches(/^[a-f0-9]{24}(,[a-f0-9]{24})*$/)
+  @IsOptional()
+  userIds?: string;
 }
 
 export class WageExportQueryDto extends WageBasisQueryDto {

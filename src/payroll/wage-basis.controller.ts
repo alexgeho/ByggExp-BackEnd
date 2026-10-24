@@ -37,6 +37,9 @@ import { RuleWatchService } from './rule-watch.service';
 import { TaxTableService } from './tax-table.service';
 import { AgreementDraftService } from './agreement-draft.service';
 
+const splitIds = (value?: string): string[] =>
+  value ? value.split(',').filter(Boolean) : [];
+
 type UploadedPdf = { buffer: Buffer; mimetype: string; originalname: string };
 
 // Lönerunderlag enligt kollektivavtal + export to the company's payroll system.
@@ -179,7 +182,12 @@ export class WageBasisController {
 
   @Get()
   build(@Request() req, @Query() query: WageBasisQueryDto) {
-    return this.wageBasisService.buildBasis(query.from, query.to, req.user);
+    return this.wageBasisService.buildBasis(
+      query.from,
+      query.to,
+      req.user,
+      splitIds(query.userIds),
+    );
   }
 
   @Get('export')
@@ -194,6 +202,7 @@ export class WageBasisController {
         query.to,
         req.user,
         query.format,
+        splitIds(query.userIds),
       );
     res.set({
       'Content-Type': contentType,
