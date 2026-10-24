@@ -251,7 +251,12 @@ export class WageBasisService {
 
     const ruleDocs = await this.ruleSetModel
       .find({
-        agreement: settings.agreement,
+        // Versions saved before `agreement` was always set carry null; they
+        // are Byggavtalet, the only agreement so far.
+        agreement:
+          settings.agreement === 'byggavtalet'
+            ? { $in: ['byggavtalet', null] }
+            : settings.agreement,
         status: AgreementRuleSetStatus.Published,
         validFrom: { $lte: to },
         $or: [{ validTo: '' }, { validTo: { $gte: from } }],
