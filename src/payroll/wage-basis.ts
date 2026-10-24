@@ -134,6 +134,22 @@ export function rateOn(worker: WageWorker, date: string): number {
 
 // The wage an agreement version's general raise gives a worker: the old wage
 // plus the raise, and never below the version's minimum for the category.
+// Fördelningstal for categories an agreement version may not list on its own:
+// their minimum is the yrkesarbetare grundlön times the factor.
+const CATEGORY_FACTORS: Record<string, number> = { ovriga_1: 0.88 };
+
+export function minimumWageFor(
+  rules: Pick<WageRuleSet, 'minimumWages'>,
+  category?: string | null,
+): number | null {
+  if (!category) return null;
+  const own = rules.minimumWages.find((m) => m.category === category)?.hourly;
+  if (own != null) return own;
+  const factor = CATEGORY_FACTORS[category];
+  const base = rules.minimumWages.find((m) => m.category === 'yrkesarbetare')?.hourly;
+  return factor && base != null ? round2(base * factor) : null;
+}
+
 export function proposeRaisedRate(
   currentRate: number,
   rules: Pick<WageRuleSet, 'wageRaiseKind' | 'wageRaiseValue' | 'minimumWages'>,
@@ -143,7 +159,7 @@ export function proposeRaisedRate(
   let raised = currentRate;
   if (rules.wageRaiseKind === 'fixed') raised = currentRate + value;
   else if (rules.wageRaiseKind === 'percent') raised = currentRate * (1 + value / 100);
-  const minimum = rules.minimumWages.find((m) => m.category === category)?.hourly;
+  const minimum = minimumWageFor(rules, category);
   return round2(Math.max(raised, minimum ?? 0));
 }
 
@@ -485,8 +501,8 @@ export function buildWorkerWageBasis(
       });
     }
 
-    const minimum = rules.minimumWages.find((m) => m.category === category);
-    if (category && category !== 'other' && !minimum) {
+    const minimumHourly = minimumWageFor(rules, category);
+    if (category && category !== 'other' && minimumHourly == null) {
       warnings.push({
         code: 'missing_minimum_wage',
         message: `Avtalsversionen "${rules.name}" saknar minimilön för kategorin "${category}".`,
@@ -494,10 +510,10 @@ export function buildWorkerWageBasis(
     }
     // Checked at the last day this version covers in the period.
     const versionRate = rateOn(worker, date);
-    if (minimum && versionRate > 0 && versionRate < minimum.hourly) {
+    if (minimumHourly != null && versionRate > 0 && versionRate < minimumHourly) {
       warnings.push({
         code: 'below_minimum_wage',
-        message: `Timlönen ${versionRate} kr är lägre än avtalets minimilön ${minimum.hourly} kr (${rules.name}).`,
+        message: `Timlönen ${versionRate} kr är lägre än avtalets minimilön ${minimumHourly} kr (${rules.name}).`,
       });
     }
   }

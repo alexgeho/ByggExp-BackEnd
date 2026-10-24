@@ -59,7 +59,7 @@ export class CreateUserDto {
   @IsOptional()
   taxColumn?: number;
 
-  @IsIn(["yrkesarbetare", "ny_i_branschen", "larling", "other"])
+  @IsIn(["yrkesarbetare", "ny_i_branschen", "larling", "ovriga_1", "other"])
   @IsOptional()
   wageCategory?: string | null;
 

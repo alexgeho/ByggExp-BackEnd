@@ -1,4 +1,5 @@
 import {
+  minimumWageFor,
   WageRuleSet,
   buildWorkerWageBasis,
   ruleSetForDate,
@@ -328,5 +329,24 @@ describe('buildCsv', () => {
     expect(salaryCount).toBe(3);
     expect(absenceCount).toBe(1);
     expect(skipped.map((s) => s.code)).toEqual(['mileage_taxable']);
+  });
+});
+
+describe('minimumWageFor', () => {
+  const rules = {
+    minimumWages: [
+      { category: 'yrkesarbetare', hourly: 203 },
+      { category: 'ny_i_branschen', hourly: 142.1 },
+    ],
+  };
+  it('uses the category the version lists', () => {
+    expect(minimumWageFor(rules, 'ny_i_branschen')).toBe(142.1);
+  });
+  it('derives Övriga 1 from grundlön × 0,88', () => {
+    expect(minimumWageFor(rules, 'ovriga_1')).toBe(178.64);
+  });
+  it('returns null when nothing applies', () => {
+    expect(minimumWageFor(rules, 'larling')).toBeNull();
+    expect(minimumWageFor(rules, null)).toBeNull();
   });
 });

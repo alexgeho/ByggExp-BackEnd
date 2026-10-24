@@ -47,7 +47,7 @@ Return one JSON object, no prose:
       "validFrom": "YYYY-MM-DD" (the date these wages start applying),
       "validTo": "YYYY-MM-DD" or null,
       "wageRaise": { "kind": "fixed" (kr per hour) | "percent", "value": number, "quote": "exact sentence" } or null,
-      "minimumWages": [ { "category": "yrkesarbetare" | "ny_i_branschen" | "larling", "label": "the document's own wording", "hourly": number (kr per hour), "quote": "exact text" } ]
+      "minimumWages": [ { "category": "yrkesarbetare" | "ny_i_branschen" | "larling" | "ovriga_1" (Övriga arbetstagare 1, fördelningstal 0,88), "label": "the document's own wording", "hourly": number (kr per hour), "quote": "exact text" } ]
     }
   ],
   "hourTypeSupplements": [ { "hourType": "overtime" | "ob", "label": "e.g. Övertid A / OB 1", "kind": "percent" (of hourly wage) | "fixed" (kr per hour), "value": number, "quote": "exact text" } ],

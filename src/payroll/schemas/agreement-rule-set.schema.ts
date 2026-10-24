@@ -18,6 +18,8 @@ export enum WageCategory {
   Yrkesarbetare = 'yrkesarbetare',
   NyIBranschen = 'ny_i_branschen',
   Larling = 'larling',
+  // Övriga arbetstagare 1 (≥ 12 mån i branschen): fördelningstal 0,88.
+  Ovriga1 = 'ovriga_1',
   Other = 'other', // not covered by the agreement's minimum wage
 }
 
