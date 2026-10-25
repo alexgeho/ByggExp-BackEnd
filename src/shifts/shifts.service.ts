@@ -995,6 +995,11 @@ export class ShiftsService {
 
     let target: ShiftDocument;
     if (existing) {
+      // Only the worker changes hours already on their day; the manager adjusts
+      // them later, when the payroll is set.
+      if (String(dto.workerId) !== String(user.userId)) {
+        throw new ForbiddenException("Only the worker can change their hours.");
+      }
       existing.manualDurationMs = durationMs;
       this.applyOvertime(existing, dto.overtimeMs, user);
       this.applyOb(existing, dto.obMs, user);
