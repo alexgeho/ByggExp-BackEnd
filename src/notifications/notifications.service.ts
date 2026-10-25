@@ -55,10 +55,20 @@ export class NotificationsService {
 
   async updateUserPreferences(
     userId: string,
-    preferences: UserNotificationPreferences,
+    preferences: Partial<UserNotificationPreferences>,
   ) {
-    const normalizedPreferences =
-      normalizeUserNotificationPreferences(preferences);
+    // Merge over what's stored, so a client that doesn't know a newer key
+    // (e.g. `invoices`) doesn't switch it back on when it saves.
+    const current = await this.userModel
+      .findById(userId)
+      .select("notificationPreferences")
+      .lean()
+      .exec();
+    const normalizedPreferences = normalizeUserNotificationPreferences({
+      ...((current as { notificationPreferences?: object } | null)
+        ?.notificationPreferences || {}),
+      ...preferences,
+    });
 
     const updatedUser = await this.userModel
       .findByIdAndUpdate(
@@ -360,6 +370,10 @@ export class NotificationsService {
 
     if (type.startsWith("task_")) {
       return "tasks";
+    }
+
+    if (type === "supplier_invoice_due" || type === "payment_due") {
+      return "invoices";
     }
 
     if (type.startsWith("message_") || type === "chat_message") {

@@ -58,6 +58,8 @@ export type UserNotificationPreferences = {
   messages: boolean;
   tasks: boolean;
   productAndMarketingAlerts: boolean;
+  // Bills to pay: the unpaid / due supplier-invoice reminders.
+  invoices: boolean;
 };
 
 export const DEFAULT_USER_NOTIFICATION_PREFERENCES: UserNotificationPreferences =
@@ -66,6 +68,7 @@ export const DEFAULT_USER_NOTIFICATION_PREFERENCES: UserNotificationPreferences 
     messages: true,
     tasks: true,
     productAndMarketingAlerts: true,
+    invoices: true,
   };
 
 export const normalizeUserNotificationPreferences = (
@@ -87,6 +90,10 @@ export const normalizeUserNotificationPreferences = (
     typeof value?.productAndMarketingAlerts === "boolean"
       ? value.productAndMarketingAlerts
       : DEFAULT_USER_NOTIFICATION_PREFERENCES.productAndMarketingAlerts,
+  invoices:
+    typeof value?.invoices === "boolean"
+      ? value.invoices
+      : DEFAULT_USER_NOTIFICATION_PREFERENCES.invoices,
 });
 
 // Manager "what needs attention" summary reminder: a periodic digest of overdue
