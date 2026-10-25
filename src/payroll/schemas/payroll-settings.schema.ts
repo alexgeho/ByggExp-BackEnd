@@ -49,10 +49,6 @@ export class PayrollSettings {
   // raise show as pending in the lönerunderlag.
   @Prop({ type: [String], default: [] })
   handledRaises: string[];
-
-  // Only attested shifts (approvedAt set) count towards the lönerunderlag.
-  @Prop({ type: Boolean, default: true })
-  onlyApprovedShifts: boolean;
 }
 
 export const PayrollSettingsSchema =

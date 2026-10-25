@@ -202,7 +202,6 @@ export class WageBasisService {
       exportFormat: settings?.exportFormat || 'paxml',
       salaryCodes: settings?.salaryCodes || {},
       absenceCodes: { ...DEFAULT_ABSENCE_CODES, ...(settings?.absenceCodes || {}) },
-      onlyApprovedShifts: settings?.onlyApprovedShifts ?? true,
       handledRaises: settings?.handledRaises || [],
       salaryItems: SALARY_ITEM_LABELS,
       absenceItems: ABSENCE_ITEM_LABELS,
@@ -224,9 +223,6 @@ export class WageBasisService {
     const absenceCodes = clean(dto.absenceCodes);
     if (salaryCodes) update.salaryCodes = salaryCodes;
     if (absenceCodes) update.absenceCodes = absenceCodes;
-    if (dto.onlyApprovedShifts != null) {
-      update.onlyApprovedShifts = dto.onlyApprovedShifts;
-    }
     if (dto.payrollSystem) update.payrollSystem = dto.payrollSystem;
     if (dto.exportFormat) update.exportFormat = dto.exportFormat;
     await this.settingsModel
@@ -290,7 +286,6 @@ export class WageBasisService {
         workerId: { $in: workerIds },
         shiftDate: { $gte: from, $lte: to },
         status: 'completed',
-        ...(settings.onlyApprovedShifts ? { approvedAt: { $ne: null } } : {}),
       })
       .select(
         'workerId projectId shiftDate durationMs manualDurationMs hourType overtimeMs overtimeStatus obMs obStatus travelKm travelMinutes perDiem',
@@ -306,19 +301,6 @@ export class WageBasisService {
         startDate: { $lte: to },
         endDate: { $gte: from },
       })
-      .lean()
-      .exec();
-
-    // Days the worker reported but nobody has attested yet. Shown per person
-    // so the admin sees what is missing before exporting.
-    const unattested = await this.shiftModel
-      .find({
-        workerId: { $in: workerIds },
-        shiftDate: { $gte: from, $lte: to },
-        status: 'completed',
-        approvedAt: null,
-      })
-      .select('workerId shiftDate')
       .lean()
       .exec();
 
@@ -386,7 +368,6 @@ export class WageBasisService {
     const result: Array<
       WorkerWageBasis & {
         payrollEmployeeId: string;
-        unattestedDates: string[];
         exportedAt: Date | null;
         changedAfterExport: boolean;
       }
@@ -395,14 +376,7 @@ export class WageBasisService {
       const id = String(w._id);
       const own = shifts.filter((s) => String(s.workerId) === id);
       const ownLeaves = leaves.filter((l) => String(l.userId) === id);
-      const unattestedDates = [
-        ...new Set(
-          unattested
-            .filter((s) => String(s.workerId) === id)
-            .map((s) => s.shiftDate),
-        ),
-      ].sort();
-      if (!own.length && !ownLeaves.length && !unattestedDates.length) continue;
+      if (!own.length && !ownLeaves.length) continue;
       const basis = buildWorkerWageBasis(
         {
           userId: id,
@@ -449,7 +423,6 @@ export class WageBasisService {
       result.push({
         ...basis,
         payrollEmployeeId: employeeId,
-        unattestedDates,
         exportedAt: exportedAtByUser.get(id) || null,
         changedAfterExport: changedAfterExport.has(id),
       });

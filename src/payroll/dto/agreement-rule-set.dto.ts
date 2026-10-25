@@ -215,10 +215,6 @@ export class PayrollSettingsDto {
   @IsObject()
   @IsOptional()
   absenceCodes?: Record<string, string>;
-
-  @IsBoolean()
-  @IsOptional()
-  onlyApprovedShifts?: boolean;
 }
 
 export class WageBasisQueryDto {
