@@ -11,6 +11,7 @@ import * as path from "path";
 import archiver from "archiver";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
+import { ScanningService } from "../scanning/scanning.service";
 import { UserRole } from "../users/schemas/user.schema";
 import { CreateExpenseDto } from "./dto/create-expense.dto";
 import { UpdateExpenseDto } from "./dto/update-expense.dto";
@@ -49,7 +50,62 @@ export class ExpensesService {
 
   constructor(
     @InjectModel(Expense.name) private model: Model<ExpenseDocument>,
+    private readonly scanning: ScanningService,
   ) {}
+
+  // Receipts saved while the scanner was down (amount 0, photo/PDF attached):
+  // scan the stored file again and fill only the fields that are still empty.
+  async rescanEmpty(sinceDays = 14) {
+    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+    const docs = await this.model
+      .find({
+        amount: 0,
+        receiptUrl: { $nin: [null, ""] },
+        createdAt: { $gte: since },
+      })
+      .limit(50)
+      .exec();
+    const uploadsRoot = path.join(process.cwd(), "uploads");
+    const results: { id: string; ok: boolean; info: string }[] = [];
+    for (const doc of docs) {
+      const id = String(doc._id);
+      const abs = path.join(
+        process.cwd(),
+        String(doc.receiptUrl).replace(/^\/+/, ""),
+      );
+      if (!abs.startsWith(uploadsRoot) || !fs.existsSync(abs)) {
+        results.push({ id, ok: false, info: "file missing" });
+        continue;
+      }
+      const ext = path.extname(abs).toLowerCase();
+      const mimetype =
+        ext === ".pdf"
+          ? "application/pdf"
+          : ext === ".png"
+            ? "image/png"
+            : /\.(heic|heif)$/.test(ext)
+              ? "image/heic"
+              : "image/jpeg";
+      try {
+        const s = await this.scanning.extract(fs.readFileSync(abs), mimetype);
+        if (!doc.supplierName) doc.supplierName = s.supplierName || "";
+        if (!doc.category) doc.category = s.category || "";
+        if (!doc.date) doc.date = s.date || "";
+        doc.amount = round2(s.total);
+        doc.vat = round2(s.vat);
+        doc.currency = normCurrency(s.currency);
+        await doc.save();
+        results.push({
+          id,
+          ok: true,
+          info: `${doc.supplierName} ${doc.amount} ${doc.currency}`,
+        });
+      } catch (error) {
+        results.push({ id, ok: false, info: (error as Error)?.message || "" });
+      }
+    }
+    return { found: docs.length, results };
+  }
 
   private isAdmin(user: AuthUser) {
     return ADMIN_ROLES.includes(user.role);

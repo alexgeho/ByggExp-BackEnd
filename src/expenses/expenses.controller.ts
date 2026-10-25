@@ -89,6 +89,13 @@ export class ExpensesController {
     return this.service.streamReceiptsZip(body?.ids || [], req.user, res);
   }
 
+  // Superadmin: re-scan receipts saved while the scanner was down.
+  @Post("rescan-empty")
+  @Roles(UserRole.SuperAdmin)
+  rescanEmpty(@Query("days") days?: string) {
+    return this.service.rescanEmpty(Number(days) || 14);
+  }
+
   @Get("project/:projectId/summary")
   @Roles(...ADMIN)
   projectSummary(@Request() req, @Param("projectId") projectId: string) {
