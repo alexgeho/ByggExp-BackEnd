@@ -59,6 +59,7 @@ import { PaymentRemindersModule } from "./payment-reminders/payment-reminders.mo
 import { NoteRemindersModule } from "./note-reminders/note-reminders.module";
 import { ScanningModule } from "./scanning/scanning.module";
 import { SystemModule } from "./system/system.module";
+import { FortnoxModule } from "./fortnox/fortnox.module";
 
 @Module({
   imports: [
@@ -107,6 +108,7 @@ import { SystemModule } from "./system/system.module";
     NoteRemindersModule,
     ScanningModule,
     SystemModule,
+    FortnoxModule,
     OffersModule,
     ProjektkalkylModule,
     OfferDraftModule,

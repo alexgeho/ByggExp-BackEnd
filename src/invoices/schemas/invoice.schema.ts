@@ -216,6 +216,23 @@ export class Invoice {
   @Prop({ type: Number, default: 0 })
   reminderCount: number;
 
+  // Fortnox sync (src/fortnox): 'sent' | 'error' | null, the Fortnox
+  // DocumentNumber, when it was sent and the last error.
+  @Prop({ type: String, default: null })
+  fortnoxStatus?: string | null;
+
+  @Prop({ type: String, default: null })
+  fortnoxDocumentNumber?: string | null;
+
+  @Prop({ type: Date, default: null })
+  fortnoxSentAt?: Date | null;
+
+  @Prop({ type: String, default: null })
+  fortnoxError?: string | null;
+
+  @Prop({ type: Date, default: null, select: false })
+  fortnoxPushingAt?: Date | null;
+
   @Prop({ type: InvoiceCompanyFooterSchema, default: () => ({}) })
   companyFooter: InvoiceCompanyFooter;
 }

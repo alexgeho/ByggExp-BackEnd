@@ -62,6 +62,6 @@ import { AgreementDraftService } from './agreement-draft.service';
     RuleWatchService,
     AgreementDraftService,
   ],
-  exports: [PayrollService],
+  exports: [PayrollService, WageBasisService],
 })
 export class PayrollModule {}
