@@ -39,6 +39,18 @@ describe('calculateInvoiceTotals', () => {
 });
 
 describe('deriveInvoiceSettlement', () => {
+  it('RUT is 50% capped at 75 000; grön teknik 15% / 50%', () => {
+    expect(deriveInvoiceSettlement(10000, { rotEnabled: true, rotLaborAmount: 8000, deductionType: 'rut' }).rotDeduction).toBe(4000);
+    expect(deriveInvoiceSettlement(500000, { rotEnabled: true, rotLaborAmount: 400000, deductionType: 'rut' }).rotDeduction).toBe(75000);
+    expect(deriveInvoiceSettlement(100000, { rotEnabled: true, rotLaborAmount: 100000, deductionType: 'green15' }).rotDeduction).toBe(15000);
+    expect(deriveInvoiceSettlement(60000, { rotEnabled: true, rotLaborAmount: 60000, deductionType: 'green50' }).rotDeduction).toBe(30000);
+  });
+
+  it('unknown or missing type falls back to ROT 30%', () => {
+    expect(deriveInvoiceSettlement(10000, { rotEnabled: true, rotLaborAmount: 10000 }).rotDeduction).toBe(3000);
+    expect(deriveInvoiceSettlement(10000, { rotEnabled: true, rotLaborAmount: 10000, deductionType: 'x' }).rotDeduction).toBe(3000);
+  });
+
   it('is a no-op without ROT (only öresavrundning)', () => {
     const s = deriveInvoiceSettlement(32500);
     expect(s.rotDeduction).toBe(0);

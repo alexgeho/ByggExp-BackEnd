@@ -1,3 +1,4 @@
+import { deductionMeta } from "../invoice-math";
 export type InvoicePdfCompanyFooter = {
   name?: string;
   address?: string;
@@ -50,6 +51,7 @@ export type InvoicePdfData = {
   vat?: number;
   total?: number;
   rotEnabled?: boolean;
+  deductionType?: string;
   rotPersonalNumber?: string;
   rotProperty?: string;
   rotDeduction?: number;
@@ -559,7 +561,7 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
   }
   if (data.rotEnabled) {
     notes.push(
-      `ROT-avdrag: personnr ${text(data.rotPersonalNumber) || "—"}${data.rotProperty ? `, fastighet ${text(data.rotProperty)}` : ""}`,
+      `${deductionMeta(data.deductionType).label}: personnr ${text(data.rotPersonalNumber) || "—"}${data.rotProperty ? `, fastighet ${text(data.rotProperty)}` : ""}`,
     );
   }
   const noteHtml = notes.length

@@ -177,6 +177,10 @@ export class Invoice {
   @Prop({ type: Boolean, default: false })
   rotEnabled: boolean;
 
+  // rot | rut | green15 | green50 — which skattereduktion rotEnabled applies.
+  @Prop({ default: 'rot' })
+  deductionType: string;
+
   @Prop({ default: '' })
   rotPersonalNumber: string;
 

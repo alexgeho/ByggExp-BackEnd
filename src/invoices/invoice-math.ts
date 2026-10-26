@@ -16,6 +16,20 @@ export type InvoiceTotals = { subtotal: number; vat: number; total: number };
 export const ROT_RATE = 0.3;
 export const ROT_MAX = 50000;
 
+// Skattereduktion kinds. The invoice keeps its rot* fields for all of them;
+// deductionType picks the rate, cap and the label on the PDF.
+export const DEDUCTION_TYPES = {
+  rot: { rate: ROT_RATE, max: ROT_MAX, label: 'ROT-avdrag' },
+  rut: { rate: 0.5, max: 75000, label: 'RUT-avdrag' },
+  green15: { rate: 0.15, max: 50000, label: 'Grön teknik (solceller)' },
+  green50: { rate: 0.5, max: 50000, label: 'Grön teknik (batteri/laddpunkt)' },
+} as const;
+
+export type DeductionType = keyof typeof DEDUCTION_TYPES;
+
+export const deductionMeta = (type?: string) =>
+  DEDUCTION_TYPES[(type as DeductionType) in DEDUCTION_TYPES ? (type as DeductionType) : 'rot'];
+
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
 export function calculateInvoiceTotals(
@@ -41,10 +55,11 @@ export function calculateInvoiceTotals(
 
 export function deriveInvoiceSettlement(
   total: number,
-  opts: { rotEnabled?: boolean; rotLaborAmount?: number } = {},
+  opts: { rotEnabled?: boolean; rotLaborAmount?: number; deductionType?: string } = {},
 ): { rotDeduction: number; rounding: number; roundedTotal: number } {
+  const { rate, max } = deductionMeta(opts.deductionType);
   const rotDeduction = opts.rotEnabled
-    ? Math.min(round2(ROT_RATE * (Number(opts.rotLaborAmount) || 0)), ROT_MAX)
+    ? Math.min(round2(rate * (Number(opts.rotLaborAmount) || 0)), max)
     : 0;
   const payable = total - rotDeduction;
   const roundedTotal = Math.round(payable);

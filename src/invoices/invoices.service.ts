@@ -214,7 +214,7 @@ export class InvoicesService {
 
   private deriveSettlement(
     total: number,
-    dto: { rotEnabled?: boolean; rotLaborAmount?: number },
+    dto: { rotEnabled?: boolean; rotLaborAmount?: number; deductionType?: string },
   ): { rotDeduction: number; rounding: number; roundedTotal: number } {
     return deriveInvoiceSettlement(total, dto);
   }
@@ -300,6 +300,7 @@ export class InvoicesService {
     const settlement = this.deriveSettlement(totals.total, {
       rotEnabled: dto.rotEnabled ?? invoice.rotEnabled,
       rotLaborAmount: dto.rotLaborAmount ?? invoice.rotLaborAmount,
+      deductionType: dto.deductionType ?? invoice.deductionType,
     });
 
     Object.assign(invoice, {
@@ -410,6 +411,7 @@ export class InvoicesService {
     const settlement = this.deriveSettlement(negTotal, {
       rotEnabled: source.rotEnabled,
       rotLaborAmount,
+      deductionType: source.deductionType,
     });
 
     const creditNote = new this.invoiceModel({
@@ -623,6 +625,7 @@ export class InvoicesService {
       vat: invoice.vat,
       total: invoice.total,
       rotEnabled: invoice.rotEnabled,
+      deductionType: invoice.deductionType,
       rotPersonalNumber: invoice.rotPersonalNumber,
       rotProperty: invoice.rotProperty,
       rotDeduction: invoice.rotDeduction,

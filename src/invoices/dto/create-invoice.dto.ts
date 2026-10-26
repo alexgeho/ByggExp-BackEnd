@@ -165,6 +165,10 @@ export class CreateInvoiceDto {
   rotEnabled?: boolean;
 
   @IsOptional()
+  @IsIn(['rot', 'rut', 'green15', 'green50'])
+  deductionType?: string;
+
+  @IsOptional()
   @IsString()
   rotPersonalNumber?: string;
 
