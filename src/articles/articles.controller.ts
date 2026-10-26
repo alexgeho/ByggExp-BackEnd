@@ -24,10 +24,17 @@ import { ImportArticlesDto } from "./dto/import-articles.dto";
 export class ArticlesController {
   constructor(private readonly articlesService: ArticlesService) {}
 
+  // Read access for every company member (workers pick material on site);
+  // prices are stripped for workers in the service.
   @Get()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  findAllAccessible(@Request() req) {
-    return this.articlesService.findAccessible(req.user);
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  findAllAccessible(@Request() req, @Query("supplier") supplier?: string) {
+    return this.articlesService.findAccessible(req.user, supplier);
   }
 
   @Get("next-number")

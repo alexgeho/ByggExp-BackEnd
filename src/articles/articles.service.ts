@@ -87,17 +87,29 @@ export class ArticlesService {
     return { created: res.upsertedCount, updated: res.modifiedCount };
   }
 
-  async findAccessible(user: AuthUser): Promise<Article[]> {
+  async findAccessible(
+    user: AuthUser,
+    supplier?: string,
+  ): Promise<Partial<Article>[]> {
     // Superadmin is scoped to its own company like any tenant admin — it must
     // never list another company's articles.
     if (!user.companyId) {
       return [];
     }
 
-    return this.articleModel
-      .find({ companyId: user.companyId })
-      .sort({ createdAt: -1 })
-      .exec();
+    const filter: Record<string, unknown> = { companyId: user.companyId };
+    if (supplier) {
+      filter.supplier = supplier;
+    }
+    const query = this.articleModel.find(filter).sort({ createdAt: -1 });
+    // Workers order material but never see purchase/sale prices.
+    if (user.role === UserRole.Worker) {
+      return query
+        .select("articleNumber name unit supplier active articleGroups")
+        .lean()
+        .exec();
+    }
+    return query.exec();
   }
 
   async findOne(id: string, user: AuthUser): Promise<ArticleDocument> {

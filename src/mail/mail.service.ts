@@ -78,6 +78,8 @@ export class MailService {
     subject: string;
     html: string;
     text: string;
+    replyTo?: string;
+    attachments?: { filename: string; content: Buffer | string; contentType?: string }[];
   }): Promise<void> {
     if (!this.transporter) {
       throw new Error("SMTP is not configured");
@@ -88,6 +90,8 @@ export class MailService {
       subject: params.subject,
       html: params.html,
       text: params.text,
+      ...(params.replyTo ? { replyTo: params.replyTo } : {}),
+      ...(params.attachments?.length ? { attachments: params.attachments } : {}),
     });
   }
 

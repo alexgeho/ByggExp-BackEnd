@@ -36,6 +36,7 @@ import { ProjektkalkylModule } from "./projektkalkyl/projektkalkyl.module";
 import { OfferDraftModule } from "./offer-draft/offer-draft.module";
 import { BugReportsModule } from "./bug-reports/bug-reports.module";
 import { AnalyticsModule } from "./analytics/analytics.module";
+import { MaterialOrdersModule } from "./material-orders/material-orders.module";
 import { MailModule } from "./mail/mail.module";
 import { BlogPostsModule } from "./blog-posts/blog-posts.module";
 import { SiteSeoModule } from "./site-seo/site-seo.module";
@@ -118,6 +119,7 @@ import { SystemModule } from "./system/system.module";
     BugReportsModule,
     AnalyticsModule,
     MailModule,
+    MaterialOrdersModule,
   ],
   controllers: [AppController],
   providers: [
