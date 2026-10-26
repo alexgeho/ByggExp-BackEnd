@@ -52,7 +52,7 @@ const sign = (body: string) =>
 export function signState(
   companyId: string,
   userId: string,
-  ttlMs = 15 * 60_000,
+  ttlMs = 60 * 60_000,
 ): string {
   const state: FortnoxState = {
     companyId,

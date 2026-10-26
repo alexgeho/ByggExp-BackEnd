@@ -151,12 +151,13 @@ export class FortnoxService {
   }
 
   // Where the browser lands after Fortnox: back on the admin Profile page.
-  private returnUrl(result: "connected" | "error") {
+  private returnUrl(result: "connected" | "error", reason?: string) {
     const base = (
       process.env.FORTNOX_RETURN_URL ||
       `${(process.env.APP_PUBLIC_URL || "https://admin.byggexp.se").replace(/\/+$/, "")}/company/profile`
     ).trim();
-    return `${base}${base.includes("?") ? "&" : "?"}fortnox=${result}`;
+    const why = reason ? `&reason=${encodeURIComponent(reason.slice(0, 160))}` : "";
+    return `${base}${base.includes("?") ? "&" : "?"}fortnox=${result}${why}`;
   }
 
   async handleCallback(query: {
@@ -169,7 +170,12 @@ export class FortnoxService {
     if (!cfg || !state || query.error || !query.code) {
       if (query.error)
         this.logger.warn(`Fortnox auth declined: ${query.error}`);
-      return this.returnUrl("error");
+      const reason = !cfg
+        ? "not_configured"
+        : !state
+          ? "invalid_state"
+          : query.error || "no_code";
+      return this.returnUrl("error", reason);
     }
     try {
       const tokens = await this.tokenRequest(cfg, {
@@ -203,7 +209,7 @@ export class FortnoxService {
       return this.returnUrl("connected");
     } catch (err) {
       this.logger.error(`Fortnox connect failed: ${(err as Error).message}`);
-      return this.returnUrl("error");
+      return this.returnUrl("error", (err as Error).message);
     }
   }
 
