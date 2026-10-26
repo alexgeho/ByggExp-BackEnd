@@ -17,6 +17,7 @@ import { UserRole } from "../users/schemas/user.schema";
 import { ArticlesService } from "./articles.service";
 import { CreateArticleDto } from "./dto/create-article.dto";
 import { UpdateArticleDto } from "./dto/update-article.dto";
+import { ImportArticlesDto } from "./dto/import-articles.dto";
 
 @Controller("articles")
 @UseGuards(AuthGuard("jwt"), RolesGuard)
@@ -42,6 +43,12 @@ export class ArticlesController {
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
   create(@Request() req, @Body() createArticleDto: CreateArticleDto) {
     return this.articlesService.create(createArticleDto, req.user);
+  }
+
+  @Post("import")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  importPriceList(@Request() req, @Body() dto: ImportArticlesDto) {
+    return this.articlesService.importPriceList(dto, req.user);
   }
 
   @Get(":id")

@@ -8,6 +8,7 @@ import { Model } from "mongoose";
 import { UserRole } from "../users/schemas/user.schema";
 import { CreateArticleDto } from "./dto/create-article.dto";
 import { UpdateArticleDto } from "./dto/update-article.dto";
+import { ImportArticlesDto } from "./dto/import-articles.dto";
 import { Article, ArticleDocument } from "./schemas/article.schema";
 
 type AuthUser = {
@@ -38,6 +39,52 @@ export class ArticlesService {
     });
 
     return article.save();
+  }
+
+  // Upserts a grossist price list chunk: same supplier + article number updates
+  // the prices, new numbers become new material articles.
+  async importPriceList(
+    dto: ImportArticlesDto,
+    user: AuthUser,
+  ): Promise<{ created: number; updated: number }> {
+    if (!user.companyId) {
+      throw new ForbiddenException("No company");
+    }
+    const supplier = dto.supplier.trim();
+    const factor = 1 + (Number(dto.markupPercent) || 0) / 100;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const ops = dto.rows
+      .filter((r) => r.articleNumber?.trim())
+      .map((r) => {
+        const purchase = round2(Number(r.purchasePrice) || 0);
+        return {
+          updateOne: {
+            filter: {
+              companyId: user.companyId,
+              supplier,
+              articleNumber: r.articleNumber.trim(),
+            },
+            update: {
+              $set: {
+                name: (r.name || "").trim(),
+                unit: (r.unit || "st").trim() || "st",
+                purchasePriceExclMoms: purchase,
+                priceExclMoms: round2(purchase * factor),
+              },
+              $setOnInsert: {
+                createdByUserId: user.userId,
+                kontering: "Varor 25%",
+                momsPercent: 25,
+                active: true,
+              },
+            },
+            upsert: true,
+          },
+        };
+      });
+    if (!ops.length) return { created: 0, updated: 0 };
+    const res = await this.articleModel.bulkWrite(ops, { ordered: false });
+    return { created: res.upsertedCount, updated: res.modifiedCount };
   }
 
   async findAccessible(user: AuthUser): Promise<Article[]> {

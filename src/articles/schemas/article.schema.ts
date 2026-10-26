@@ -52,9 +52,15 @@ export class Article {
 
   @Prop({ type: [String], default: [] })
   articleGroups: string[];
+
+  // Grossist the row came from (Ahlsell, Dahl, Rexel…) when imported from a
+  // price list; empty for articles made by hand.
+  @Prop({ default: "" })
+  supplier: string;
 }
 
 export const ArticleSchema = SchemaFactory.createForClass(Article);
 
 ArticleSchema.index({ companyId: 1, articleNumber: 1 });
+ArticleSchema.index({ companyId: 1, supplier: 1, articleNumber: 1 });
 ArticleSchema.index({ createdByUserId: 1, articleNumber: 1 });

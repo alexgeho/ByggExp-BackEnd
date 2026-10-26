@@ -61,4 +61,8 @@ export class CreateArticleDto {
   @IsArray()
   @IsString({ each: true })
   articleGroups?: string[];
+
+  @IsOptional()
+  @IsString()
+  supplier?: string;
 }
