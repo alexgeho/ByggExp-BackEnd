@@ -1,7 +1,12 @@
 import { Type } from "class-transformer";
 import {
+  PRICE_LIST_FILE_TYPES,
+  type PriceListFileType,
+} from "../price-list-merge";
+import {
   ArrayMaxSize,
   IsArray,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -37,6 +42,11 @@ export class ImportArticlesDto {
   @Min(0)
   @Max(1000)
   markupPercent?: number;
+
+  // Huvudprislista / Nettoprislista / Kopparpriser. Default: main.
+  @IsOptional()
+  @IsIn(PRICE_LIST_FILE_TYPES)
+  fileType?: PriceListFileType;
 
   @IsArray()
   @ArrayMaxSize(5000)

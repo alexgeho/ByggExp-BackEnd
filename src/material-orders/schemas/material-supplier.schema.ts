@@ -18,6 +18,10 @@ export class MaterialSupplier {
 
   @Prop({ default: "" })
   customerNumber: string;
+
+  // When each price file was last imported (main / net / copper).
+  @Prop({ type: Object, default: {} })
+  priceLists: { main?: Date; net?: Date; copper?: Date };
 }
 
 export const MaterialSupplierSchema =

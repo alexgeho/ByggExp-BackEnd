@@ -364,6 +364,7 @@ export class MaterialOrdersService {
         supplier,
         orderEmail: admin ? s?.orderEmail || "" : undefined,
         customerNumber: admin ? s?.customerNumber || "" : undefined,
+        priceLists: admin ? s?.priceLists || {} : undefined,
         canOrder: !!s?.orderEmail,
       };
     });
