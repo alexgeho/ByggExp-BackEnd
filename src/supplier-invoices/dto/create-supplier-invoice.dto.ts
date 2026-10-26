@@ -1,10 +1,4 @@
-import {
-  IsArray,
-  IsIn,
-  IsNumber,
-  IsOptional,
-  IsString,
-} from "class-validator";
+import { IsArray, IsIn, IsNumber, IsOptional, IsString } from "class-validator";
 import { SupplierInvoiceStatus } from "../schemas/supplier-invoice.schema";
 
 export class CreateSupplierInvoiceDto {
@@ -92,6 +86,11 @@ export class CreateSupplierInvoiceDto {
   @IsOptional()
   @IsString()
   creditOfNumber?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  materialOrderIds?: string[];
 
   @IsOptional()
   @IsIn(Object.values(SupplierInvoiceStatus))

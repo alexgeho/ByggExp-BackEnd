@@ -7,6 +7,10 @@ import {
   SupplierInvoiceSchema,
 } from "./schemas/supplier-invoice.schema";
 import { User, UserSchema } from "../users/schemas/user.schema";
+import {
+  MaterialOrder,
+  MaterialOrderSchema,
+} from "../material-orders/schemas/material-order.schema";
 import { NotificationsModule } from "../notifications/notifications.module";
 
 @Module({
@@ -14,6 +18,7 @@ import { NotificationsModule } from "../notifications/notifications.module";
     MongooseModule.forFeature([
       { name: SupplierInvoice.name, schema: SupplierInvoiceSchema },
       { name: User.name, schema: UserSchema },
+      { name: MaterialOrder.name, schema: MaterialOrderSchema },
     ]),
     NotificationsModule,
   ],

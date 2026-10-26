@@ -30,6 +30,11 @@ import {
 } from "./dto/material-order.dto";
 import { ORDER_SENDER } from "./senders/order-sender";
 import type { OrderSender } from "./senders/order-sender";
+import {
+  SupplierInvoice,
+  SupplierInvoiceDocument,
+} from "../supplier-invoices/schemas/supplier-invoice.schema";
+import { orderedMaterialCost } from "./ordered-material";
 import { NotificationsService } from "../notifications/notifications.service";
 
 type AuthUser = {
@@ -52,6 +57,8 @@ export class MaterialOrdersService {
     @InjectModel(Project.name) private projects: Model<ProjectDocument>,
     @InjectModel(Company.name) private companies: Model<CompanyDocument>,
     @InjectModel(User.name) private users: Model<UserDocument>,
+    @InjectModel(SupplierInvoice.name)
+    private supplierInvoices: Model<SupplierInvoiceDocument>,
     @Inject(ORDER_SENDER) private readonly sender: OrderSender,
     private readonly notifications: NotificationsService,
   ) {}
@@ -223,12 +230,69 @@ export class MaterialOrdersService {
     return d;
   }
 
+  // Which supplier invoice (if any) pays each order: orderId → invoice.
+  private async invoiceLinks(companyId: string, orderIds: string[]) {
+    const links = new Map<string, { id: string; number: string }>();
+    if (!orderIds.length) return links;
+    const invoices = await this.supplierInvoices
+      .find({ companyId, materialOrderIds: { $in: orderIds } })
+      .select("_id invoiceNumber materialOrderIds")
+      .lean()
+      .exec();
+    for (const inv of invoices) {
+      for (const oid of inv.materialOrderIds || []) {
+        links.set(String(oid), {
+          id: String(inv._id),
+          number: inv.invoiceNumber || "",
+        });
+      }
+    }
+    return links;
+  }
+
   // Workers never see prices: drop unitPrice from the rows they get back.
-  private view(order: MaterialOrderDocument, user: AuthUser) {
-    if (user.role !== UserRole.Worker) return order;
+  // Admins also get the supplier invoice the order is billed on.
+  private view(
+    order: MaterialOrderDocument,
+    user: AuthUser,
+    links?: Map<string, { id: string; number: string }>,
+  ) {
     const o = order.toObject();
-    o.rows = (o.rows || []).map(({ unitPrice: _p, ...r }) => r);
-    return o;
+    if (user.role === UserRole.Worker) {
+      o.rows = (o.rows || []).map(({ unitPrice: _p, ...r }) => r);
+      return o;
+    }
+    const link = links?.get(String(order._id));
+    return {
+      ...o,
+      supplierInvoiceId: link?.id ?? null,
+      supplierInvoiceNumber: link?.number ?? "",
+    };
+  }
+
+  private async viewOne(order: MaterialOrderDocument, user: AuthUser) {
+    const links =
+      user.role === UserRole.Worker
+        ? undefined
+        : await this.invoiceLinks(String(order.companyId), [String(order._id)]);
+    return this.view(order, user, links);
+  }
+
+  // "Beställt material" for the project economy: draft + sent orders at
+  // quantity × unitPrice, minus orders already billed on a supplier invoice.
+  async projectSummary(projectId: string, user: AuthUser) {
+    const companyId = this.companyOf(user);
+    await this.loadProject(projectId, user);
+    const orders = await this.orders
+      .find({ companyId, projectId })
+      .select("_id rows")
+      .lean()
+      .exec();
+    const links = await this.invoiceLinks(
+      companyId,
+      orders.map((o) => String(o._id)),
+    );
+    return orderedMaterialCost(orders, links.keys());
   }
 
   // ---------- orders ----------
@@ -261,11 +325,18 @@ export class MaterialOrdersService {
       .sort({ createdAt: -1 })
       .limit(500)
       .exec();
-    return list.map((o) => this.view(o, user));
+    const links =
+      user.role === UserRole.Worker
+        ? undefined
+        : await this.invoiceLinks(
+            companyId,
+            list.map((o) => String(o._id)),
+          );
+    return list.map((o) => this.view(o, user, links));
   }
 
   async findOne(id: string, user: AuthUser) {
-    return this.view((await this.loadOrder(id, user)).order, user);
+    return this.viewOne((await this.loadOrder(id, user)).order, user);
   }
 
   async create(dto: CreateMaterialOrderDto, user: AuthUser) {
@@ -308,7 +379,7 @@ export class MaterialOrdersService {
       order.desiredDate = this.parseDate(dto.desiredDate);
     }
     if (dto.comment !== undefined) order.comment = dto.comment.trim();
-    return this.view(await order.save(), user);
+    return this.viewOne(await order.save(), user);
   }
 
   async remove(id: string, user: AuthUser) {

@@ -11,7 +11,11 @@ import * as fs from "fs";
 import * as path from "path";
 import archiver from "archiver";
 import { InjectModel } from "@nestjs/mongoose";
-import { Model } from "mongoose";
+import { isValidObjectId, Model } from "mongoose";
+import {
+  MaterialOrder,
+  MaterialOrderDocument,
+} from "../material-orders/schemas/material-order.schema";
 import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
 import { NotificationsService } from "../notifications/notifications.service";
 import { CreateSupplierInvoiceDto } from "./dto/create-supplier-invoice.dto";
@@ -44,8 +48,45 @@ export class SupplierInvoicesService {
     private model: Model<SupplierInvoiceDocument>,
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
+    @InjectModel(MaterialOrder.name)
+    private orderModel: Model<MaterialOrderDocument>,
     private readonly notifications: NotificationsService,
   ) {}
+
+  // Keep only the company's own orders (of the invoice's project, when set).
+  private async cleanOrderIds(
+    ids: string[] | undefined,
+    companyId: string,
+    projectId?: string | null,
+  ): Promise<string[]> {
+    const unique = Array.from(new Set((ids || []).map(String))).filter(
+      isValidObjectId,
+    );
+    if (!unique.length) return [];
+    const filter: Record<string, unknown> = { _id: { $in: unique }, companyId };
+    if (projectId) filter.projectId = String(projectId);
+    const found = await this.orderModel
+      .find(filter)
+      .select("_id")
+      .lean()
+      .exec();
+    return found.map((o) => String(o._id));
+  }
+
+  // An order is paid by one invoice: linking it here unlinks it elsewhere.
+  private async releaseOrders(
+    ids: string[],
+    companyId: string,
+    keepId: unknown,
+  ) {
+    if (!ids.length) return;
+    await this.model
+      .updateMany(
+        { companyId, _id: { $ne: keepId }, materialOrderIds: { $in: ids } },
+        { $pull: { materialOrderIds: { $in: ids } } },
+      )
+      .exec();
+  }
 
   // Daily heads-up so a supplier bill never slips into inkasso: push the company
   // admins when an unpaid invoice is due today or in exactly `lead` days. Two
@@ -143,9 +184,16 @@ export class SupplierInvoicesService {
       vat: round2(dto.vat ?? 0),
       total: this.computeTotal(dto),
       status: dto.status || SupplierInvoiceStatus.Registered,
+      materialOrderIds: await this.cleanOrderIds(
+        dto.materialOrderIds,
+        companyId,
+        dto.projectId,
+      ),
       createdByUserId: user.userId || null,
     });
-    return doc.save();
+    const saved = await doc.save();
+    await this.releaseOrders(saved.materialOrderIds, companyId, saved._id);
+    return saved;
   }
 
   // Credit a bill we have received: a negated copy that settles it, in full or
@@ -160,9 +208,7 @@ export class SupplierInvoicesService {
     const source = await this.findOne(id, user);
 
     if (source.creditOfId) {
-      throw new BadRequestException(
-        "A credit note cannot itself be credited",
-      );
+      throw new BadRequestException("A credit note cannot itself be credited");
     }
 
     const sourceExcl = Number(source.amountExclVat) || 0;
@@ -183,9 +229,7 @@ export class SupplierInvoicesService {
       projectId: source.projectId || null,
       supplierName: source.supplierName,
       supplierOrgNumber: source.supplierOrgNumber,
-      invoiceNumber: source.invoiceNumber
-        ? `${source.invoiceNumber}-K`
-        : "",
+      invoiceNumber: source.invoiceNumber ? `${source.invoiceNumber}-K` : "",
       invoiceDate: new Date().toISOString().slice(0, 10),
       dueDate: source.dueDate,
       category: source.category,
@@ -317,8 +361,19 @@ export class SupplierInvoicesService {
         amountExclVat: dto.amountExclVat ?? doc.amountExclVat,
         vat: dto.vat ?? doc.vat,
       }),
+      // Re-checked on every save so a project change drops foreign orders.
+      materialOrderIds: await this.cleanOrderIds(
+        dto.materialOrderIds ?? doc.materialOrderIds,
+        String(doc.companyId),
+        dto.projectId ?? doc.projectId,
+      ),
     });
     await doc.save();
+    await this.releaseOrders(
+      doc.materialOrderIds || [],
+      String(doc.companyId),
+      doc._id,
+    );
     return doc;
   }
 
@@ -387,7 +442,8 @@ export class SupplierInvoicesService {
         bankDate && !Number.isNaN(bankDate.getTime())
           ? bankDate
           : doc.paidAt || new Date();
-      if (payment.bankRef) doc.paidBankRef = String(payment.bankRef).slice(0, 200);
+      if (payment.bankRef)
+        doc.paidBankRef = String(payment.bankRef).slice(0, 200);
     } else if (status === SupplierInvoiceStatus.Registered) {
       doc.approvedAt = null;
       doc.paidAt = null;

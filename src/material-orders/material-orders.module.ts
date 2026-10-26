@@ -14,6 +14,10 @@ import {
   MaterialSupplier,
   MaterialSupplierSchema,
 } from "./schemas/material-supplier.schema";
+import {
+  SupplierInvoice,
+  SupplierInvoiceSchema,
+} from "../supplier-invoices/schemas/supplier-invoice.schema";
 import { MaterialOrdersController } from "./material-orders.controller";
 import { MaterialOrdersService } from "./material-orders.service";
 import { EmailOrderSender } from "./senders/email-order.sender";
@@ -30,6 +34,7 @@ import { ORDER_SENDER } from "./senders/order-sender";
       { name: Project.name, schema: ProjectSchema },
       { name: Company.name, schema: CompanySchema },
       { name: User.name, schema: UserSchema },
+      { name: SupplierInvoice.name, schema: SupplierInvoiceSchema },
     ]),
   ],
   controllers: [MaterialOrdersController],

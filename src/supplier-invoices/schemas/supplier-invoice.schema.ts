@@ -122,6 +122,12 @@ export class SupplierInvoice {
   @Prop({ default: "" })
   creditOfNumber?: string;
 
+  // Material orders this bill pays for. A linked order stops counting as
+  // "Beställt material" in the project economy — the invoice carries the cost.
+  // An order belongs to at most one invoice (enforced on save).
+  @Prop({ type: [String], default: [], index: true })
+  materialOrderIds: string[];
+
   @Prop({ type: String, ref: "User", default: null })
   createdByUserId?: string | null;
 

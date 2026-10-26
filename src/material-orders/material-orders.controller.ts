@@ -64,6 +64,13 @@ export class MaterialOrdersController {
     return this.service.upsertSupplier(supplier, dto, req.user);
   }
 
+  // "Beställt material" for the project economy: { total, count, invoicedCount }.
+  @Get("project/:projectId/summary")
+  @Roles(...SENDERS)
+  projectSummary(@Request() req, @Param("projectId") projectId: string) {
+    return this.service.projectSummary(projectId, req.user);
+  }
+
   @Get()
   @Roles(...ALL)
   findAll(@Request() req, @Query("projectId") projectId?: string) {
