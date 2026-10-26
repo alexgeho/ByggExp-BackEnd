@@ -92,6 +92,14 @@ export class Project {
   @Prop({ default: "" })
   littera: string;
 
+  // Kind of job: a normal project or a work order (service, installation,
+  // jour call-out, warranty). Used to filter the list and follow up profit.
+  @Prop({
+    enum: ["project", "service", "installation", "jour", "garanti"],
+    default: "project",
+  })
+  orderType: string;
+
   @Prop({ type: Date })
   beginningDate: Date;
 

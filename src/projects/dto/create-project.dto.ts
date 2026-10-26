@@ -141,6 +141,10 @@ export class CreateProjectDto {
   @IsOptional()
   littera?: string;
 
+  @IsOptional()
+  @IsEnum(["project", "service", "installation", "jour", "garanti"])
+  orderType?: string;
+
   @IsDateString()
   @IsOptional()
   beginningDate?: Date;
