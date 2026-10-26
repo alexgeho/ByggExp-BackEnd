@@ -148,6 +148,7 @@ export class ProjectsController {
   @Get("my")
   @Roles(UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
   async findAllByUser(@Request() req): Promise<Project[]> {
+    await this.projectsService.ensureInternalProject(req.user);
     if (req.user.role === UserRole.CompanyAdmin) {
       // CompanyAdmin sees all projects in its company
       return this.projectsService.findAllByCompany(req.user.companyId);
@@ -166,6 +167,7 @@ export class ProjectsController {
     UserRole.Worker,
   )
   async findMyPopulated(@Request() req) {
+    await this.projectsService.ensureInternalProject(req.user);
     return this.projectsService.findMyPopulated(req.user);
   }
 
@@ -204,10 +206,11 @@ export class ProjectsController {
 
   @Get("company/:companyId")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
-  findAllByCompany(
+  async findAllByCompany(
     @Param("companyId") companyId: string,
     @Request() req,
   ): Promise<Project[]> {
+    await this.projectsService.ensureInternalProject(req.user);
     // Non-superadmin can only ever list their own company, regardless of param.
     const scopedCompanyId =
       req.user.role === UserRole.SuperAdmin ? companyId : req.user.companyId;

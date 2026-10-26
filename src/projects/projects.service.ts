@@ -981,6 +981,35 @@ export class ProjectsService {
   // populated the same way as findOneWithPopulated (incl. tasks). Lets the
   // mobile app replace its per-project N+1 loop over /projects/:id/populated
   // with a single request.
+  // Lazily makes the company's "Intern tid" project and adds the caller to it
+  // (workers/project admins), so every staff member can log internal time.
+  async ensureInternalProject(user: ProjectAuthUser): Promise<void> {
+    if (!user?.companyId || !user.userId || user.role === UserRole.SuperAdmin) {
+      return;
+    }
+    const staff = await this.usersService.findAllByCompany(user.companyId);
+    const admin = staff.find((u) => u.role === UserRole.CompanyAdmin);
+    const ownerId = admin ? String((admin as { _id?: unknown })._id) : user.userId;
+    await this.projectModel
+      .updateOne(
+        { companyId: user.companyId, internal: true },
+        {
+          $setOnInsert: {
+            name: "Intern tid",
+            status: "in_progress",
+            ownerId,
+            projectManagerId: ownerId,
+            location: "",
+          },
+          ...(user.role === UserRole.Worker
+            ? { $addToSet: { workers: user.userId } }
+            : {}),
+        },
+        { upsert: true },
+      )
+      .exec();
+  }
+
   async findMyPopulated(user: ProjectAuthUser) {
     let filter: Record<string, unknown>;
     if (user?.role === UserRole.SuperAdmin) {

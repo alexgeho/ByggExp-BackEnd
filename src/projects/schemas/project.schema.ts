@@ -45,6 +45,12 @@ export class Project {
   @Prop({ required: true })
   name: string;
 
+  // The company's "Intern tid" project: time not spent at a customer's site
+  // (grossist run, workshop, service, training). Every worker is a member; its
+  // hours go to payroll but never onto an invoice. One per company.
+  @Prop({ type: Boolean, default: false, index: true })
+  internal: boolean;
+
   @Prop({
     required: true,
     enum: ["planning", "in_progress", "completed", "on_hold"],
@@ -128,3 +134,9 @@ export class Project {
 }
 
 export const ProjectSchema = SchemaFactory.createForClass(Project);
+
+// At most one "Intern tid" project per company (concurrent first loads upsert).
+ProjectSchema.index(
+  { companyId: 1, internal: 1 },
+  { unique: true, partialFilterExpression: { internal: true } },
+);
