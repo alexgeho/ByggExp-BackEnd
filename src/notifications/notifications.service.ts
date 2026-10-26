@@ -376,6 +376,10 @@ export class NotificationsService {
       return "invoices";
     }
 
+    if (type.startsWith("material_order")) {
+      return "materialOrders";
+    }
+
     if (type.startsWith("message_") || type === "chat_message") {
       return "messages";
     }

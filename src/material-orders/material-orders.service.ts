@@ -30,6 +30,7 @@ import {
 } from "./dto/material-order.dto";
 import { ORDER_SENDER } from "./senders/order-sender";
 import type { OrderSender } from "./senders/order-sender";
+import { NotificationsService } from "../notifications/notifications.service";
 
 type AuthUser = {
   role: UserRole;
@@ -52,7 +53,75 @@ export class MaterialOrdersService {
     @InjectModel(Company.name) private companies: Model<CompanyDocument>,
     @InjectModel(User.name) private users: Model<UserDocument>,
     @Inject(ORDER_SENDER) private readonly sender: OrderSender,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  // ---------- push (best effort: a failed push never fails the order) ----------
+
+  // A worker's new draft → the company admins, who send it.
+  private async notifyDraft(
+    order: MaterialOrderDocument,
+    project: { name?: string },
+    user: AuthUser,
+  ) {
+    if (user.role !== UserRole.Worker) return;
+    try {
+      const [admins, author] = await Promise.all([
+        this.users
+          .find({
+            companyId: String(order.companyId),
+            role: UserRole.CompanyAdmin,
+          })
+          .select("_id")
+          .lean()
+          .exec(),
+        this.users.findById(user.userId).select("name").lean().exec(),
+      ]);
+      const ids = admins
+        .map((a) => String(a._id))
+        .filter((id) => id !== String(user.userId));
+      if (!ids.length) return;
+      await this.notifications.sendToUsers(ids, {
+        title: "Ny materialbeställning",
+        body: [author?.name, order.supplier, project.name]
+          .filter(Boolean)
+          .join(" · "),
+        data: {
+          type: "material_order_draft",
+          screen: "MaterialOrder",
+          entityId: String(order._id),
+          projectId: String(order.projectId),
+        },
+      });
+    } catch {
+      /* push is best effort */
+    }
+  }
+
+  // Sent to the grossist → the worker who made the draft.
+  private async notifySent(
+    order: MaterialOrderDocument,
+    project: { name?: string },
+    user: AuthUser,
+  ) {
+    if (!order.createdBy || String(order.createdBy) === String(user.userId)) {
+      return;
+    }
+    try {
+      await this.notifications.sendToUsers([String(order.createdBy)], {
+        title: `Beställning #${order.orderNumber} skickad`,
+        body: [order.supplier, project.name].filter(Boolean).join(" · "),
+        data: {
+          type: "material_order_sent",
+          screen: "MaterialOrder",
+          entityId: String(order._id),
+          projectId: String(order.projectId),
+        },
+      });
+    } catch {
+      /* push is best effort */
+    }
+  }
 
   // ---------- access ----------
 
@@ -221,6 +290,7 @@ export class MaterialOrdersService {
       status: MaterialOrderStatus.Draft,
       createdBy: String(user.userId),
     });
+    await this.notifyDraft(created, project, user);
     return this.view(created, user);
   }
 
@@ -312,7 +382,9 @@ export class MaterialOrdersService {
     order.sentBy = String(user.userId);
     order.sentTo = settings.orderEmail;
     order.sentVia = this.sender.channel;
-    return order.save();
+    const saved = await order.save();
+    await this.notifySent(saved, project, user);
+    return saved;
   }
 
   // ---------- article picker (workers can't use /articles) ----------

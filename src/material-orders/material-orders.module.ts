@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
 import { MailModule } from "../mail/mail.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 import { Article, ArticleSchema } from "../articles/schemas/article.schema";
 import { Project, ProjectSchema } from "../projects/schemas/project.schema";
 import { Company, CompanySchema } from "../company/schemas/company.schema";
@@ -21,6 +22,7 @@ import { ORDER_SENDER } from "./senders/order-sender";
 @Module({
   imports: [
     MailModule,
+    NotificationsModule,
     MongooseModule.forFeature([
       { name: MaterialOrder.name, schema: MaterialOrderSchema },
       { name: MaterialSupplier.name, schema: MaterialSupplierSchema },

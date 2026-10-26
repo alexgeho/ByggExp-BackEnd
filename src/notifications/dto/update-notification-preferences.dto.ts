@@ -17,4 +17,8 @@ export class UpdateNotificationPreferencesDto {
   @IsOptional()
   @IsBoolean()
   invoices?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  materialOrders?: boolean;
 }
