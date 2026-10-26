@@ -175,6 +175,12 @@ export class Company {
   @Prop({ type: HoursReminderRuleSchema, default: () => ({}) })
   hoursReminderRule?: HoursReminderRule;
 
+  // ---- Worker day report: fields the employer switched off in the app ----
+  // Keys: overtime, ob, travel, mileage, perDiem, absence, photos, receipts.
+  // Hours are always shown. Empty = every field visible.
+  @Prop({ type: [String], default: [] })
+  hiddenReportFields: string[];
+
   // ---- Superadmin label: our own / test / real customer (null = unset) ----
   @Prop({ type: String, enum: ["own", "test", "customer", null], default: null })
   label?: "own" | "test" | "customer" | null;
