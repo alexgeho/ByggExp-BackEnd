@@ -47,6 +47,14 @@ export class Article {
   @Prop({ type: Number, default: 0 })
   purchasePriceExclMoms: number;
 
+  // Grossist price files: list price (Huvudprislista/Kopparpriser) and net
+  // price (Nettoprislista) kept apart; purchasePriceExclMoms = net ?? list.
+  @Prop({ type: Number, default: null })
+  listPurchasePrice?: number | null;
+
+  @Prop({ type: Number, default: null })
+  netPurchasePrice?: number | null;
+
   @Prop({ type: String, enum: HouseworkType, default: HouseworkType.None })
   houseworkType: HouseworkType;
 

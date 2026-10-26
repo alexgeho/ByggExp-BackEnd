@@ -59,13 +59,38 @@ export class ArticlesService {
     }
     const supplier = dto.supplier.trim();
     const fileType = dto.fileType || "main";
-    const ops = buildPriceListOps(dto.rows, {
-      companyId: String(user.companyId),
-      userId: user.userId,
-      supplier,
-      markupPercent: dto.markupPercent,
-      fileType,
-    });
+    const numbers = dto.rows
+      .map((r) => r.articleNumber?.trim())
+      .filter(Boolean);
+    const stored = await this.articleModel
+      .find({
+        companyId: String(user.companyId),
+        supplier,
+        articleNumber: { $in: numbers },
+      })
+      .select("articleNumber listPurchasePrice netPurchasePrice")
+      .lean()
+      .exec();
+    const existing = new Map(
+      stored.map((a) => [
+        a.articleNumber,
+        {
+          listPurchasePrice: a.listPurchasePrice,
+          netPurchasePrice: a.netPurchasePrice,
+        },
+      ]),
+    );
+    const ops = buildPriceListOps(
+      dto.rows,
+      {
+        companyId: String(user.companyId),
+        userId: user.userId,
+        supplier,
+        markupPercent: dto.markupPercent,
+        fileType,
+      },
+      existing,
+    );
     await this.supplierModel
       .updateOne(
         { companyId: String(user.companyId), supplier },
