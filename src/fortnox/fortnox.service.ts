@@ -57,10 +57,10 @@ const AUTH_URL = "https://apps.fortnox.se/oauth-v1/auth";
 const TOKEN_URL = "https://apps.fortnox.se/oauth-v1/token";
 const REVOKE_URL = "https://apps.fortnox.se/oauth-v1/revoke";
 const API_BASE = "https://api.fortnox.se/3";
-// supplierinvoice joins once it is enabled on the ByggExp integration in the
-// Fortnox developer portal (asking for a scope the app lacks fails the
-// connect). Until then set FORTNOX_SCOPES to include it.
-const DEFAULT_SCOPES = "companyinformation invoice customer salary";
+// Every scope here must be ticked on the ByggExp integration in the Fortnox
+// developer portal (asking for one the app lacks fails the connect).
+const DEFAULT_SCOPES =
+  "companyinformation invoice customer salary supplierinvoice";
 const SUPPLIER_SCOPE = "supplierinvoice";
 // Fortnox allows 25 requests per 5 s per token: keep calls ≥ 220 ms apart.
 const MIN_CALL_GAP_MS = 220;
