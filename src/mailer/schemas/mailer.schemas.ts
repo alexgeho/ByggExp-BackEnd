@@ -430,6 +430,28 @@ export class MailReply {
   // Manual edits always win; bump REPLY_SORT_VERSION to re-sort unsorted ones.
   @Prop({ default: 0 })
   sortVersion: number;
+
+  // Leads: which mailbox it came to ("main" / "inbox:<brand>") and its IMAP
+  // UID there, so "answered" (\Answered flag) can be re-read and the mail
+  // opened in webmail. direct = a new inquiry, not a reply to a campaign.
+  @Prop({ default: "main", index: true })
+  inbox: string;
+
+  @Prop({ type: Number, default: null })
+  uid: number | null;
+
+  @Prop({ default: false })
+  direct: boolean;
+
+  @Prop({ default: false })
+  answered: boolean;
+
+  @Prop({ type: [{ name: String, size: Number, _id: false }], default: [] })
+  files: { name: string; size: number }[];
+
+  // When the owner was mailed that this lead waits for an answer.
+  @Prop({ type: Date, default: null })
+  alertedAt: Date | null;
 }
 export const MailReplySchema = SchemaFactory.createForClass(MailReply);
 

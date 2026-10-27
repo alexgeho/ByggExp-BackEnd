@@ -7,6 +7,8 @@ import {
 import { InjectModel } from "@nestjs/mongoose";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { ImapFlow } from "imapflow";
+import { MailService } from "../mail/mail.service";
+import { escapeHtml } from "../newsletters/newsletter-render";
 import { simpleParser } from "mailparser";
 import { isValidObjectId, Model, Types } from "mongoose";
 import {
@@ -27,9 +29,11 @@ import {
   guessCategory,
   htmlToText,
   isAutoReply,
+  isBulk,
   isCompanyDomain,
   isSystemSender,
   replySnippet,
+  waitingLeads,
 } from "./mailer-funnel-parse";
 import { senderKeysOf } from "./mailer-campaigns.service";
 import { MailerListsService } from "./mailer-lists.service";
@@ -88,8 +92,8 @@ export type InboxInput = {
 };
 
 const MIN_REAL_CAMPAIGN = 10;
-const REPLY_SORT_VERSION = 3;
-const PARSE_VERSION = 2;
+const REPLY_SORT_VERSION = 4; // 4: direct inquiries
+const PARSE_VERSION = 3; // 3: direct inquiries, UID, flags, attachments
 
 // "ByggExp (Brevo)" → "ByggExp"; campaigns of deleted senders fall back to
 // the first word of the campaign name ("Nordkod – utan hemsida").
@@ -125,6 +129,7 @@ export class MailerFunnelService {
     private readonly demoLeads: Model<DemoLeadDocument>,
     private readonly settings: MailerSettingsService,
     private readonly listsService: MailerListsService,
+    private readonly mail: MailService,
   ) {}
 
   private async cfg() {
@@ -193,7 +198,7 @@ export class MailerFunnelService {
     const ids = picked.map((r) => r.c._id);
 
     const match = await this.matcher(ids);
-    const [replies, signups, demos, ga] = await Promise.all([
+    const [replies, signups, demos, ga, waiting] = await Promise.all([
       this.replies
         .find({ campaignId: { $in: ids } })
         .sort({ receivedAt: -1 })
@@ -201,6 +206,7 @@ export class MailerFunnelService {
       this.signups(match),
       this.demos(match, from, to),
       mailerVisits(),
+      publicView ? [] : this.waiting(ids, q.brand),
     ]);
 
     const per = new Map<string, Counts>();
@@ -296,6 +302,7 @@ export class MailerFunnelService {
           campaignName: nameOf.get(String(r.campaignId)) || "",
           receivedAt: r.receivedAt,
         })),
+      waiting,
       demos: demos.map((d) => ({
         name: publicView ? "" : d.name,
         email: publicView ? "" : d.email,
@@ -561,9 +568,13 @@ export class MailerFunnelService {
     return out;
   }
 
-  async updateReply(id: string, input: { category?: string; note?: string }) {
+  async updateReply(
+    id: string,
+    input: { category?: string; note?: string; answered?: boolean },
+  ) {
     if (!isValidObjectId(id)) throw new NotFoundException("Not found");
     const set: Partial<MailReply> = {};
+    if (input.answered !== undefined) set.answered = input.answered;
     if (input.category !== undefined) {
       if (!(REPLY_CATEGORIES as readonly string[]).includes(input.category))
         throw new BadRequestException("Okänd kategori");
@@ -599,6 +610,86 @@ export class MailerFunnelService {
     if (!c.shareToken || token !== c.shareToken)
       throw new NotFoundException("Not found");
     return this.funnel(q, true);
+  }
+
+  // ---------- leads waiting for an answer ----------
+
+  // Latest mail per sender that we have not answered: replies to the tab's
+  // campaigns + new inquiries to the tab's mailbox (all mailboxes on "All").
+  private async waiting(ids: Types.ObjectId[], brand?: string) {
+    const since = new Date(Date.now() - 60 * 864e5);
+    const box = brand ? await this.boxFor(brand) : null;
+    const mails = await this.replies
+      .find({
+        receivedAt: { $gte: since },
+        $or: [
+          { campaignId: { $in: ids } },
+          { direct: true, ...(box ? { inbox: box.key } : {}) },
+        ],
+      })
+      .lean();
+    const boxes = new Map(
+      (
+        await this.config.find({}, { key: 1, imapHost: 1, imapUser: 1 }).lean()
+      ).map((c) => [c.key, c]),
+    );
+    return waitingLeads(mails).map((m) => {
+      const c = boxes.get(m.inbox || "main");
+      return {
+        _id: String(m._id),
+        name: m.name,
+        email: m.email,
+        company: m.company || domainOf(m.email),
+        subject: m.subject,
+        snippet: m.snippet,
+        note: m.note,
+        category: m.category,
+        direct: Boolean(m.direct),
+        files: m.files || [],
+        receivedAt: m.receivedAt,
+        mailbox: c?.imapUser || "",
+        openUrl:
+          c?.imapHost && m.uid
+            ? `https://${c.imapHost}/webmail/?_task=mail&_mbox=INBOX&_uid=${m.uid}&_action=show`
+            : "",
+      };
+    });
+  }
+
+  // Every hour in the working day: leads waiting > 4 h get one mail to the
+  // owner (the same address site demo requests go to).
+  @Cron("0 0 8-19 * * *", { timeZone: "Europe/Stockholm" })
+  async alertWaiting() {
+    const mails = await this.replies
+      .find({ receivedAt: { $gte: new Date(Date.now() - 14 * 864e5) } })
+      .lean();
+    const due = waitingLeads(mails).filter(
+      (m) =>
+        !m.alertedAt &&
+        new Date(m.receivedAt || 0).getTime() < Date.now() - 4 * 36e5,
+    );
+    if (!due.length) return 0;
+    const rows = due.map(
+      (m) =>
+        `${m.name || m.email} — ${m.subject || ""}${m.files?.length ? ` (${m.files.length} bilagor)` : ""}`,
+    );
+    try {
+      for (const to of this.mail.getDemoRequestRecipients())
+        await this.mail.sendHtmlEmail({
+          to,
+          subject: `Obesvarade leads: ${due.length}`,
+          text: rows.join("\n"),
+          html: `<ul>${rows.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul><p><a href="https://admin.byggexp.se/admin/mailer/funnel">Tratt → Att svara</a></p>`,
+        });
+    } catch (err) {
+      this.logger.warn(`Lead alert failed: ${err}`);
+      return 0;
+    }
+    await this.replies.updateMany(
+      { _id: { $in: due.map((m) => m._id) } },
+      { alertedAt: new Date() },
+    );
+    return due.length;
   }
 
   // ---------- inbox (IMAP) ----------
@@ -740,13 +831,23 @@ export class MailerFunnelService {
         if (!Array.isArray(range) || range.length)
           for await (const msg of client.fetch(
             range,
-            { uid: true, source: true },
+            { uid: true, source: true, flags: true },
             { uid: true },
           )) {
             if (msg.uid < fromUid) continue; // "N:*" returns the last mail
             maxUid = Math.max(maxUid, msg.uid);
-            if (msg.source && (await this.storeReply(msg.source))) added += 1;
+            if (
+              msg.source &&
+              (await this.storeReply(msg.source, {
+                inbox: c.key,
+                own: c.imapUser,
+                uid: msg.uid,
+                answered: Boolean(msg.flags?.has("\\Answered")),
+              }))
+            )
+              added += 1;
           }
+        await this.refreshAnswered(client, c.key);
         c.uidValidity = validity;
         c.lastUid = maxUid;
         c.parseVersion = PARSE_VERSION;
@@ -780,23 +881,65 @@ export class MailerFunnelService {
     });
   }
 
-  // true when the mail answers one of our campaigns and is new.
-  private async storeReply(source: Buffer): Promise<boolean> {
+  // Answered later (in webmail) → the \\Answered flag flips; re-read it for
+  // the leads of the last 60 days that still wait.
+  private async refreshAnswered(client: ImapFlow, inbox: string) {
+    const waiting = await this.replies
+      .find(
+        {
+          inbox,
+          answered: { $ne: true },
+          uid: { $ne: null },
+          receivedAt: { $gte: new Date(Date.now() - 60 * 864e5) },
+        },
+        { uid: 1 },
+      )
+      .lean();
+    if (!waiting.length) return;
+    const done: number[] = [];
+    for await (const msg of client.fetch(
+      waiting.map((w) => w.uid as number),
+      { uid: true, flags: true },
+      { uid: true },
+    ))
+      if (msg.flags?.has("\\Answered")) done.push(msg.uid);
+    if (done.length)
+      await this.replies.updateMany(
+        { inbox, uid: { $in: done } },
+        { answered: true },
+      );
+  }
+
+  // true when the mail is a new reply to a campaign or a new inquiry.
+  private async storeReply(
+    source: Buffer,
+    box: { inbox: string; own: string; uid: number; answered: boolean },
+  ): Promise<boolean> {
     const mail = await simpleParser(source);
     const from = mail.from?.value?.[0];
     const email = String(from?.address || "")
       .toLowerCase()
       .trim();
-    if (!email || isSystemSender(email)) return false;
+    if (!email || isSystemSender(email) || email === box.own) return false;
     const received = mail.date || new Date();
     const messageId =
       mail.messageId || `${email}:${received.toISOString()}:${mail.subject}`;
     const text =
       mail.text || htmlToText(typeof mail.html === "string" ? mail.html : "");
+    const files = (mail.attachments || [])
+      .filter((a) => a.contentDisposition !== "inline" && a.filename)
+      .map((a) => ({ name: String(a.filename).slice(0, 200), size: a.size }));
+    const lead = {
+      inbox: box.inbox,
+      uid: box.uid,
+      files,
+      ...(box.answered ? { answered: true } : {}),
+    };
     const existing = await this.replies
       .findOne({ messageId }, { snippet: 1 })
       .lean();
     if (existing) {
+      await this.replies.updateOne({ _id: existing._id }, lead);
       // Re-read after a parser fix: fill a snippet that came out empty and
       // let it be sorted again.
       const snippet = replySnippet(text);
@@ -829,11 +972,28 @@ export class MailerFunnelService {
         })
         .sort({ sentAt: -1 })
         .lean();
-    if (!r) return false;
-
     const headers: Record<string, string | undefined> = {};
     for (const [k, v] of mail.headers)
-      headers[k.toLowerCase()] = typeof v === "string" ? v : undefined;
+      headers[k.toLowerCase()] =
+        typeof v === "string" ? v : v ? String(v) : undefined;
+    // Not a campaign reply: keep it as a new inquiry (a firm asking for a
+    // price, drawings attached…) unless it is mass mail or an auto-reply.
+    if (!r) {
+      if (isBulk(headers) || isAutoReply(mail.subject || "", headers))
+        return false;
+      await this.replies.create({
+        ...lead,
+        messageId,
+        direct: true,
+        email,
+        name: from?.name || "",
+        company: "",
+        subject: (mail.subject || "").slice(0, 300),
+        snippet: replySnippet(text),
+        receivedAt: received,
+      });
+      return true;
+    }
     const subject = mail.subject || "";
     const snippet = replySnippet(text);
     let category: ReplyCategory = "";
@@ -841,6 +1001,7 @@ export class MailerFunnelService {
     else if (asksToUnsubscribe(snippet)) category = "unsubscribe";
 
     await this.replies.create({
+      ...lead,
       messageId,
       campaignId: r.campaignId,
       recipientId: r._id,
@@ -879,6 +1040,7 @@ export class MailerFunnelService {
     }
     const items = pending.map((r) => ({
       id: String(r._id),
+      ...(r.direct ? { direct: true } : {}),
       company: r.company,
       subject: r.subject,
       text: r.snippet,
@@ -893,6 +1055,8 @@ Categories:
 - "unsubscribe": asks to be removed, unsubscribed or not to be mailed again (also an empty mail whose subject is "unsubscribe")
 - "auto": automatic reply (out of office, ticket received, "we answer in turn"), or an empty reply with no message
 - "": cannot tell
+
+Items with "direct": true are not replies but new mails to our inbox. A request for a price/quote, a tender (anbudsförfrågan), drawings, a job or a question about our work → "interest"; ads, newsletters, invoices, notifications, recruiting offers → "no".
 
 Also return:
 - "competitor": the product they already use, as its usual name (e.g. "Softone", "Bygglet", "Fieldly", "Fortnox", "SmartDok"), "Eget system" if they built their own, else "".

@@ -95,6 +95,7 @@ export class MailerController {
     return this.funnel.updateReply(id, {
       category: typeof body.category === "string" ? body.category : undefined,
       note: typeof body.note === "string" ? body.note : undefined,
+      answered: typeof body.answered === "boolean" ? body.answered : undefined,
     });
   }
   @Post("funnel/replies/:id/draft") draftReply(@Param("id") id: string) {

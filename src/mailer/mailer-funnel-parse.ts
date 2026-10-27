@@ -110,3 +110,38 @@ export const htmlToText = (html: string) =>
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)));
+
+// Newsletters / mass mail: never a lead when it is not a campaign reply.
+export const isBulk = (headers: Record<string, string | undefined>) =>
+  Boolean(headers["list-unsubscribe"] || headers["list-id"]) ||
+  ["bulk", "list", "junk"].includes(
+    (headers["precedence"] || "").toLowerCase(),
+  );
+
+// Categories that still want an answer from us.
+export const NEEDS_ANSWER = new Set(["", "interest", "later", "has_system"]);
+
+type LeadMail = {
+  email: string;
+  receivedAt: Date | string | null;
+  answered?: boolean;
+  category: string;
+};
+
+// "Att svara": one row per sender — their latest mail, when it is unanswered
+// and still wants an answer. Oldest waiting first.
+export function waitingLeads<T extends LeadMail>(mails: T[]): T[] {
+  const latest = new Map<string, T>();
+  for (const m of mails) {
+    const cur = latest.get(m.email);
+    if (!cur || new Date(m.receivedAt || 0) > new Date(cur.receivedAt || 0))
+      latest.set(m.email, m);
+  }
+  return [...latest.values()]
+    .filter((m) => !m.answered && NEEDS_ANSWER.has(m.category))
+    .sort(
+      (a, b) =>
+        new Date(a.receivedAt || 0).getTime() -
+        new Date(b.receivedAt || 0).getTime(),
+    );
+}

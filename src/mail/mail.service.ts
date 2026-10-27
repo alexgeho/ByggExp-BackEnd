@@ -79,7 +79,11 @@ export class MailService {
     html: string;
     text: string;
     replyTo?: string;
-    attachments?: { filename: string; content: Buffer | string; contentType?: string }[];
+    attachments?: {
+      filename: string;
+      content: Buffer | string;
+      contentType?: string;
+    }[];
   }): Promise<void> {
     if (!this.transporter) {
       throw new Error("SMTP is not configured");
@@ -91,7 +95,9 @@ export class MailService {
       html: params.html,
       text: params.text,
       ...(params.replyTo ? { replyTo: params.replyTo } : {}),
-      ...(params.attachments?.length ? { attachments: params.attachments } : {}),
+      ...(params.attachments?.length
+        ? { attachments: params.attachments }
+        : {}),
     });
   }
 
@@ -265,7 +271,7 @@ export class MailService {
     });
   }
 
-  private getDemoRequestRecipients(): string[] {
+  getDemoRequestRecipients(): string[] {
     return (
       this.configService.get<string>("DEMO_REQUEST_RECIPIENTS") ||
       this.configService.get<string>("DEMO_REQUEST_RECIPIENT") ||

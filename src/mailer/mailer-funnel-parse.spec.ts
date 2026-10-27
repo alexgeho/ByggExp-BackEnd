@@ -77,3 +77,58 @@ describe("reply text", () => {
     ).toBe("Vi kör Softone Mvh");
   });
 });
+
+describe("leads waiting for an answer", () => {
+  const { isBulk, waitingLeads } = jest.requireActual("./mailer-funnel-parse");
+
+  it("treats newsletters as bulk", () => {
+    expect(isBulk({ "list-unsubscribe": "<mailto:x>" })).toBe(true);
+    expect(isBulk({ precedence: "bulk" })).toBe(true);
+    expect(isBulk({})).toBe(false);
+  });
+
+  it("keeps one row per sender: the latest, if unanswered and relevant", () => {
+    const rows = waitingLeads([
+      {
+        email: "a@x.se",
+        receivedAt: "2026-10-20",
+        answered: true,
+        category: "interest",
+      },
+      {
+        email: "a@x.se",
+        receivedAt: "2026-10-22",
+        answered: false,
+        category: "interest",
+      },
+      {
+        email: "b@y.se",
+        receivedAt: "2026-10-21",
+        answered: false,
+        category: "",
+      },
+      {
+        email: "c@z.se",
+        receivedAt: "2026-10-19",
+        answered: false,
+        category: "no",
+      },
+      {
+        email: "d@w.se",
+        receivedAt: "2026-10-18",
+        answered: false,
+        category: "interest",
+      },
+      {
+        email: "d@w.se",
+        receivedAt: "2026-10-23",
+        answered: true,
+        category: "interest",
+      },
+    ]);
+    expect(rows.map((r: { email: string }) => r.email)).toEqual([
+      "b@y.se",
+      "a@x.se",
+    ]);
+  });
+});

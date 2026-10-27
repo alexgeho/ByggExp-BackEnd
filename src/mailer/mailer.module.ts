@@ -1,5 +1,6 @@
 import { DemoLead, DemoLeadSchema } from "../mail/schemas/demo-lead.schema";
 import { Module } from "@nestjs/common";
+import { MailModule } from "../mail/mail.module";
 import { MongooseModule } from "@nestjs/mongoose";
 import {
   Newsletter,
@@ -50,6 +51,7 @@ import {
       { name: User.name, schema: UserSchema },
       { name: DemoLead.name, schema: DemoLeadSchema },
     ]),
+    MailModule,
   ],
   controllers: [MailerController, MailerPublicController],
   providers: [
