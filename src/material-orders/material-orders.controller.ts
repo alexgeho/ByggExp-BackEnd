@@ -18,6 +18,7 @@ import { MaterialOrdersService } from "./material-orders.service";
 import {
   CreateMaterialOrderDto,
   UpdateMaterialOrderDto,
+  SetSupplierDiscountsDto,
   UpsertMaterialSupplierDto,
 } from "./dto/material-order.dto";
 
@@ -62,6 +63,17 @@ export class MaterialOrdersController {
     @Body() dto: UpsertMaterialSupplierDto,
   ) {
     return this.service.upsertSupplier(supplier, dto, req.user);
+  }
+
+  // Rabattbrev: replace the discounts and reprice the supplier's articles.
+  @Put("suppliers/:supplier/discounts")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  setDiscounts(
+    @Request() req,
+    @Param("supplier") supplier: string,
+    @Body() dto: SetSupplierDiscountsDto,
+  ) {
+    return this.service.setDiscounts(supplier, dto, req.user);
   }
 
   @Delete("suppliers/:supplier")

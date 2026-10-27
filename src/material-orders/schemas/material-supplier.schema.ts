@@ -27,6 +27,13 @@ export class MaterialSupplier {
   // orders are kept. PUT (or a price-list import) brings it back.
   @Prop({ default: false })
   hidden: boolean;
+
+  // Rabattbrev: rabattgrupp → rabatt %, and when it was uploaded.
+  @Prop({ type: Object, default: {} })
+  discounts: Record<string, number>;
+
+  @Prop({ type: Date, default: null })
+  discountsUpdatedAt?: Date | null;
 }
 
 export const MaterialSupplierSchema =

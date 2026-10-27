@@ -315,6 +315,32 @@ describe("Tenant isolation (e2e)", () => {
         .expect(400);
     });
 
+    it("rabattbrev stays per company", async () => {
+      await request(http)
+        .put(`/material-orders/suppliers/${SUP}/discounts`)
+        .set("Authorization", `Bearer ${tokenA}`)
+        .send({
+          rows: [
+            { group: "A1", percent: 35 },
+            { group: "B2", percent: 20 },
+          ],
+        })
+        .expect(200);
+      await request(http)
+        .put(`/material-orders/suppliers/${SUP}/discounts`)
+        .set("Authorization", `Bearer ${tokenB}`)
+        .send({ rows: [{ group: "A1", percent: 90 }] })
+        .expect(200);
+      const list = await request(http)
+        .get("/material-orders/suppliers")
+        .set("Authorization", `Bearer ${tokenA}`)
+        .expect(200);
+      const mine = list.body.find(
+        (s: { supplier: string }) => s.supplier === SUP,
+      );
+      expect(mine.discountCount).toBe(2);
+    });
+
     it("A adds it again with PUT", async () => {
       await request(http)
         .put(`/material-orders/suppliers/${SUP}`)

@@ -29,6 +29,10 @@ export class ImportArticleRowDto {
 
   @IsNumber()
   purchasePrice: number;
+
+  @IsOptional()
+  @IsString()
+  discountGroup?: string;
 }
 
 // One chunk of a grossist price list. The client sends big files in chunks.

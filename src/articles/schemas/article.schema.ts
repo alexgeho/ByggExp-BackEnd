@@ -65,6 +65,11 @@ export class Article {
   // price list; empty for articles made by hand.
   @Prop({ default: "" })
   supplier: string;
+
+  // Rabattgrupp from the grossist's price list; the company's rabattbrev
+  // gives a discount per group (see price-list-merge.ts).
+  @Prop({ default: "" })
+  discountGroup: string;
 }
 
 export const ArticleSchema = SchemaFactory.createForClass(Article);

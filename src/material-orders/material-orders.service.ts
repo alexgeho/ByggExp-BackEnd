@@ -26,8 +26,10 @@ import {
   CreateMaterialOrderDto,
   MaterialOrderRowDto,
   UpdateMaterialOrderDto,
+  SetSupplierDiscountsDto,
   UpsertMaterialSupplierDto,
 } from "./dto/material-order.dto";
+import { repriceForDiscounts } from "../articles/price-list-merge";
 import { ORDER_SENDER } from "./senders/order-sender";
 import type { OrderSender } from "./senders/order-sender";
 import {
@@ -535,6 +537,10 @@ export class MaterialOrdersService {
         orderEmail: admin ? s?.orderEmail || "" : undefined,
         customerNumber: admin ? s?.customerNumber || "" : undefined,
         priceLists: admin ? s?.priceLists || {} : undefined,
+        discountsUpdatedAt: admin ? s?.discountsUpdatedAt || null : undefined,
+        discountCount: admin
+          ? Object.keys(s?.discounts || {}).length
+          : undefined,
         canOrder: !!s?.orderEmail,
       };
     });
@@ -577,5 +583,42 @@ export class MaterialOrdersService {
       )
       .exec();
     return { hidden: true };
+  }
+
+  async setDiscounts(
+    supplier: string,
+    dto: SetSupplierDiscountsDto,
+    user: AuthUser,
+  ) {
+    const companyId = this.companyOf(user);
+    const name = (supplier || "").trim();
+    if (!name) throw new BadRequestException("Supplier is required");
+    const discounts: Record<string, number> = {};
+    for (const r of dto.rows) {
+      const group = r.group.trim();
+      if (group) discounts[group] = Math.round(Number(r.percent) * 100) / 100;
+    }
+    await this.suppliers
+      .updateOne(
+        { companyId, supplier: name },
+        {
+          $set: { discounts, discountsUpdatedAt: new Date(), hidden: false },
+          $setOnInsert: { companyId, supplier: name },
+        },
+        { upsert: true },
+      )
+      .exec();
+    const articles = await this.articles
+      .find({ companyId, supplier: name })
+      .select(
+        "listPurchasePrice netPurchasePrice discountGroup purchasePriceExclMoms priceExclMoms",
+      )
+      .lean()
+      .exec();
+    const ops = repriceForDiscounts(articles, discounts);
+    for (let i = 0; i < ops.length; i += 2000) {
+      await this.articles.bulkWrite(ops.slice(i, i + 2000), { ordered: false });
+    }
+    return { groups: Object.keys(discounts).length, repriced: ops.length };
   }
 }

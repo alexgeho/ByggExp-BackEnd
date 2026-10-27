@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   ValidateIf,
@@ -106,4 +107,24 @@ export class UpsertMaterialSupplierDto {
   @IsString()
   @MaxLength(64)
   customerNumber?: string;
+}
+
+export class DiscountRowDto {
+  @IsString()
+  @MaxLength(64)
+  group: string;
+
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  percent: number;
+}
+
+// Rabattbrev: replaces the company's discounts at this grossist.
+export class SetSupplierDiscountsDto {
+  @IsArray()
+  @ArrayMaxSize(5000)
+  @ValidateNested({ each: true })
+  @Type(() => DiscountRowDto)
+  rows: DiscountRowDto[];
 }

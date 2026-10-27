@@ -1,5 +1,7 @@
 import {
   buildPriceListOps,
+  discountedListPrice,
+  repriceForDiscounts,
   type PriceListFileType,
   type PriceListRow,
   type StoredPrices,
@@ -131,5 +133,83 @@ describe("price list merge", () => {
       netPurchasePrice: 60,
       purchasePriceExclMoms: 60,
     });
+  });
+});
+
+describe("rabattbrev", () => {
+  it("takes the group's discount off the list price", () => {
+    expect(discountedListPrice(200, "A1", { A1: 35 })).toBe(130);
+    expect(discountedListPrice(200, "B2", { A1: 35 })).toBe(200);
+    expect(discountedListPrice(200, "", { A1: 35 })).toBe(200);
+  });
+
+  it("main import applies the discount and stores the group", () => {
+    const [op] = buildPriceListOps(
+      [
+        {
+          articleNumber: "1",
+          name: "Rör",
+          purchasePrice: 100,
+          discountGroup: "A1",
+        },
+      ],
+      { ...ctx, markupPercent: 10, discounts: { A1: 40 } },
+    );
+    expect(op.updateOne.update.$set).toMatchObject({
+      listPurchasePrice: 100,
+      purchasePriceExclMoms: 60,
+      priceExclMoms: 66,
+      discountGroup: "A1",
+    });
+  });
+
+  it("a net price ignores the discount", () => {
+    const existing = new Map<string, StoredPrices>([
+      ["1", { listPurchasePrice: 100, discountGroup: "A1" }],
+    ]);
+    const [op] = buildPriceListOps(
+      [{ articleNumber: "1", purchasePrice: 50 }],
+      { ...ctx, fileType: "net", discounts: { A1: 40 } },
+      existing,
+    );
+    expect(op.updateOne.update.$set.purchasePriceExclMoms).toBe(50);
+  });
+
+  it("reprices list-priced articles and keeps their markup", () => {
+    const ops = repriceForDiscounts(
+      [
+        {
+          _id: "a",
+          listPurchasePrice: 100,
+          discountGroup: "A1",
+          purchasePriceExclMoms: 100,
+          priceExclMoms: 125,
+        },
+        {
+          _id: "b",
+          listPurchasePrice: 100,
+          netPurchasePrice: 70,
+          discountGroup: "A1",
+          purchasePriceExclMoms: 70,
+          priceExclMoms: 80,
+        },
+        {
+          _id: "c",
+          listPurchasePrice: 100,
+          discountGroup: "Z",
+          purchasePriceExclMoms: 100,
+          priceExclMoms: 100,
+        },
+      ],
+      { A1: 20 },
+    );
+    expect(ops).toEqual([
+      {
+        updateOne: {
+          filter: { _id: "a" },
+          update: { $set: { purchasePriceExclMoms: 80, priceExclMoms: 100 } },
+        },
+      },
+    ]);
   });
 });

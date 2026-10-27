@@ -68,7 +68,7 @@ export class ArticlesService {
         supplier,
         articleNumber: { $in: numbers },
       })
-      .select("articleNumber listPurchasePrice netPurchasePrice")
+      .select("articleNumber listPurchasePrice netPurchasePrice discountGroup")
       .lean()
       .exec();
     const existing = new Map(
@@ -77,9 +77,15 @@ export class ArticlesService {
         {
           listPurchasePrice: a.listPurchasePrice,
           netPurchasePrice: a.netPurchasePrice,
+          discountGroup: a.discountGroup,
         },
       ]),
     );
+    const settings = await this.supplierModel
+      .findOne({ companyId: String(user.companyId), supplier })
+      .select("discounts")
+      .lean()
+      .exec();
     const ops = buildPriceListOps(
       dto.rows,
       {
@@ -88,6 +94,7 @@ export class ArticlesService {
         supplier,
         markupPercent: dto.markupPercent,
         fileType,
+        discounts: settings?.discounts || {},
       },
       existing,
     );
