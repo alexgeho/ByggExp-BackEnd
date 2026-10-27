@@ -22,6 +22,11 @@ export class MaterialSupplier {
   // When each price file was last imported (main / net / copper).
   @Prop({ type: Object, default: {} })
   priceLists: { main?: Date; net?: Date; copper?: Date };
+
+  // Removed by the admin: gone from pickers and new orders; articles and old
+  // orders are kept. PUT (or a price-list import) brings it back.
+  @Prop({ default: false })
+  hidden: boolean;
 }
 
 export const MaterialSupplierSchema =

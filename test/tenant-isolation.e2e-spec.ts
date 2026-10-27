@@ -270,6 +270,61 @@ describe("Tenant isolation (e2e)", () => {
         .expect(200));
   });
 
+  describe("Material suppliers: remove is per company", () => {
+    const SUP = `Grossist-${uniq}`;
+    const names = async (token: string) =>
+      (
+        await request(http)
+          .get("/material-orders/suppliers")
+          .set("Authorization", `Bearer ${token}`)
+          .expect(200)
+      ).body.map((s: { supplier: string }) => s.supplier);
+
+    it("A adds a supplier; B does not see it", async () => {
+      await request(http)
+        .put(`/material-orders/suppliers/${SUP}`)
+        .set("Authorization", `Bearer ${tokenA}`)
+        .send({ orderEmail: "order@e2e.local", customerNumber: "123" })
+        .expect(200);
+      expect(await names(tokenA)).toContain(SUP);
+      expect(await names(tokenB)).not.toContain(SUP);
+    });
+
+    it("B removing the same name leaves A's supplier alone", async () => {
+      await request(http)
+        .delete(`/material-orders/suppliers/${SUP}`)
+        .set("Authorization", `Bearer ${tokenB}`)
+        .expect(200);
+      expect(await names(tokenA)).toContain(SUP);
+    });
+
+    it("A removes it: gone from the list, new orders -> 400", async () => {
+      await request(http)
+        .delete(`/material-orders/suppliers/${SUP}`)
+        .set("Authorization", `Bearer ${tokenA}`)
+        .expect(200);
+      expect(await names(tokenA)).not.toContain(SUP);
+      await request(http)
+        .post("/material-orders")
+        .set("Authorization", `Bearer ${tokenA}`)
+        .send({
+          projectId: projectIdA,
+          supplier: SUP,
+          rows: [{ name: "Skruv", quantity: 1 }],
+        })
+        .expect(400);
+    });
+
+    it("A adds it again with PUT", async () => {
+      await request(http)
+        .put(`/material-orders/suppliers/${SUP}`)
+        .set("Authorization", `Bearer ${tokenA}`)
+        .send({})
+        .expect(200);
+      expect(await names(tokenA)).toContain(SUP);
+    });
+  });
+
   describe("Privilege-escalation is blocked", () => {
     it("public /auth/register cannot self-assign superadmin", async () => {
       const res = await request(http)

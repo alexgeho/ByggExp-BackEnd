@@ -221,6 +221,21 @@ export class MaterialOrdersService {
     });
   }
 
+  private async hiddenSuppliers(companyId: string): Promise<string[]> {
+    return this.suppliers
+      .distinct("supplier", { companyId, hidden: true })
+      .exec() as Promise<string[]>;
+  }
+
+  private async assertSupplierActive(companyId: string, supplier: string) {
+    const hidden = await this.suppliers
+      .exists({ companyId, supplier: (supplier || "").trim(), hidden: true })
+      .exec();
+    if (hidden) {
+      throw new BadRequestException(`${supplier} has been removed`);
+    }
+  }
+
   private parseDate(v?: string): Date | null {
     if (!v) return null;
     const d = new Date(v);
@@ -342,6 +357,7 @@ export class MaterialOrdersService {
   async create(dto: CreateMaterialOrderDto, user: AuthUser) {
     const companyId = this.companyOf(user);
     const project = await this.loadProject(dto.projectId, user);
+    await this.assertSupplierActive(companyId, dto.supplier);
     const rows = await this.resolveRows(dto.rows || [], companyId);
     const last = await this.orders
       .findOne({ companyId })
@@ -368,7 +384,10 @@ export class MaterialOrdersService {
   async update(id: string, dto: UpdateMaterialOrderDto, user: AuthUser) {
     const { order } = await this.loadOrder(id, user);
     this.assertCanEdit(order, user);
-    if (dto.supplier !== undefined) order.supplier = dto.supplier.trim();
+    if (dto.supplier !== undefined && dto.supplier.trim() !== order.supplier) {
+      await this.assertSupplierActive(String(order.companyId), dto.supplier);
+      order.supplier = dto.supplier.trim();
+    }
     if (dto.rows !== undefined) {
       order.rows = await this.resolveRows(dto.rows, String(order.companyId));
     }
@@ -466,7 +485,13 @@ export class MaterialOrdersService {
       companyId,
       active: { $ne: false },
     };
-    if (supplier) filter.supplier = supplier;
+    const hidden = await this.hiddenSuppliers(companyId);
+    if (supplier) {
+      if (hidden.includes(supplier)) return [];
+      filter.supplier = supplier;
+    } else if (hidden.length) {
+      filter.supplier = { $nin: hidden };
+    }
     const term = (q || "").trim();
     if (term) {
       const rx = new RegExp(escapeRegex(term), "i");
@@ -499,7 +524,9 @@ export class MaterialOrdersService {
         ...settings.map((s) => s.supplier),
         ...(fromArticles as string[]).filter(Boolean),
       ]),
-    ].sort((a, b) => a.localeCompare(b, "sv"));
+    ]
+      .filter((name) => !bySupplier.get(name)?.hidden)
+      .sort((a, b) => a.localeCompare(b, "sv"));
     const admin = user.role !== UserRole.Worker;
     return names.map((supplier) => {
       const s = bySupplier.get(supplier);
@@ -521,7 +548,7 @@ export class MaterialOrdersService {
     const companyId = this.companyOf(user);
     const name = (supplier || "").trim();
     if (!name) throw new BadRequestException("Supplier is required");
-    const set: Record<string, string> = {};
+    const set: Record<string, string | boolean> = { hidden: false };
     if (dto.orderEmail !== undefined) set.orderEmail = dto.orderEmail.trim();
     if (dto.customerNumber !== undefined) {
       set.customerNumber = dto.customerNumber.trim();
@@ -534,5 +561,21 @@ export class MaterialOrdersService {
       )
       .lean()
       .exec();
+  }
+
+  // Soft remove: articles and old orders stay, the supplier just disappears
+  // from pickers and can't take new orders.
+  async hideSupplier(supplier: string, user: AuthUser) {
+    const companyId = this.companyOf(user);
+    const name = (supplier || "").trim();
+    if (!name) throw new BadRequestException("Supplier is required");
+    await this.suppliers
+      .updateOne(
+        { companyId, supplier: name },
+        { $set: { hidden: true }, $setOnInsert: { companyId, supplier: name } },
+        { upsert: true },
+      )
+      .exec();
+    return { hidden: true };
   }
 }

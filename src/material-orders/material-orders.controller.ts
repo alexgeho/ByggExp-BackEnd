@@ -64,6 +64,12 @@ export class MaterialOrdersController {
     return this.service.upsertSupplier(supplier, dto, req.user);
   }
 
+  @Delete("suppliers/:supplier")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  hideSupplier(@Request() req, @Param("supplier") supplier: string) {
+    return this.service.hideSupplier(supplier, req.user);
+  }
+
   // "Beställt material" for the project economy: { total, count, invoicedCount }.
   @Get("project/:projectId/summary")
   @Roles(...SENDERS)

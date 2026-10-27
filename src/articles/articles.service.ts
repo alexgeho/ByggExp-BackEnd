@@ -95,7 +95,7 @@ export class ArticlesService {
       .updateOne(
         { companyId: String(user.companyId), supplier },
         {
-          $set: { [`priceLists.${fileType}`]: new Date() },
+          $set: { [`priceLists.${fileType}`]: new Date(), hidden: false },
           $setOnInsert: { companyId: String(user.companyId), supplier },
         },
         { upsert: true },
