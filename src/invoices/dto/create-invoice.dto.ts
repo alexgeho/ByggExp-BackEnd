@@ -83,6 +83,12 @@ export class InvoiceCompanyFooterDto {
 }
 
 export class CreateInvoiceDto {
+  // Purchase invoices billed on to the customer with this invoice.
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  supplierInvoiceIds?: string[];
+
   @IsOptional()
   @IsString()
   companyId?: string;
@@ -165,7 +171,7 @@ export class CreateInvoiceDto {
   rotEnabled?: boolean;
 
   @IsOptional()
-  @IsIn(['rot', 'rut', 'green15', 'green50'])
+  @IsIn(["rot", "rut", "green15", "green50"])
   deductionType?: string;
 
   @IsOptional()

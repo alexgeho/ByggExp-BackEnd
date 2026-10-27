@@ -67,6 +67,14 @@ export class FortnoxController {
     return this.fortnox.pushInvoice(id, req.user);
   }
 
+  // Paid supplier invoices → project costs. Also runs nightly.
+  @Post("supplier-invoices/sync")
+  @UseGuards(PermissionsGuard)
+  @Permissions(PERMISSIONS.FINANCE_MANAGE)
+  syncSupplierInvoices(@Request() req) {
+    return this.fortnox.syncSupplierInvoices(req.user);
+  }
+
   @Post("payroll")
   @UseGuards(RolesGuard)
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)

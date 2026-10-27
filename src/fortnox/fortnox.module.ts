@@ -9,6 +9,11 @@ import {
   PayrollExport,
   PayrollExportSchema,
 } from "../payroll/schemas/payroll-export.schema";
+import {
+  SupplierInvoice,
+  SupplierInvoiceSchema,
+} from "../supplier-invoices/schemas/supplier-invoice.schema";
+import { Project, ProjectSchema } from "../projects/schemas/project.schema";
 import { FortnoxController } from "./fortnox.controller";
 import { FortnoxService } from "./fortnox.service";
 import {
@@ -26,6 +31,8 @@ import {
       { name: Client.name, schema: ClientSchema },
       { name: Company.name, schema: CompanySchema },
       { name: PayrollExport.name, schema: PayrollExportSchema },
+      { name: SupplierInvoice.name, schema: SupplierInvoiceSchema },
+      { name: Project.name, schema: ProjectSchema },
     ]),
   ],
   controllers: [FortnoxController],

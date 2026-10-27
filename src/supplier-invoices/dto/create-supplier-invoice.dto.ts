@@ -1,4 +1,11 @@
-import { IsArray, IsIn, IsNumber, IsOptional, IsString } from "class-validator";
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from "class-validator";
 import { SupplierInvoiceStatus } from "../schemas/supplier-invoice.schema";
 
 export class CreateSupplierInvoiceDto {
@@ -95,4 +102,9 @@ export class CreateSupplierInvoiceDto {
   @IsOptional()
   @IsIn(Object.values(SupplierInvoiceStatus))
   status?: SupplierInvoiceStatus;
+
+  // true = put on a customer invoice, false = undo.
+  @IsOptional()
+  @IsBoolean()
+  rebilled?: boolean;
 }

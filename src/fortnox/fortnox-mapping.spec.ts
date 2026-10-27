@@ -6,6 +6,8 @@ import {
   splitPostalCode,
   taxReductionType,
   toFortnoxOrgNumber,
+  mapSupplierInvoice,
+  matchProject,
 } from "./fortnox-mapping";
 import {
   signState,
@@ -415,5 +417,51 @@ describe("fortnox-crypto", () => {
     const [body, sig] = s.split(".");
     expect(verifyState(`${body}x.${sig}`)).toBeNull();
     expect(verifyState(s, Date.now() + 60 * 60_000)).toBeNull();
+  });
+});
+
+describe("supplier invoices from Fortnox", () => {
+  const projects = [
+    { id: "p1", littera: "P-100", name: "Villa Ek" },
+    { id: "p2", littera: "", name: "Badrum Ås" },
+  ];
+
+  it("maps a paid supplier invoice and finds the project by littera", () => {
+    const doc = mapSupplierInvoice(
+      {
+        GivenNumber: 17,
+        SupplierName: "Ahlsell",
+        InvoiceNumber: "A-9",
+        InvoiceDate: "2026-10-01",
+        DueDate: "2026-10-31",
+        FinalPayDate: "2026-10-20",
+        Total: "1250",
+        VAT: "250",
+        Project: "p-100",
+      },
+      projects,
+    );
+    expect(doc).toMatchObject({
+      fortnoxGivenNumber: "17",
+      projectId: "p1",
+      supplierName: "Ahlsell",
+      total: 1250,
+      vat: 250,
+      amountExclVat: 1000,
+      source: "fortnox",
+      status: "paid",
+    });
+    expect(doc.paidAt.toISOString().slice(0, 10)).toBe("2026-10-20");
+  });
+
+  it("falls back to a row's project, then to the project name", () => {
+    expect(
+      matchProject(
+        { SupplierInvoiceRows: [{}, { Project: "Badrum Ås" }] },
+        projects,
+      ),
+    ).toBe("p2");
+    expect(matchProject({ Project: "okänd" }, projects)).toBeNull();
+    expect(matchProject({}, projects)).toBeNull();
   });
 });

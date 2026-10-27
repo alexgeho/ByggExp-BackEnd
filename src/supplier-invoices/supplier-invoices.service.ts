@@ -350,22 +350,40 @@ export class SupplierInvoicesService {
 
   async update(id: string, dto: CreateSupplierInvoiceDto, user: AuthUser) {
     const doc = await this.findOne(id, user);
+    const { rebilled, ...rest } = dto;
+    if (rebilled !== undefined) {
+      doc.rebilledAt = rebilled ? new Date() : null;
+      if (!rebilled) {
+        doc.rebilledInvoiceId = null;
+        doc.rebilledInvoiceNumber = null;
+      }
+    }
+    // Imported from Fortnox: Fortnox is the source of truth for the amounts;
+    // here only the project, category and notes can change.
+    const fields: CreateSupplierInvoiceDto =
+      doc.source === "fortnox"
+        ? Object.fromEntries(
+            (["projectId", "category", "notes"] as const)
+              .filter((k) => rest[k] !== undefined)
+              .map((k) => [k, rest[k]]),
+          )
+        : rest;
     Object.assign(doc, {
-      ...dto,
+      ...fields,
       companyId: doc.companyId,
-      projectId: dto.projectId ?? doc.projectId ?? null,
-      amountExclVat: round2(dto.amountExclVat ?? doc.amountExclVat),
-      vat: round2(dto.vat ?? doc.vat),
+      projectId: fields.projectId ?? doc.projectId ?? null,
+      amountExclVat: round2(fields.amountExclVat ?? doc.amountExclVat),
+      vat: round2(fields.vat ?? doc.vat),
       total: this.computeTotal({
-        total: dto.total,
-        amountExclVat: dto.amountExclVat ?? doc.amountExclVat,
-        vat: dto.vat ?? doc.vat,
+        total: fields.total,
+        amountExclVat: fields.amountExclVat ?? doc.amountExclVat,
+        vat: fields.vat ?? doc.vat,
       }),
       // Re-checked on every save so a project change drops foreign orders.
       materialOrderIds: await this.cleanOrderIds(
-        dto.materialOrderIds ?? doc.materialOrderIds,
+        fields.materialOrderIds ?? doc.materialOrderIds,
         String(doc.companyId),
-        dto.projectId ?? doc.projectId,
+        fields.projectId ?? doc.projectId,
       ),
     });
     await doc.save();
@@ -458,6 +476,9 @@ export class SupplierInvoicesService {
 
   async remove(id: string, user: AuthUser) {
     const doc = await this.findOne(id, user);
+    if (doc.source === "fortnox") {
+      throw new BadRequestException("Imported from Fortnox — remove it there");
+    }
     await this.model.findByIdAndDelete(id).exec();
     return doc;
   }

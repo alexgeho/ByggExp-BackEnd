@@ -351,6 +351,46 @@ describe("Tenant isolation (e2e)", () => {
     });
   });
 
+  describe("Purchase invoice billed on to the customer", () => {
+    let supId = "";
+
+    it("B cannot stamp A's purchase invoice; A's invoice does", async () => {
+      const sup = await request(http)
+        .post("/supplier-invoices")
+        .set("Authorization", `Bearer ${tokenA}`)
+        .send({
+          supplierName: "Ahlsell",
+          amountExclVat: 100,
+          vat: 25,
+          projectId: projectIdA,
+        })
+        .expect(201);
+      supId = sup.body._id;
+
+      await request(http)
+        .post("/invoices")
+        .set("Authorization", `Bearer ${tokenB}`)
+        .send({ items: [], supplierInvoiceIds: [supId] })
+        .expect(201);
+      let got = await request(http)
+        .get(`/supplier-invoices/${supId}`)
+        .set("Authorization", `Bearer ${tokenA}`)
+        .expect(200);
+      expect(got.body.rebilledInvoiceId).toBeFalsy();
+
+      const inv = await request(http)
+        .post("/invoices")
+        .set("Authorization", `Bearer ${tokenA}`)
+        .send({ items: [], projectId: projectIdA, supplierInvoiceIds: [supId] })
+        .expect(201);
+      got = await request(http)
+        .get(`/supplier-invoices/${supId}`)
+        .set("Authorization", `Bearer ${tokenA}`)
+        .expect(200);
+      expect(got.body.rebilledInvoiceNumber).toBe(inv.body.invoiceNumber);
+    });
+  });
+
   describe("Privilege-escalation is blocked", () => {
     it("public /auth/register cannot self-assign superadmin", async () => {
       const res = await request(http)

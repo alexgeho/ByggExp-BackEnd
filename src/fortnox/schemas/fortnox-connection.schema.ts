@@ -38,6 +38,10 @@ export class FortnoxConnection {
   // days unused): the company has to connect again.
   @Prop({ type: Boolean, default: false })
   needsReconnect: boolean;
+
+  // Last supplier-invoice import (Fortnox lastmodified filter).
+  @Prop({ type: Date, default: null })
+  supplierSyncAt?: Date | null;
 }
 
 export const FortnoxConnectionSchema =

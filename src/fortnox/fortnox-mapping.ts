@@ -364,3 +364,73 @@ export function buildFortnoxWageTransactions(
   }
   return out;
 }
+
+// ---- Supplier invoices (Fortnox → ByggExp) ---------------------------------
+
+export type FortnoxSupplierInvoice = {
+  GivenNumber?: string | number;
+  SupplierName?: string;
+  InvoiceNumber?: string;
+  InvoiceDate?: string;
+  DueDate?: string;
+  FinalPayDate?: string;
+  Total?: string | number;
+  VAT?: string | number;
+  Currency?: string;
+  OCR?: string;
+  Project?: string;
+  Comments?: string;
+  Cancelled?: boolean;
+  SupplierInvoiceRows?: Array<{ Project?: string }>;
+};
+
+export type ProjectRef = { id: string; littera?: string; name?: string };
+
+const norm = (v: unknown) => str(v).trim().toLowerCase();
+const num = (v: unknown) => {
+  const n = Number(String(v ?? "").replace(",", "."));
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+};
+
+// Fortnox project code (invoice head, else the first row that has one) →
+// our project by littera, then by name. Null when nothing matches.
+export function matchProject(
+  fx: FortnoxSupplierInvoice,
+  projects: ProjectRef[],
+): string | null {
+  const code = norm(
+    fx.Project || fx.SupplierInvoiceRows?.find((r) => str(r.Project))?.Project,
+  );
+  if (!code) return null;
+  const hit =
+    projects.find((p) => norm(p.littera) === code) ||
+    projects.find((p) => norm(p.name) === code);
+  return hit ? hit.id : null;
+}
+
+// A paid Fortnox supplier invoice → our SupplierInvoice fields.
+export function mapSupplierInvoice(
+  fx: FortnoxSupplierInvoice,
+  projects: ProjectRef[],
+) {
+  const total = num(fx.Total);
+  const vat = num(fx.VAT);
+  const paid = str(fx.FinalPayDate);
+  return {
+    fortnoxGivenNumber: str(fx.GivenNumber),
+    projectId: matchProject(fx, projects),
+    supplierName: str(fx.SupplierName),
+    invoiceNumber: str(fx.InvoiceNumber),
+    invoiceDate: str(fx.InvoiceDate),
+    dueDate: str(fx.DueDate),
+    currency: str(fx.Currency) || "SEK",
+    ocr: str(fx.OCR),
+    notes: str(fx.Comments),
+    total,
+    vat,
+    amountExclVat: Math.round((total - vat) * 100) / 100,
+    source: "fortnox",
+    status: "paid",
+    paidAt: paid ? new Date(paid) : new Date(),
+  };
+}

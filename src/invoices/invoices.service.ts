@@ -4,20 +4,23 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { existsSync } from 'fs';
-import { readFile } from 'fs/promises';
-import { Model } from 'mongoose';
-import path from 'path';
-import { Company, CompanyDocument } from '../company/schemas/company.schema';
-import { MailService } from '../mail/mail.service';
-import { UserRole } from '../users/schemas/user.schema';
-import { CreateInvoiceDto, InvoiceItemDto } from './dto/create-invoice.dto';
-import { UpdateInvoiceDto } from './dto/update-invoice.dto';
-import { generateOCR } from './generate-ocr';
-import { calculateInvoiceTotals, deriveInvoiceSettlement } from './invoice-math';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { existsSync } from "fs";
+import { readFile } from "fs/promises";
+import { Model } from "mongoose";
+import path from "path";
+import { Company, CompanyDocument } from "../company/schemas/company.schema";
+import { MailService } from "../mail/mail.service";
+import { UserRole } from "../users/schemas/user.schema";
+import { CreateInvoiceDto, InvoiceItemDto } from "./dto/create-invoice.dto";
+import { UpdateInvoiceDto } from "./dto/update-invoice.dto";
+import { generateOCR } from "./generate-ocr";
+import {
+  calculateInvoiceTotals,
+  deriveInvoiceSettlement,
+} from "./invoice-math";
 
 const round2 = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
 import {
@@ -25,15 +28,19 @@ import {
   DEFAULT_REFERENCE_RATE_PERCENT,
   DEFAULT_REMINDER_FEE_SEK,
   ReminderResult,
-} from './reminder-math';
-import { Invoice, InvoiceDocument, InvoiceStatus } from './schemas/invoice.schema';
-import { launchForInvoicePdf } from './puppeteer-launch';
-import { buildInvoiceQrDataUrl } from './invoice-qr';
+} from "./reminder-math";
+import {
+  Invoice,
+  InvoiceDocument,
+  InvoiceStatus,
+} from "./schemas/invoice.schema";
+import { launchForInvoicePdf } from "./puppeteer-launch";
+import { buildInvoiceQrDataUrl } from "./invoice-qr";
 import {
   buildInvoicePdfHtmlPuppeteer,
   InvoicePdfData,
-} from './templates/invoice-pdf.template';
-import { reserveOutgoingEmail } from '../mail/outgoing-mail-quota';
+} from "./templates/invoice-pdf.template";
+import { reserveOutgoingEmail } from "../mail/outgoing-mail-quota";
 
 type AuthUser = {
   role: UserRole;
@@ -64,7 +71,7 @@ export class InvoicesService {
   async markOverdueInvoices(): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
     const result = await this.invoiceModel.updateMany(
-      { status: InvoiceStatus.Sent, dueDate: { $gt: '', $lt: today } },
+      { status: InvoiceStatus.Sent, dueDate: { $gt: "", $lt: today } },
       { $set: { status: InvoiceStatus.Overdue } },
     );
     if (result.modifiedCount) {
@@ -79,10 +86,10 @@ export class InvoicesService {
     message?: string,
   ): Promise<{ sent: boolean; to: string }> {
     const invoice = await this.findOne(id, user);
-    const to = (email || invoice.email || '').trim();
+    const to = (email || invoice.email || "").trim();
     if (!to) {
       throw new BadRequestException(
-        'No recipient email — set the customer email or provide one',
+        "No recipient email — set the customer email or provide one",
       );
     }
     const pdf = await this.buildInvoicePdf(id, user);
@@ -113,12 +120,17 @@ export class InvoicesService {
     id: string,
     user: AuthUser,
     body: { email?: string; message?: string; fee?: number } = {},
-  ): Promise<{ sent: boolean; to: string; reminder: ReminderResult; reminderCount: number }> {
+  ): Promise<{
+    sent: boolean;
+    to: string;
+    reminder: ReminderResult;
+    reminderCount: number;
+  }> {
     const invoice = await this.findOne(id, user);
-    const to = (body.email || invoice.email || '').trim();
+    const to = (body.email || invoice.email || "").trim();
     if (!to) {
       throw new BadRequestException(
-        'No recipient email — set the customer email or provide one',
+        "No recipient email — set the customer email or provide one",
       );
     }
 
@@ -204,32 +216,66 @@ export class InvoicesService {
         companyId: source.companyId,
         creditOfId: String(source._id),
       })
-      .select('subtotal')
+      .select("subtotal")
       .lean()
       .exec();
     return round2(
-      existing.reduce((sum, note) => sum + Math.abs(Number(note.subtotal) || 0), 0),
+      existing.reduce(
+        (sum, note) => sum + Math.abs(Number(note.subtotal) || 0),
+        0,
+      ),
     );
   }
 
   private deriveSettlement(
     total: number,
-    dto: { rotEnabled?: boolean; rotLaborAmount?: number; deductionType?: string },
+    dto: {
+      rotEnabled?: boolean;
+      rotLaborAmount?: number;
+      deductionType?: string;
+    },
   ): { rotDeduction: number; rounding: number; roundedTotal: number } {
     return deriveInvoiceSettlement(total, dto);
+  }
+
+  // Purchase invoices put on this customer invoice ("Fakturera"): stamp them
+  // so they are never billed twice. SupplierInvoice is registered by its own
+  // module on the same connection.
+  private async markRebilled(
+    companyId: string,
+    ids: string[] | undefined,
+    invoice: InvoiceDocument,
+  ) {
+    if (!ids?.length) return;
+    await this.invoiceModel.db
+      .model("SupplierInvoice")
+      .updateMany(
+        { _id: { $in: ids }, companyId, rebilledInvoiceId: null },
+        {
+          $set: {
+            rebilledAt: new Date(),
+            rebilledInvoiceId: String(invoice._id),
+            rebilledInvoiceNumber: invoice.invoiceNumber,
+          },
+        },
+      )
+      .exec();
   }
 
   async create(dto: CreateInvoiceDto, user: AuthUser): Promise<Invoice> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
     const invoiceNumber = await this.getNextInvoiceNumber(companyId);
-    const totals = this.calculateTotals(dto.items || [], dto.reverseVAT === 'true');
+    const totals = this.calculateTotals(
+      dto.items || [],
+      dto.reverseVAT === "true",
+    );
     const settlement = this.deriveSettlement(totals.total, dto);
     const companyFooter = await this.resolveCompanyFooter(companyId, dto);
     // Snapshot the company logo onto the invoice so the PDF shows it (and stays
     // fixed even if the company later changes its logo).
     const company = await this.companyModel
       .findById(companyId)
-      .select('logoUrl')
+      .select("logoUrl")
       .lean()
       .exec();
     const logoUrl = dto.logoUrl ?? company?.logoUrl ?? null;
@@ -252,7 +298,9 @@ export class InvoicesService {
       logoUrl,
     });
 
-    return invoice.save();
+    const saved = await invoice.save();
+    await this.markRebilled(companyId, dto.supplierInvoiceIds, saved);
+    return saved;
   }
 
   async findAccessible(user: AuthUser): Promise<Invoice[]> {
@@ -291,11 +339,15 @@ export class InvoicesService {
     }
   }
 
-  async update(id: string, dto: UpdateInvoiceDto, user: AuthUser): Promise<InvoiceDocument> {
+  async update(
+    id: string,
+    dto: UpdateInvoiceDto,
+    user: AuthUser,
+  ): Promise<InvoiceDocument> {
     const invoice = await this.findOne(id, user);
-    this.assertDraft(invoice, 'edited');
+    this.assertDraft(invoice, "edited");
     const items = dto.items ?? invoice.items;
-    const isReverseVAT = (dto.reverseVAT ?? invoice.reverseVAT) === 'true';
+    const isReverseVAT = (dto.reverseVAT ?? invoice.reverseVAT) === "true";
     const totals = this.calculateTotals(items || [], isReverseVAT);
     const settlement = this.deriveSettlement(totals.total, {
       rotEnabled: dto.rotEnabled ?? invoice.rotEnabled,
@@ -324,7 +376,7 @@ export class InvoicesService {
 
   async remove(id: string, user: AuthUser): Promise<Invoice> {
     const invoice = await this.findOne(id, user);
-    this.assertDraft(invoice, 'deleted');
+    this.assertDraft(invoice, "deleted");
     await this.invoiceModel.findByIdAndDelete(id).exec();
     return invoice;
   }
@@ -362,11 +414,11 @@ export class InvoicesService {
     const source = await this.findOne(id, user);
     if (source.status === InvoiceStatus.Draft) {
       throw new BadRequestException(
-        'A draft invoice can be edited directly — no credit note needed',
+        "A draft invoice can be edited directly — no credit note needed",
       );
     }
     if (source.creditOfNumber) {
-      throw new BadRequestException('A credit note cannot itself be credited');
+      throw new BadRequestException("A credit note cannot itself be credited");
     }
 
     // A partial credit reverses part of the invoice: the customer keeps half
@@ -395,11 +447,14 @@ export class InvoicesService {
         ? 1
         : requested / Math.abs(sourceSubtotal);
 
-    const raw = (source as InvoiceDocument).toObject() as Record<string, unknown>;
+    const raw = (source as InvoiceDocument).toObject() as Record<
+      string,
+      unknown
+    >;
     const invoiceNumber = await this.getNextInvoiceNumber(source.companyId);
     const neg = (n: unknown) => -(Number(n) || 0);
 
-    ['_id', 'id', 'createdAt', 'updatedAt', '__v', 'sentAt', 'paidAt'].forEach(
+    ["_id", "id", "createdAt", "updatedAt", "__v", "sentAt", "paidAt"].forEach(
       (k) => delete raw[k],
     );
 
@@ -443,15 +498,18 @@ export class InvoicesService {
     const latest = await this.invoiceModel
       .findOne({ companyId })
       .sort({ invoiceNumber: -1 })
-      .select('invoiceNumber')
+      .select("invoiceNumber")
       .lean()
       .exec();
 
     const last = latest?.invoiceNumber;
-    return typeof last === 'number' && !Number.isNaN(last) ? last + 1 : 1;
+    return typeof last === "number" && !Number.isNaN(last) ? last + 1 : 1;
   }
 
-  async getNextInvoiceNumberForUser(user: AuthUser, companyId?: string): Promise<{ invoiceNumber: number; ocr: string }> {
+  async getNextInvoiceNumberForUser(
+    user: AuthUser,
+    companyId?: string,
+  ): Promise<{ invoiceNumber: number; ocr: string }> {
     const resolvedCompanyId = this.resolveCompanyId(companyId, user);
     const invoiceNumber = await this.getNextInvoiceNumber(resolvedCompanyId);
 
@@ -492,23 +550,23 @@ export class InvoicesService {
         logoUrl = company?.logoUrl ?? null;
       }
       if (company) {
-        footer.name = footer.name || company.name || '';
-        footer.address = footer.address || company.address || '';
-        footer.city = footer.city || company.city || '';
-        footer.phone = footer.phone || company.phone || '';
-        footer.email = footer.email || company.email || '';
-        footer.website = footer.website || company.website || '';
-        footer.orgNumber = footer.orgNumber || company.orgNumber || '';
-        footer.vatNumber = footer.vatNumber || company.vatNumber || '';
-        footer.bankgiro = footer.bankgiro || company.bankgiro || '';
-        footer.plusgiro = footer.plusgiro || company.plusgiro || '';
+        footer.name = footer.name || company.name || "";
+        footer.address = footer.address || company.address || "";
+        footer.city = footer.city || company.city || "";
+        footer.phone = footer.phone || company.phone || "";
+        footer.email = footer.email || company.email || "";
+        footer.website = footer.website || company.website || "";
+        footer.orgNumber = footer.orgNumber || company.orgNumber || "";
+        footer.vatNumber = footer.vatNumber || company.vatNumber || "";
+        footer.bankgiro = footer.bankgiro || company.bankgiro || "";
+        footer.plusgiro = footer.plusgiro || company.plusgiro || "";
         if (!footer.vatStatus) {
           const fskatt = company.vatStatus;
           footer.vatStatus =
-            fskatt === 'true'
-              ? 'Godkänd för F-skatt'
-              : !fskatt || fskatt === 'false'
-                ? ''
+            fskatt === "true"
+              ? "Godkänd för F-skatt"
+              : !fskatt || fskatt === "false"
+                ? ""
                 : fskatt;
         }
       }
@@ -536,11 +594,11 @@ export class InvoicesService {
 
     try {
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'load' });
+      await page.setContent(html, { waitUntil: "load" });
       const pdfBuffer = await page.pdf({
-        format: 'A4',
+        format: "A4",
         printBackground: true,
-        margin: { top: '0', bottom: '0', left: '0', right: '0' },
+        margin: { top: "0", bottom: "0", left: "0", right: "0" },
         preferCSSPageSize: true,
       });
 
@@ -550,22 +608,31 @@ export class InvoicesService {
     }
   }
 
-  private resolveCompanyId(_companyId: string | undefined, user: AuthUser): string {
+  private resolveCompanyId(
+    _companyId: string | undefined,
+    user: AuthUser,
+  ): string {
     // Every actor (superadmin included) creates only within its own company.
     if (!user.companyId) {
-      throw new ForbiddenException('Your account is not attached to a company');
+      throw new ForbiddenException("Your account is not attached to a company");
     }
 
     return user.companyId;
   }
 
   private assertCanAccess(invoice: Invoice, user: AuthUser): void {
-    if (!user.companyId || String(invoice.companyId) !== String(user.companyId)) {
-      throw new ForbiddenException('You do not have access to this invoice');
+    if (
+      !user.companyId ||
+      String(invoice.companyId) !== String(user.companyId)
+    ) {
+      throw new ForbiddenException("You do not have access to this invoice");
     }
   }
 
-  private calculateTotals(items: InvoiceItemDto[], reverseVAT: boolean): InvoiceTotals {
+  private calculateTotals(
+    items: InvoiceItemDto[],
+    reverseVAT: boolean,
+  ): InvoiceTotals {
     return calculateInvoiceTotals(items, reverseVAT);
   }
 
@@ -583,24 +650,24 @@ export class InvoicesService {
     // it into the label the invoice footer should print.
     const fskatt = company?.vatStatus;
     const vatStatus =
-      fskatt === 'true'
-        ? 'Godkänd för F-skatt'
-        : !fskatt || fskatt === 'false'
-          ? ''
+      fskatt === "true"
+        ? "Godkänd för F-skatt"
+        : !fskatt || fskatt === "false"
+          ? ""
           : fskatt;
 
     return {
-      name: company?.name || '',
-      address: company?.address || '',
-      city: company?.city || '',
-      phone: company?.phone || '',
-      email: company?.email || '',
-      website: company?.website || '',
-      orgNumber: company?.orgNumber || '',
-      vatNumber: company?.vatNumber || '',
+      name: company?.name || "",
+      address: company?.address || "",
+      city: company?.city || "",
+      phone: company?.phone || "",
+      email: company?.email || "",
+      website: company?.website || "",
+      orgNumber: company?.orgNumber || "",
+      vatNumber: company?.vatNumber || "",
       vatStatus,
-      bankgiro: company?.bankgiro || '',
-      plusgiro: company?.plusgiro || '',
+      bankgiro: company?.bankgiro || "",
+      plusgiro: company?.plusgiro || "",
     };
   }
 
@@ -639,14 +706,18 @@ export class InvoicesService {
   }
 
   private async getLogoDataUrl(logoUrl?: string | null): Promise<string> {
-    if (!logoUrl || logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
-      return '';
+    if (
+      !logoUrl ||
+      logoUrl.startsWith("http://") ||
+      logoUrl.startsWith("https://")
+    ) {
+      return "";
     }
 
-    const relativePath = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
+    const relativePath = logoUrl.startsWith("/") ? logoUrl.slice(1) : logoUrl;
     const candidates = [
       path.join(process.cwd(), relativePath),
-      path.join(process.cwd(), 'public', relativePath),
+      path.join(process.cwd(), "public", relativePath),
     ];
 
     for (const filePath of candidates) {
@@ -655,10 +726,10 @@ export class InvoicesService {
       }
 
       const buffer = await readFile(filePath);
-      const ext = path.extname(filePath).slice(1) || 'png';
-      return `data:image/${ext};base64,${buffer.toString('base64')}`;
+      const ext = path.extname(filePath).slice(1) || "png";
+      return `data:image/${ext};base64,${buffer.toString("base64")}`;
     }
 
-    return '';
+    return "";
   }
 }

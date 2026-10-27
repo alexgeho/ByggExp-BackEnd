@@ -91,6 +91,20 @@ export class SupplierInvoice {
   @Prop({ default: "manual" })
   source: string;
 
+  // Fortnox leverantörsfaktura löpnummer when imported from Fortnox.
+  @Prop({ type: String, default: null })
+  fortnoxGivenNumber?: string | null;
+
+  // Put on a customer invoice ("Fakturera"): never billed twice.
+  @Prop({ type: Date, default: null })
+  rebilledAt?: Date | null;
+
+  @Prop({ type: String, default: null })
+  rebilledInvoiceId?: string | null;
+
+  @Prop({ type: Number, default: null })
+  rebilledInvoiceNumber?: number | null;
+
   // For e-mailed invoices: one id per received e-mail (shared by all of its
   // attachments), so the daily inbound e-mail limit can count e-mails.
   @Prop({ type: String, default: null })
@@ -144,3 +158,10 @@ export class SupplierInvoice {
 
 export const SupplierInvoiceSchema =
   SchemaFactory.createForClass(SupplierInvoice);
+SupplierInvoiceSchema.index(
+  { companyId: 1, fortnoxGivenNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { fortnoxGivenNumber: { $type: "string" } },
+  },
+);

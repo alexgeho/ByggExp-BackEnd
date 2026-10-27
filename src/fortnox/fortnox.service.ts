@@ -7,6 +7,7 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
+import { Cron } from "@nestjs/schedule";
 import { Model } from "mongoose";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import { Client, ClientDocument } from "../clients/schemas/client.schema";
@@ -36,8 +37,15 @@ import {
   buildFortnoxTaxReduction,
   buildFortnoxWageTransactions,
   customerOrgNumber,
+  FortnoxSupplierInvoice,
+  mapSupplierInvoice,
   str,
 } from "./fortnox-mapping";
+import {
+  SupplierInvoice,
+  SupplierInvoiceDocument,
+} from "../supplier-invoices/schemas/supplier-invoice.schema";
+import { Project, ProjectDocument } from "../projects/schemas/project.schema";
 import {
   FortnoxConnection,
   FortnoxConnectionDocument,
@@ -49,7 +57,9 @@ const AUTH_URL = "https://apps.fortnox.se/oauth-v1/auth";
 const TOKEN_URL = "https://apps.fortnox.se/oauth-v1/token";
 const REVOKE_URL = "https://apps.fortnox.se/oauth-v1/revoke";
 const API_BASE = "https://api.fortnox.se/3";
-const DEFAULT_SCOPES = "companyinformation invoice customer salary";
+const DEFAULT_SCOPES =
+  "companyinformation invoice customer salary supplierinvoice";
+const SUPPLIER_SCOPE = "supplierinvoice";
 // Fortnox allows 25 requests per 5 s per token: keep calls ≥ 220 ms apart.
 const MIN_CALL_GAP_MS = 220;
 const PUSH_CLAIM_MS = 2 * 60_000;
@@ -86,6 +96,9 @@ export class FortnoxService {
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
     @InjectModel(PayrollExport.name)
     private exportModel: Model<PayrollExportDocument>,
+    @InjectModel(SupplierInvoice.name)
+    private supplierInvoiceModel: Model<SupplierInvoiceDocument>,
+    @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
     private readonly invoicesService: InvoicesService,
     private readonly wageBasisService: WageBasisService,
   ) {}
@@ -133,6 +146,9 @@ export class FortnoxService {
       orgNumber: conn?.fortnoxOrgNumber || "",
       connectedAt: conn?.connectedAt || null,
       scopes: conn?.scope ? conn.scope.split(/\s+/).filter(Boolean) : [],
+      // false → reconnect once to let ByggExp read supplier invoices.
+      supplierInvoices: this.hasScope(conn?.scope, SUPPLIER_SCOPE),
+      supplierSyncAt: conn?.supplierSyncAt || null,
     };
   }
 
@@ -156,7 +172,9 @@ export class FortnoxService {
       process.env.FORTNOX_RETURN_URL ||
       `${(process.env.APP_PUBLIC_URL || "https://admin.byggexp.se").replace(/\/+$/, "")}/company/profile`
     ).trim();
-    const why = reason ? `&reason=${encodeURIComponent(reason.slice(0, 160))}` : "";
+    const why = reason
+      ? `&reason=${encodeURIComponent(reason.slice(0, 160))}`
+      : "";
     return `${base}${base.includes("?") ? "&" : "?"}fortnox=${result}${why}`;
   }
 
@@ -765,5 +783,128 @@ export class FortnoxService {
       });
     }
     return { salaryCount, absenceCount, failed, skipped: tx.skipped };
+  }
+
+  // ---- Supplier invoices (Fortnox → project costs) ------------------------
+
+  private hasScope(scope: string | undefined | null, wanted: string) {
+    return String(scope || "")
+      .split(/\s+/)
+      .includes(wanted);
+  }
+
+  async syncSupplierInvoices(user: AuthUser) {
+    const companyId = this.companyOf(user);
+    try {
+      return await this.syncCompanySupplierInvoices(companyId);
+    } catch (err) {
+      throw this.toHttpError(err);
+    }
+  }
+
+  // Paid supplier invoices modified since the last run → our purchase
+  // invoices (source "fortnox"), each imported once by its löpnummer and
+  // put on the project whose littera/name matches the Fortnox project code.
+  async syncCompanySupplierInvoices(companyId: string) {
+    const conn = await this.connectionModel
+      .findOne({ companyId })
+      .lean()
+      .exec();
+    if (!conn || conn.needsReconnect) {
+      throw new BadRequestException("Fortnox is not connected");
+    }
+    if (!this.hasScope(conn.scope, SUPPLIER_SCOPE)) {
+      throw new BadRequestException(
+        "Reconnect Fortnox to allow reading supplier invoices",
+      );
+    }
+    const startedAt = new Date();
+    const since = conn.supplierSyncAt
+      ? new Date(conn.supplierSyncAt)
+      : new Date(Date.now() - 365 * 86400000);
+    const stamp = since.toISOString().slice(0, 16).replace("T", " ");
+
+    const listed: FortnoxSupplierInvoice[] = [];
+    for (let page = 1, pages = 1; page <= pages && page <= 50; page += 1) {
+      const q = new URLSearchParams({
+        filter: "fullypaid",
+        lastmodified: stamp,
+        limit: "500",
+        page: String(page),
+      });
+      const data = (await this.api(
+        companyId,
+        "GET",
+        `/supplierinvoices?${q.toString()}`,
+      )) as {
+        SupplierInvoices?: FortnoxSupplierInvoice[];
+        MetaInformation?: Record<string, unknown>;
+      };
+      listed.push(...(data.SupplierInvoices || []));
+      pages = Number(data.MetaInformation?.["@TotalPages"]) || 1;
+    }
+
+    const numbers = listed
+      .filter((fx) => !fx.Cancelled && str(fx.GivenNumber))
+      .map((fx) => str(fx.GivenNumber));
+    const known = new Set(
+      (
+        await this.supplierInvoiceModel
+          .find({ companyId, fortnoxGivenNumber: { $in: numbers } })
+          .select("fortnoxGivenNumber")
+          .lean()
+          .exec()
+      ).map((d) => String(d.fortnoxGivenNumber)),
+    );
+    const projects = (
+      await this.projectModel
+        .find({ companyId })
+        .select("_id name littera")
+        .lean()
+        .exec()
+    ).map((p) => ({ id: String(p._id), name: p.name, littera: p.littera }));
+
+    let imported = 0;
+    let linked = 0;
+    for (const given of numbers.filter((n) => !known.has(n))) {
+      const detail = (await this.api(
+        companyId,
+        "GET",
+        `/supplierinvoices/${encodeURIComponent(given)}`,
+      )) as { SupplierInvoice?: FortnoxSupplierInvoice };
+      if (!detail.SupplierInvoice || detail.SupplierInvoice.Cancelled) continue;
+      const fields = mapSupplierInvoice(detail.SupplierInvoice, projects);
+      try {
+        await this.supplierInvoiceModel.create({ companyId, ...fields });
+        imported += 1;
+        if (fields.projectId) linked += 1;
+      } catch (err) {
+        // Duplicate from a parallel run: already imported.
+        if ((err as { code?: number }).code !== 11000) throw err;
+      }
+    }
+    await this.connectionModel
+      .updateOne({ companyId }, { $set: { supplierSyncAt: startedAt } })
+      .exec();
+    return { imported, linked, unlinked: imported - linked };
+  }
+
+  // Nightly: every company that allowed supplier invoices.
+  @Cron("0 30 3 * * *")
+  async nightlySupplierInvoiceSync() {
+    const conns = await this.connectionModel
+      .find({ needsReconnect: { $ne: true }, scope: /supplierinvoice/ })
+      .select("companyId")
+      .lean()
+      .exec();
+    for (const c of conns) {
+      try {
+        await this.syncCompanySupplierInvoices(String(c.companyId));
+      } catch (err) {
+        this.logger.warn(
+          `Fortnox supplier sync ${c.companyId}: ${(err as Error).message}`,
+        );
+      }
+    }
   }
 }
