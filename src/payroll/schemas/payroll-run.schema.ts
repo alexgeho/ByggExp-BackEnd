@@ -1,6 +1,10 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { HydratedDocument } from "mongoose";
 
+// basis of a run entered by hand on Löner → Ny lönekörning (no shifts). The
+// hours grid's own "manual" measure stays "manual" and is not editable here.
+export const ENTERED_BASIS = "entered";
+
 export enum PayrollStatus {
   Draft = "draft",
   Approved = "approved",
@@ -89,8 +93,8 @@ export class PayrollRun {
   @Prop({ required: true })
   periodTo: string;
 
-  // Which measure the hours came from: contracted "planned", measured
-  // "actual", or "manual" (entered by hand on the Löner page, no shifts).
+  // Where the hours came from: the hours grid's "planned", "actual" (GPS) or
+  // "manual" measure, or "entered" (ENTERED_BASIS) = typed in on Löner.
   @Prop({ default: "planned" })
   basis: string;
 

@@ -112,6 +112,12 @@ export class PayrollController {
     return this.payrollService.setStatus(id, req.user, body.status);
   }
 
+  // Approved → draft (explicit; status PATCH never goes back to draft).
+  @Post(":id/reopen")
+  reopen(@Request() req, @Param("id") id: string) {
+    return this.payrollService.reopen(id, req.user);
+  }
+
   @Delete(":id")
   remove(@Request() req, @Param("id") id: string) {
     return this.payrollService.remove(id, req.user);

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -14,6 +15,7 @@ import {
   computeLineAmounts,
   computeManualItems,
   computeRunTotals,
+  isHourItem,
 } from "./payroll-math";
 import { resolveModules } from "../company/modules";
 import { TaxTableService } from "./tax-table.service";
@@ -24,6 +26,7 @@ import {
   ManualPayrollRunDto,
 } from "./dto/create-payroll-run.dto";
 import {
+  ENTERED_BASIS,
   PayrollLine,
   PayrollRun,
   PayrollRunDocument,
@@ -173,12 +176,12 @@ export class PayrollService {
     await this.assertPayrollEnabled(companyId);
     const taxRate = dto.taxRate ?? 30;
     const employerRate = 31.42;
-    const lines = await this.buildManualLines(dto, companyId, taxRate);
+    const lines = await this.buildManualLines(dto, companyId, taxRate, []);
     const run = new this.payrollModel({
       companyId,
       periodFrom: dto.periodFrom,
       periodTo: dto.periodTo,
-      basis: "manual",
+      basis: ENTERED_BASIS,
       projectId: null,
       status: PayrollStatus.Draft,
       ...runFigures(lines, taxRate, employerRate),
@@ -194,7 +197,7 @@ export class PayrollService {
     user: AuthUser,
   ): Promise<PayrollRunDocument> {
     const run = await this.findOne(id, user);
-    if (run.basis !== "manual") {
+    if (run.basis !== ENTERED_BASIS) {
       throw new BadRequestException("Only manual payroll runs can be edited");
     }
     if (run.status !== PayrollStatus.Draft) {
@@ -202,29 +205,63 @@ export class PayrollService {
     }
     await this.assertPayrollEnabled(run.companyId);
     const taxRate = dto.taxRate ?? run.taxRate ?? 30;
-    const lines = await this.buildManualLines(dto, run.companyId, taxRate);
-    run.set({
-      periodFrom: dto.periodFrom,
-      periodTo: dto.periodTo,
-      ...runFigures(lines, taxRate, run.employerRate ?? 31.42),
-    });
-    return run.save();
+    // Workers already in the run stay editable even if erased since.
+    const lines = await this.buildManualLines(
+      dto,
+      run.companyId,
+      taxRate,
+      (run.lines || []).map((l) => String(l.userId)),
+    );
+    // Write only if it is still a manual draft of this company — an approve
+    // or delete in between wins instead of being overwritten.
+    const updated = await this.payrollModel
+      .findOneAndUpdate(
+        {
+          _id: run._id,
+          companyId: run.companyId,
+          basis: ENTERED_BASIS,
+          status: PayrollStatus.Draft,
+        },
+        {
+          $set: {
+            periodFrom: dto.periodFrom,
+            periodTo: dto.periodTo,
+            ...runFigures(lines, taxRate, run.employerRate ?? 31.42),
+          },
+        },
+        { new: true },
+      )
+      .exec();
+    if (!updated) {
+      throw new ConflictException(
+        "The payroll run changed meanwhile — reload and try again",
+      );
+    }
+    return updated;
   }
 
   private async buildManualLines(
     dto: ManualPayrollRunDto,
     companyId: string,
     taxRate: number,
+    keepUserIds: string[],
   ) {
     if (dto.periodFrom > dto.periodTo) {
       throw new BadRequestException("periodFrom must be before periodTo");
+    }
+    if (dto.periodFrom.slice(0, 7) !== dto.periodTo.slice(0, 7)) {
+      throw new BadRequestException("The period must be within one month");
     }
     const ids = dto.employees.map((e) => String(e.userId));
     if (new Set(ids).size !== ids.length) {
       throw new BadRequestException("A worker can only appear once per run");
     }
     const users = await this.userModel
-      .find({ _id: { $in: ids }, companyId, erasedAt: null })
+      .find({
+        _id: { $in: ids },
+        companyId,
+        $or: [{ erasedAt: null }, { _id: { $in: keepUserIds } }],
+      })
       .select("name hourlyRate taxTable taxColumn")
       .exec();
     const byId = new Map(users.map((u) => [String(u._id), u]));
@@ -238,6 +275,9 @@ export class PayrollService {
       const u = byId.get(String(e.userId))!;
       const m = computeManualItems(e.items, Number(u.hourlyRate) || 0);
       if (!m.items.length) continue;
+      if (m.items.some((i) => isHourItem(i.type) && !i.rate)) {
+        throw new BadRequestException(`Hourly rate is missing (${u.name})`);
+      }
       if (m.gross < 0) {
         throw new BadRequestException(
           `Gross salary cannot be negative (${u.name})`,
@@ -319,6 +359,14 @@ export class PayrollService {
     status: PayrollStatus,
   ): Promise<PayrollRunDocument> {
     const run = await this.findOne(id, user);
+    if (run.status === PayrollStatus.Paid && status !== PayrollStatus.Paid) {
+      throw new BadRequestException("A paid payroll run cannot be changed");
+    }
+    if (status === PayrollStatus.Draft && run.status !== PayrollStatus.Draft) {
+      throw new BadRequestException(
+        "Use reopen to turn an approved run back into a draft",
+      );
+    }
     run.status = status;
     if (status === PayrollStatus.Approved) {
       run.approvedAt = run.approvedAt || new Date();
@@ -329,6 +377,19 @@ export class PayrollService {
       run.approvedAt = null;
       run.paidAt = null;
     }
+    await run.save();
+    return run;
+  }
+
+  // Explicit action: an approved (not paid) run back to draft.
+  async reopen(id: string, user: AuthUser): Promise<PayrollRunDocument> {
+    const run = await this.findOne(id, user);
+    if (run.status !== PayrollStatus.Approved) {
+      throw new BadRequestException("Only an approved payroll run can reopen");
+    }
+    run.status = PayrollStatus.Draft;
+    run.approvedAt = null;
+    run.paidAt = null;
     await run.save();
     return run;
   }

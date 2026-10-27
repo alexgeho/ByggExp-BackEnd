@@ -1,7 +1,18 @@
-import { BadRequestException, ForbiddenException } from "@nestjs/common";
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return -- in-memory model doubles */
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from "@nestjs/common";
 import { computeManualItems } from "./payroll-math";
 import { PayrollService } from "./payroll.service";
-import { PayrollStatus } from "./schemas/payroll-run.schema";
+import { ENTERED_BASIS, PayrollStatus } from "./schemas/payroll-run.schema";
+import { plainToInstance } from "class-transformer";
+import { validateSync } from "class-validator";
+import {
+  CreatePayrollRunDto,
+  ManualPayrollRunDto,
+} from "./dto/create-payroll-run.dto";
 import { buildPayslipHtml } from "./templates/payslip-pdf.template";
 import { buildAgiXml } from "./agi";
 
@@ -91,6 +102,15 @@ const users = [
     taxColumn: 1,
     personalNumber: "199001011234",
   },
+  {
+    _id: "u3",
+    name: "Cia",
+    hourlyRate: 250,
+    taxTable: null,
+    taxColumn: null,
+    personalNumber: "",
+    erasedAt: new Date("2026-10-20"),
+  },
 ];
 
 function setup(company: Record<string, unknown> = { plan: "faktura" }) {
@@ -112,12 +132,31 @@ function setup(company: Record<string, unknown> = { plan: "faktura" }) {
   payrollModel.findById = (id: string) =>
     q(saved.find((r) => r._id === id) || null);
   payrollModel.find = () => q(saved);
+  // Mimics the guarded update: matches only while every filter field holds.
+  payrollModel.findOneAndUpdate = (
+    filter: Record<string, unknown>,
+    update: { $set: Record<string, unknown> },
+  ) => {
+    const run = saved.find((r) =>
+      Object.entries(filter).every(([k, v]) => r[k] === v),
+    );
+    if (run) Object.assign(run, update.$set);
+    return q(run || null);
+  };
 
   const userModel = {
-    find: (filter: { _id: { $in: string[] }; companyId: string }) =>
+    find: (filter: {
+      _id: { $in: string[] };
+      companyId: string;
+      $or?: [unknown, { _id: { $in: string[] } }];
+    }) =>
       q(
         filter.companyId === COMPANY
-          ? users.filter((u) => filter._id.$in.includes(u._id))
+          ? users.filter(
+              (u) =>
+                filter._id.$in.includes(u._id) &&
+                (!u.erasedAt || !!filter.$or?.[1]._id.$in.includes(u._id)),
+            )
           : [],
       ),
     findById: () =>
@@ -166,7 +205,7 @@ describe("PayrollService manual runs", () => {
     const run: any = await service.createManual(dto, admin);
     expect(run).toMatchObject({
       companyId: COMPANY,
-      basis: "manual",
+      basis: ENTERED_BASIS,
       status: PayrollStatus.Draft,
       taxRate: 30,
       employerRate: 31.42,
@@ -272,11 +311,69 @@ describe("PayrollService manual runs", () => {
     await expect(service.updateManual("r1", dto, admin)).rejects.toThrow(
       "Only a draft",
     );
+    // A run from the hours grid in its "manual" measure is not editable here.
     run.status = PayrollStatus.Draft;
-    run.basis = "planned";
+    run.basis = "manual";
     await expect(service.updateManual("r1", dto, admin)).rejects.toThrow(
       "Only manual",
     );
+  });
+
+  it("returns 409 when the run is approved between read and write", async () => {
+    const { service, saved } = setup();
+    const run: any = await service.createManual(dto, admin);
+    run._id = "r1";
+    // Someone approves while this edit computes its lines.
+    const orig = (service as any).buildManualLines.bind(service);
+    (service as any).buildManualLines = async (...args: unknown[]) => {
+      const out = await orig(...args);
+      saved[0].status = PayrollStatus.Approved;
+      return out;
+    };
+    await expect(service.updateManual("r1", dto, admin)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(saved[0].totalGross).toBe(67000);
+  });
+
+  it("keeps an erased worker editable in a draft that already has them", async () => {
+    const { service } = setup();
+    const withCia = {
+      ...dto,
+      employees: [{ userId: "u3", items: [{ type: "normal", hours: 10 }] }],
+    };
+    // New run: an erased worker cannot be added.
+    await expect(service.createManual(withCia, admin)).rejects.toThrow(
+      "Unknown worker",
+    );
+    const run: any = await service.createManual(dto, admin);
+    run._id = "r1";
+    run.lines.push({ userId: "u3", name: "Cia" });
+    const edited: any = await service.updateManual("r1", withCia, admin);
+    expect(edited.lines[0]).toMatchObject({ userId: "u3", amount: 2500 });
+  });
+
+  it("rejects hour rows without a timlön", async () => {
+    const { service } = setup();
+    await expect(
+      service.createManual(
+        {
+          ...dto,
+          employees: [{ userId: "u2", items: [{ type: "normal", hours: 8 }] }],
+        },
+        admin,
+      ),
+    ).rejects.toThrow("Hourly rate is missing (Bo)");
+  });
+
+  it("keeps a run within one month", async () => {
+    const { service } = setup();
+    await expect(
+      service.createManual(
+        { ...dto, periodFrom: "2026-09-25", periodTo: "2026-10-05" },
+        admin,
+      ),
+    ).rejects.toThrow("one month");
   });
 
   it("feeds AGI exactly like a run from the hours grid", async () => {
@@ -311,5 +408,103 @@ describe("PayrollService manual runs", () => {
     });
     expect(old.match(/Arbetad tid/g)).toHaveLength(1);
     expect(old).not.toContain("Övertid");
+  });
+});
+
+describe("payroll status", () => {
+  it("never leaves paid, and only reopen turns approved into draft", async () => {
+    const { service } = setup();
+    const run: any = await service.createManual(dto, admin);
+    run._id = "r1";
+    await service.setStatus("r1", admin, PayrollStatus.Approved);
+    await expect(
+      service.setStatus("r1", admin, PayrollStatus.Draft),
+    ).rejects.toThrow("Use reopen");
+    const reopened: any = await service.reopen("r1", admin);
+    expect(reopened).toMatchObject({ status: "draft", approvedAt: null });
+
+    await service.setStatus("r1", admin, PayrollStatus.Paid);
+    for (const s of [PayrollStatus.Draft, PayrollStatus.Approved]) {
+      await expect(service.setStatus("r1", admin, s)).rejects.toThrow(
+        "paid payroll run cannot be changed",
+      );
+    }
+    await expect(service.reopen("r1", admin)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+});
+
+describe("payroll DTOs", () => {
+  const id = "65f000000000000000000001";
+  const errors = (cls: any, body: unknown) =>
+    validateSync(plainToInstance(cls, body)).map((e) => e.property);
+  const ok = {
+    periodFrom: "2026-10-01",
+    periodTo: "2026-10-31",
+    employees: [{ userId: id, items: [{ type: "monthly", amount: 30000 }] }],
+  };
+
+  it("validates a manual run", () => {
+    expect(errors(ManualPayrollRunDto, ok)).toEqual([]);
+    expect(
+      errors(ManualPayrollRunDto, { ...ok, periodTo: "2026-02-30" }),
+    ).toEqual(["periodTo"]);
+    expect(
+      errors(ManualPayrollRunDto, { ...ok, periodFrom: "2026-10-01T00:00" }),
+    ).toEqual(["periodFrom"]);
+    expect(
+      errors(ManualPayrollRunDto, {
+        ...ok,
+        employees: [{ userId: "u1", items: [] }],
+      }),
+    ).toEqual(["employees"]);
+    expect(
+      errors(ManualPayrollRunDto, {
+        ...ok,
+        employees: Array.from({ length: 501 }, () => ok.employees[0]),
+      }),
+    ).toEqual(["employees"]);
+    expect(
+      errors(ManualPayrollRunDto, {
+        ...ok,
+        employees: [
+          {
+            userId: id,
+            items: Array.from({ length: 51 }, () => ({
+              type: "other",
+              amount: 1,
+            })),
+          },
+        ],
+      }),
+    ).toEqual(["employees"]);
+  });
+
+  it("accepts the hours grid's manual measure and keeps its factor", async () => {
+    expect(
+      errors(CreatePayrollRunDto, {
+        periodFrom: "2026-10-01",
+        periodTo: "2026-10-31",
+        basis: "manual",
+        lines: [{ userId: "u1", hours: 10, multiplier: 1.5, hourType: "ob" }],
+      }),
+    ).toEqual([]);
+    const { service } = setup();
+    const run: any = await service.create(
+      {
+        periodFrom: "2026-10-01",
+        periodTo: "2026-10-31",
+        basis: "manual",
+        lines: [{ userId: "u1", hours: 10, multiplier: 1.5, hourType: "ob" }],
+      },
+      admin,
+    );
+    expect(run.basis).toBe("manual");
+    expect(run.lines[0]).toMatchObject({
+      multiplier: 1.5,
+      hourType: "ob",
+      amount: 3000,
+    });
   });
 });

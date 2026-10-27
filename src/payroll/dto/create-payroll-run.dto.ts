@@ -1,7 +1,10 @@
 import { Type } from "class-transformer";
 import {
+  ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
+  IsISO8601,
+  IsMongoId,
   IsIn,
   IsNumber,
   IsOptional,
@@ -48,7 +51,8 @@ export class CreatePayrollRunDto {
   @IsString()
   periodTo: string;
 
-  @IsIn(["planned", "actual"])
+  // The hours grid's measure (planned / GPS / manual hours).
+  @IsIn(["planned", "actual", "manual"])
   @IsOptional()
   basis?: string;
 
@@ -101,20 +105,24 @@ export class ManualPayrollItemDto {
 }
 
 export class ManualPayrollEmployeeDto {
-  @IsString()
+  @IsMongoId()
   userId: string;
 
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => ManualPayrollItemDto)
   items: ManualPayrollItemDto[];
 }
 
 export class ManualPayrollRunDto {
+  // Strict calendar dates (2026-02-30 fails), same month (checked in service).
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @IsISO8601({ strict: true })
   periodFrom: string;
 
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @IsISO8601({ strict: true })
   periodTo: string;
 
   @IsNumber()
@@ -125,6 +133,7 @@ export class ManualPayrollRunDto {
 
   @IsArray()
   @ArrayNotEmpty()
+  @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => ManualPayrollEmployeeDto)
   employees: ManualPayrollEmployeeDto[];
