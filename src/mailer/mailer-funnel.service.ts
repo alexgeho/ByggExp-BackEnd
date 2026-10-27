@@ -979,7 +979,11 @@ export class MailerFunnelService {
     // Not a campaign reply: keep it as a new inquiry (a firm asking for a
     // price, drawings attached…) unless it is mass mail or an auto-reply.
     if (!r) {
-      if (isBulk(headers) || isAutoReply(mail.subject || "", headers))
+      if (
+        isBulk(headers) ||
+        isAutoReply(mail.subject || "", headers) ||
+        /^\[test\]/i.test(mail.subject || "") // our own test sends
+      )
         return false;
       await this.replies.create({
         ...lead,
