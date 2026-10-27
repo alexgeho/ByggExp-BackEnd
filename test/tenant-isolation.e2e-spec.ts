@@ -351,6 +351,55 @@ describe("Tenant isolation (e2e)", () => {
     });
   });
 
+  describe("Bokföring (SIE import) stays per company", () => {
+    const sie = [
+      "#RAR 0 20260101 20261231",
+      '#KONTO 1930 "Bank"',
+      '#KONTO 3001 "Försäljning"',
+      "#IB 0 1930 100",
+      '#VER A 1 20260110 "Faktura"',
+      "{",
+      "#TRANS 1930 {} 50",
+      "#TRANS 3001 {} -50",
+      "}",
+    ].join("\r\n");
+
+    it("A imports a year and sees IB + movements", async () => {
+      await request(http)
+        .post("/accounting/ledger/import")
+        .set("Authorization", `Bearer ${tokenA}`)
+        .attach("file", Buffer.from(sie), "a.se")
+        .expect(201);
+      const res = await request(http)
+        .get("/accounting/ledger/2026-01-01/balances")
+        .set("Authorization", `Bearer ${tokenA}`)
+        .expect(200);
+      const bank = res.body.find(
+        (r: { account: number }) => r.account === 1930,
+      );
+      expect(bank.ub).toBe(150);
+    });
+
+    it("B sees no years and gets 404 for A's year", async () => {
+      const years = await request(http)
+        .get("/accounting/ledger")
+        .set("Authorization", `Bearer ${tokenB}`)
+        .expect(200);
+      expect(years.body).toEqual([]);
+      await request(http)
+        .get("/accounting/ledger/2026-01-01/verifications")
+        .set("Authorization", `Bearer ${tokenB}`)
+        .expect(404);
+    });
+
+    it("an unbalanced file is refused", () =>
+      request(http)
+        .post("/accounting/ledger/import")
+        .set("Authorization", `Bearer ${tokenA}`)
+        .attach("file", Buffer.from(sie.replace("-50", "-40")), "bad.se")
+        .expect(400));
+  });
+
   describe("Purchase invoice billed on to the customer", () => {
     let supId = "";
 

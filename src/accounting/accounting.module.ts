@@ -8,6 +8,13 @@ import {
 } from "../supplier-invoices/schemas/supplier-invoice.schema";
 import { AccountingController } from "./accounting.controller";
 import { AccountingService } from "./accounting.service";
+import { LedgerService } from "./ledger.service";
+import {
+  LedgerVerification,
+  LedgerVerificationSchema,
+  LedgerYear,
+  LedgerYearSchema,
+} from "./schemas/ledger.schema";
 
 @Module({
   imports: [
@@ -15,9 +22,11 @@ import { AccountingService } from "./accounting.service";
       { name: Invoice.name, schema: InvoiceSchema },
       { name: SupplierInvoice.name, schema: SupplierInvoiceSchema },
       { name: Company.name, schema: CompanySchema },
+      { name: LedgerYear.name, schema: LedgerYearSchema },
+      { name: LedgerVerification.name, schema: LedgerVerificationSchema },
     ]),
   ],
   controllers: [AccountingController],
-  providers: [AccountingService],
+  providers: [AccountingService, LedgerService],
 })
 export class AccountingModule {}
