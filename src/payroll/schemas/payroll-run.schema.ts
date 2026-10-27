@@ -7,6 +7,31 @@ export enum PayrollStatus {
   Paid = "paid",
 }
 
+// One row of a manually entered line: hours × timlön (normal / overtime / ob)
+// or a fixed amount (monthly = månadslön, other = bonus/avdrag).
+@Schema({ _id: false })
+export class PayrollItem {
+  @Prop({ required: true })
+  type: string;
+
+  @Prop({ default: "" })
+  label: string;
+
+  @Prop({ type: Number, default: 0 })
+  hours: number;
+
+  @Prop({ type: Number, default: 0 })
+  rate: number;
+
+  @Prop({ type: Number, default: 1 })
+  multiplier: number;
+
+  @Prop({ type: Number, default: 0 })
+  amount: number;
+}
+
+export const PayrollItemSchema = SchemaFactory.createForClass(PayrollItem);
+
 // One worker's line in a payroll run. Rate is snapshotted at run time so later
 // rate changes don't rewrite historical runs.
 @Schema({ _id: false })
@@ -39,6 +64,12 @@ export class PayrollLine {
 
   @Prop({ type: Number, default: 0 })
   net: number;
+
+  // Manual runs only: the rows behind amount (empty for runs from the hours
+  // grid). hours/rate/amount above stay the line totals either way, so AGI,
+  // payslip and exports read the same fields.
+  @Prop({ type: [PayrollItemSchema], default: [] })
+  items: PayrollItem[];
 }
 
 export const PayrollLineSchema = SchemaFactory.createForClass(PayrollLine);
@@ -58,7 +89,8 @@ export class PayrollRun {
   @Prop({ required: true })
   periodTo: string;
 
-  // Which measure the hours came from: contracted "planned" or measured "actual".
+  // Which measure the hours came from: contracted "planned", measured
+  // "actual", or "manual" (entered by hand on the Löner page, no shifts).
   @Prop({ default: "planned" })
   basis: string;
 

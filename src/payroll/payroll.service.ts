@@ -10,12 +10,21 @@ import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import { launchForInvoicePdf } from "../invoices/puppeteer-launch";
 import { buildPayslipHtml } from "./templates/payslip-pdf.template";
-import { computeLineAmounts, computeRunTotals } from "./payroll-math";
+import {
+  computeLineAmounts,
+  computeManualItems,
+  computeRunTotals,
+} from "./payroll-math";
+import { resolveModules } from "../company/modules";
 import { TaxTableService } from "./tax-table.service";
 import { Project, ProjectDocument } from "../projects/schemas/project.schema";
 import { AgiEmployee, agiProblems, buildAgiXml, mergeEmployees } from "./agi";
-import { CreatePayrollRunDto } from "./dto/create-payroll-run.dto";
 import {
+  CreatePayrollRunDto,
+  ManualPayrollRunDto,
+} from "./dto/create-payroll-run.dto";
+import {
+  PayrollLine,
   PayrollRun,
   PayrollRunDocument,
   PayrollStatus,
@@ -115,16 +124,7 @@ export class PayrollService {
             multiplier,
             taxRate,
           );
-          // Prefer the worker's Skatteverket tax table when set (and available);
-          // otherwise fall back to the flat percentage.
-          // Tax tables are per income year: the year the period ends in.
-          const tableTax = await this.taxTableService.lookupMonthlyTax(
-            u?.taxTable,
-            u?.taxColumn,
-            gross,
-            Number(String(dto.periodTo).slice(0, 4)) || undefined,
-          );
-          const tax = tableTax == null ? pctTax : round2(tableTax);
+          const tax = await this.taxFor(u, gross, pctTax, dto.periodTo);
           const net = round2(gross - tax);
           return {
             userId: String(l.userId),
@@ -146,8 +146,6 @@ export class PayrollService {
       );
     }
 
-    const totals = computeRunTotals(lines, employerRate);
-
     const run = new this.payrollModel({
       companyId,
       periodFrom: dto.periodFrom,
@@ -155,19 +153,145 @@ export class PayrollService {
       basis: dto.basis || "planned",
       projectId: dto.projectId || null,
       status: PayrollStatus.Draft,
-      lines,
-      totalHours: totals.totalHours,
-      totalAmount: totals.totalGross,
-      taxRate,
-      totalGross: totals.totalGross,
-      totalTax: totals.totalTax,
-      totalNet: totals.totalNet,
-      employerRate,
-      employerContribution: totals.employerContribution,
-      totalEmployerCost: totals.totalEmployerCost,
+      ...runFigures(lines, taxRate, employerRate),
       createdByUserId: user.userId || null,
     });
     return run.save();
+  }
+
+  // ---- Manual run (Löner → Ny lönekörning) ---------------------------------
+  // For companies without the shifts module: the admin enters hours per hour
+  // type, månadslön and other rows per worker. Stored as an ordinary run
+  // (basis "manual", one line per worker with its rows in `items`), so the
+  // payslip, AGI and exports work unchanged.
+
+  async createManual(
+    dto: ManualPayrollRunDto,
+    user: AuthUser,
+  ): Promise<PayrollRunDocument> {
+    const companyId = this.resolveCompanyId(user);
+    await this.assertPayrollEnabled(companyId);
+    const taxRate = dto.taxRate ?? 30;
+    const employerRate = 31.42;
+    const lines = await this.buildManualLines(dto, companyId, taxRate);
+    const run = new this.payrollModel({
+      companyId,
+      periodFrom: dto.periodFrom,
+      periodTo: dto.periodTo,
+      basis: "manual",
+      projectId: null,
+      status: PayrollStatus.Draft,
+      ...runFigures(lines, taxRate, employerRate),
+      createdByUserId: user.userId || null,
+    });
+    return run.save();
+  }
+
+  // Replace the rows of a manual draft and recompute everything.
+  async updateManual(
+    id: string,
+    dto: ManualPayrollRunDto,
+    user: AuthUser,
+  ): Promise<PayrollRunDocument> {
+    const run = await this.findOne(id, user);
+    if (run.basis !== "manual") {
+      throw new BadRequestException("Only manual payroll runs can be edited");
+    }
+    if (run.status !== PayrollStatus.Draft) {
+      throw new BadRequestException("Only a draft payroll run can be edited");
+    }
+    await this.assertPayrollEnabled(run.companyId);
+    const taxRate = dto.taxRate ?? run.taxRate ?? 30;
+    const lines = await this.buildManualLines(dto, run.companyId, taxRate);
+    run.set({
+      periodFrom: dto.periodFrom,
+      periodTo: dto.periodTo,
+      ...runFigures(lines, taxRate, run.employerRate ?? 31.42),
+    });
+    return run.save();
+  }
+
+  private async buildManualLines(
+    dto: ManualPayrollRunDto,
+    companyId: string,
+    taxRate: number,
+  ) {
+    if (dto.periodFrom > dto.periodTo) {
+      throw new BadRequestException("periodFrom must be before periodTo");
+    }
+    const ids = dto.employees.map((e) => String(e.userId));
+    if (new Set(ids).size !== ids.length) {
+      throw new BadRequestException("A worker can only appear once per run");
+    }
+    const users = await this.userModel
+      .find({ _id: { $in: ids }, companyId, erasedAt: null })
+      .select("name hourlyRate taxTable taxColumn")
+      .exec();
+    const byId = new Map(users.map((u) => [String(u._id), u]));
+    const unknown = ids.filter((uid) => !byId.has(uid));
+    if (unknown.length) {
+      throw new BadRequestException("Unknown worker in the payroll run");
+    }
+
+    const lines: PayrollLine[] = [];
+    for (const e of dto.employees) {
+      const u = byId.get(String(e.userId))!;
+      const m = computeManualItems(e.items, Number(u.hourlyRate) || 0);
+      if (!m.items.length) continue;
+      if (m.gross < 0) {
+        throw new BadRequestException(
+          `Gross salary cannot be negative (${u.name})`,
+        );
+      }
+      const { tax: pctTax } = computeLineAmounts(m.gross, 1, 1, taxRate);
+      const tax = await this.taxFor(u, m.gross, pctTax, dto.periodTo);
+      lines.push({
+        userId: String(u._id),
+        name: u.name || "",
+        hours: m.hours,
+        rate: m.rate,
+        multiplier: 1,
+        hourType: m.hourType,
+        amount: m.gross,
+        tax,
+        net: round2(m.gross - tax),
+        items: m.items,
+      });
+    }
+    if (!lines.length) {
+      throw new BadRequestException("Enter hours or an amount for a worker");
+    }
+    return lines;
+  }
+
+  // Prefer the worker's Skatteverket tax table when set (and available);
+  // otherwise fall back to the flat percentage. Tax tables are per income
+  // year: the year the period ends in.
+  private async taxFor(
+    u: { taxTable?: number | null; taxColumn?: number | null } | undefined,
+    gross: number,
+    pctTax: number,
+    periodTo: string,
+  ): Promise<number> {
+    const tableTax = await this.taxTableService.lookupMonthlyTax(
+      u?.taxTable,
+      u?.taxColumn,
+      gross,
+      Number(String(periodTo).slice(0, 4)) || undefined,
+    );
+    return tableTax == null ? pctTax : round2(tableTax);
+  }
+
+  // Manual runs belong to the payroll module (sold without shifts).
+  private async assertPayrollEnabled(companyId: string): Promise<void> {
+    const company = await this.companyModel
+      .findById(companyId)
+      .select("plan moduleOverrides")
+      .lean()
+      .exec();
+    if (!company || !resolveModules(company).enabled.includes("payroll")) {
+      throw new ForbiddenException("The payroll module is not enabled");
+    }
   }
 
   async findAll(user: AuthUser): Promise<PayrollRun[]> {
@@ -334,6 +458,27 @@ export class PayrollService {
     }
     return buildAgiXml(input);
   }
+}
+
+// Run-level totals stored on every run (hours grid and manual alike).
+function runFigures(
+  lines: Parameters<typeof computeRunTotals>[0],
+  taxRate: number,
+  employerRate: number,
+) {
+  const totals = computeRunTotals(lines, employerRate);
+  return {
+    lines,
+    totalHours: totals.totalHours,
+    totalAmount: totals.totalGross,
+    taxRate,
+    totalGross: totals.totalGross,
+    totalTax: totals.totalTax,
+    totalNet: totals.totalNet,
+    employerRate,
+    employerContribution: totals.employerContribution,
+    totalEmployerCost: totals.totalEmployerCost,
+  };
 }
 
 // "Storgatan 1, 741 30 Knivsta" → { street, city } (city without postcode).

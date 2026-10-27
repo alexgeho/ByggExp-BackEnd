@@ -1,5 +1,15 @@
+export type PayslipItem = {
+  type?: string;
+  label?: string;
+  hours?: number;
+  rate?: number;
+  multiplier?: number;
+  amount?: number;
+};
+
 export type PayslipLine = {
   name?: string;
+  items?: PayslipItem[];
   hours?: number;
   rate?: number;
   multiplier?: number;
@@ -32,6 +42,40 @@ function esc(value?: string | number | null): string {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+const ITEM_LABELS: Record<string, string> = {
+  normal: "Arbetad tid",
+  overtime: "Övertid",
+  ob: "OB",
+  monthly: "Månadslön",
+  other: "Övrigt",
+};
+
+// Manual runs list their rows; runs from the hours grid have one row.
+function payslipRows(l: PayslipLine): string {
+  if (!l.items?.length) {
+    return `<tr>
+          <td>Arbetad tid${l.hourType && l.hourType !== "normal" ? ` (${esc(l.hourType)})` : ""}</td>
+          <td class="r">${money(l.hours)}</td>
+          <td class="r">${money(l.rate)}</td>
+          <td class="r">${money(l.multiplier)}</td>
+          <td class="r">${money(l.amount)}</td>
+        </tr>`;
+  }
+  return l.items
+    .map((i) => {
+      const perHour = ["normal", "overtime", "ob"].includes(String(i.type));
+      const name = i.label || ITEM_LABELS[String(i.type)] || i.type;
+      return `<tr>
+          <td>${esc(name)}</td>
+          <td class="r">${perHour ? money(i.hours) : ""}</td>
+          <td class="r">${perHour ? money(i.rate) : ""}</td>
+          <td class="r">${perHour ? money(i.multiplier) : ""}</td>
+          <td class="r">${money(i.amount)}</td>
+        </tr>`;
+    })
+    .join("\n        ");
 }
 
 export function buildPayslipHtml(data: PayslipData): string {
@@ -83,13 +127,7 @@ export function buildPayslipHtml(data: PayslipData): string {
         <tr><th>Beskrivning</th><th class="r">Timmar</th><th class="r">Timlön</th><th class="r">Faktor</th><th class="r">Belopp</th></tr>
       </thead>
       <tbody>
-        <tr>
-          <td>Arbetad tid${l.hourType && l.hourType !== "normal" ? ` (${esc(l.hourType)})` : ""}</td>
-          <td class="r">${money(l.hours)}</td>
-          <td class="r">${money(l.rate)}</td>
-          <td class="r">${money(l.multiplier)}</td>
-          <td class="r">${money(l.amount)}</td>
-        </tr>
+        ${payslipRows(l)}
       </tbody>
     </table>
 

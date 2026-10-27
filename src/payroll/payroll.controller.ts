@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Request,
   Res,
   UseGuards,
@@ -16,7 +17,10 @@ import type { Response } from "express";
 import { Roles } from "../common/decorators/roles.decorator";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../users/schemas/user.schema";
-import { CreatePayrollRunDto } from "./dto/create-payroll-run.dto";
+import {
+  CreatePayrollRunDto,
+  ManualPayrollRunDto,
+} from "./dto/create-payroll-run.dto";
 import { PayrollStatus } from "./schemas/payroll-run.schema";
 import { PayrollService } from "./payroll.service";
 
@@ -34,6 +38,21 @@ export class PayrollController {
   @Post()
   create(@Request() req, @Body() dto: CreatePayrollRunDto) {
     return this.payrollService.create(dto, req.user);
+  }
+
+  // Manual run: hours / månadslön / other rows entered per worker.
+  @Post("manual")
+  createManual(@Request() req, @Body() dto: ManualPayrollRunDto) {
+    return this.payrollService.createManual(dto, req.user);
+  }
+
+  @Put(":id/manual")
+  updateManual(
+    @Request() req,
+    @Param("id") id: string,
+    @Body() dto: ManualPayrollRunDto,
+  ) {
+    return this.payrollService.updateManual(id, dto, req.user);
   }
 
   // AGI for a month the pay went out (YYYYMM): summary + blocking problems.
