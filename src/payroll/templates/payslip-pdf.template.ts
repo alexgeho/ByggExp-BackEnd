@@ -20,23 +20,24 @@ export type PayslipData = {
 };
 
 function money(value?: number): string {
-  return new Intl.NumberFormat('sv-SE', {
+  return new Intl.NumberFormat("sv-SE", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(value) || 0);
 }
 
 function esc(value?: string | number | null): string {
-  if (value === null || value === undefined) return '';
+  if (value === null || value === undefined) return "";
   return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 export function buildPayslipHtml(data: PayslipData): string {
   const l = data.line;
-  const employerCost = (Number(l.amount) || 0) * (1 + (Number(data.employerRate) || 0) / 100);
+  const employerCost =
+    (Number(l.amount) || 0) * (1 + (Number(data.employerRate) || 0) / 100);
 
   return `<!DOCTYPE html>
 <html lang="sv">
@@ -71,11 +72,11 @@ export function buildPayslipHtml(data: PayslipData): string {
       </div>
       <div class="r">
         <div style="font-weight:bold">${esc(data.companyName)}</div>
-        <div class="muted">Org.nr ${esc(data.orgNumber) || '—'}</div>
+        <div class="muted">Org.nr ${esc(data.orgNumber) || "—"}</div>
       </div>
     </div>
 
-    <p class="who">${esc(l.name) || '—'}</p>
+    <p class="who">${esc(l.name) || "—"}</p>
 
     <table>
       <thead>
@@ -83,7 +84,7 @@ export function buildPayslipHtml(data: PayslipData): string {
       </thead>
       <tbody>
         <tr>
-          <td>Arbetad tid${l.hourType && l.hourType !== 'normal' ? ` (${esc(l.hourType)})` : ''}</td>
+          <td>Arbetad tid${l.hourType && l.hourType !== "normal" ? ` (${esc(l.hourType)})` : ""}</td>
           <td class="r">${money(l.hours)}</td>
           <td class="r">${money(l.rate)}</td>
           <td class="r">${money(l.multiplier)}</td>

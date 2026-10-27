@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Type } from "class-transformer";
 import {
   IsArray,
   IsBoolean,
@@ -11,16 +11,16 @@ import {
   Matches,
   Min,
   ValidateNested,
-} from 'class-validator';
-import { WageCategory } from '../schemas/agreement-rule-set.schema';
+} from "class-validator";
+import { WageCategory } from "../schemas/agreement-rule-set.schema";
 import {
   EXPORT_FORMATS,
   PAYROLL_SYSTEMS,
-} from '../schemas/payroll-settings.schema';
+} from "../schemas/payroll-settings.schema";
 import type {
   ExportFormat,
   PayrollSystem,
-} from '../schemas/payroll-settings.schema';
+} from "../schemas/payroll-settings.schema";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -45,8 +45,8 @@ export class HourTypeSupplementDto {
   @IsOptional()
   label?: string;
 
-  @IsIn(['percent', 'fixed'])
-  kind: 'percent' | 'fixed';
+  @IsIn(["percent", "fixed"])
+  kind: "percent" | "fixed";
 
   @IsNumber()
   @Min(0)
@@ -131,9 +131,9 @@ export class AgreementRuleSetDto {
   @IsOptional()
   atkPercent?: number | null;
 
-  @IsIn(['percent', 'fixed'])
+  @IsIn(["percent", "fixed"])
   @IsOptional()
-  wageRaiseKind?: 'percent' | 'fixed' | null;
+  wageRaiseKind?: "percent" | "fixed" | null;
 
   @IsNumber()
   @Min(0)

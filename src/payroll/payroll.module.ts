@@ -1,40 +1,41 @@
-import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { User, UserSchema } from '../users/schemas/user.schema';
-import { Company, CompanySchema } from '../company/schemas/company.schema';
-import { MailModule } from '../mail/mail.module';
-import { PayrollController } from './payroll.controller';
-import { PayrollService } from './payroll.service';
-import { TaxTableService } from './tax-table.service';
-import { PayrollRun, PayrollRunSchema } from './schemas/payroll-run.schema';
-import { Shift, ShiftSchema } from '../shifts/schemas/shift.schema';
+import { Project, ProjectSchema } from "../projects/schemas/project.schema";
+import { Module } from "@nestjs/common";
+import { MongooseModule } from "@nestjs/mongoose";
+import { User, UserSchema } from "../users/schemas/user.schema";
+import { Company, CompanySchema } from "../company/schemas/company.schema";
+import { MailModule } from "../mail/mail.module";
+import { PayrollController } from "./payroll.controller";
+import { PayrollService } from "./payroll.service";
+import { TaxTableService } from "./tax-table.service";
+import { PayrollRun, PayrollRunSchema } from "./schemas/payroll-run.schema";
+import { Shift, ShiftSchema } from "../shifts/schemas/shift.schema";
 import {
   LeaveRequest,
   LeaveRequestSchema,
-} from '../leave/schemas/leave-request.schema';
+} from "../leave/schemas/leave-request.schema";
 import {
   AgreementRuleSet,
   AgreementRuleSetSchema,
-} from './schemas/agreement-rule-set.schema';
+} from "./schemas/agreement-rule-set.schema";
 import {
   PayrollSettings,
   PayrollSettingsSchema,
-} from './schemas/payroll-settings.schema';
-import { WageRate, WageRateSchema } from './schemas/wage-rate.schema';
+} from "./schemas/payroll-settings.schema";
+import { WageRate, WageRateSchema } from "./schemas/wage-rate.schema";
 import {
   PayrollExport,
   PayrollExportSchema,
-} from './schemas/payroll-export.schema';
-import { RuleSource, RuleSourceSchema } from './schemas/rule-source.schema';
+} from "./schemas/payroll-export.schema";
+import { RuleSource, RuleSourceSchema } from "./schemas/rule-source.schema";
 import {
   TaxTableYear,
   TaxTableYearSchema,
-} from './schemas/tax-table-year.schema';
-import { WageBasisController } from './wage-basis.controller';
-import { WageBasisService } from './wage-basis.service';
-import { WageRatesService } from './wage-rates.service';
-import { RuleWatchService } from './rule-watch.service';
-import { AgreementDraftService } from './agreement-draft.service';
+} from "./schemas/tax-table-year.schema";
+import { WageBasisController } from "./wage-basis.controller";
+import { WageBasisService } from "./wage-basis.service";
+import { WageRatesService } from "./wage-rates.service";
+import { RuleWatchService } from "./rule-watch.service";
+import { AgreementDraftService } from "./agreement-draft.service";
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { AgreementDraftService } from './agreement-draft.service';
       { name: PayrollExport.name, schema: PayrollExportSchema },
       { name: RuleSource.name, schema: RuleSourceSchema },
       { name: TaxTableYear.name, schema: TaxTableYearSchema },
+      { name: Project.name, schema: ProjectSchema },
     ]),
   ],
   controllers: [PayrollController, WageBasisController],

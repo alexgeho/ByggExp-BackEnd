@@ -1,5 +1,5 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { HydratedDocument } from "mongoose";
 
 // Avtalsregler — one dated version of a collective agreement's pay rules
 // (Byggavtalet first). The numbers are data, not code: when a new agreement is
@@ -9,18 +9,18 @@ import { HydratedDocument } from 'mongoose';
 // checked it against the agreement text and published it.
 
 export enum AgreementRuleSetStatus {
-  Draft = 'draft',
-  Published = 'published',
+  Draft = "draft",
+  Published = "published",
 }
 
 // Wage categories in Byggavtalet's minimum-wage table.
 export enum WageCategory {
-  Yrkesarbetare = 'yrkesarbetare',
-  NyIBranschen = 'ny_i_branschen',
-  Larling = 'larling',
+  Yrkesarbetare = "yrkesarbetare",
+  NyIBranschen = "ny_i_branschen",
+  Larling = "larling",
   // Övriga arbetstagare 1 (≥ 12 mån i branschen): fördelningstal 0,88.
-  Ovriga1 = 'ovriga_1',
-  Other = 'other', // not covered by the agreement's minimum wage
+  Ovriga1 = "ovriga_1",
+  Other = "other", // not covered by the agreement's minimum wage
 }
 
 @Schema({ _id: false })
@@ -28,7 +28,7 @@ export class MinimumWage {
   @Prop({ type: String, enum: WageCategory, required: true })
   category: WageCategory;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   label: string;
 
   // Lowest allowed hourly wage (SEK) for the category.
@@ -45,11 +45,11 @@ export class HourTypeSupplement {
   @Prop({ required: true })
   hourType: string; // matches Shift.hourType: overtime | ob | …
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   label: string;
 
-  @Prop({ type: String, enum: ['percent', 'fixed'], default: 'percent' })
-  kind: 'percent' | 'fixed';
+  @Prop({ type: String, enum: ["percent", "fixed"], default: "percent" })
+  kind: "percent" | "fixed";
 
   @Prop({ type: Number, default: 0 })
   value: number;
@@ -61,7 +61,7 @@ export type AgreementRuleSetDocument = HydratedDocument<AgreementRuleSet>;
 
 @Schema({ timestamps: true })
 export class AgreementRuleSet {
-  @Prop({ default: 'byggavtalet', index: true })
+  @Prop({ default: "byggavtalet", index: true })
   agreement: string;
 
   @Prop({ required: true })
@@ -71,7 +71,7 @@ export class AgreementRuleSet {
   @Prop({ required: true, index: true })
   validFrom: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   validTo: string;
 
   @Prop({
@@ -84,7 +84,7 @@ export class AgreementRuleSet {
 
   // Where the numbers come from (agreement section, BI/Byggnads circular,
   // Skatteverket page) — shown next to every figure in the admin.
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   sourceNote: string;
 
   @Prop({ type: [MinimumWageSchema], default: [] })
@@ -125,8 +125,8 @@ export class AgreementRuleSet {
   // General raise of every covered worker's own hourly wage from validFrom
   // (Byggavtalet: e.g. "+6,85 kr/tim from 1 May"). kind null = no raise in this
   // version. Applied per company through raise proposals, never silently.
-  @Prop({ type: String, enum: ['percent', 'fixed'], default: null })
-  wageRaiseKind: 'percent' | 'fixed' | null;
+  @Prop({ type: String, enum: ["percent", "fixed"], default: null })
+  wageRaiseKind: "percent" | "fixed" | null;
 
   @Prop({ type: Number, default: 0 })
   wageRaiseValue: number;
@@ -141,7 +141,7 @@ export class AgreementRuleSet {
   @Prop({ type: Boolean, default: false })
   aiDraft: boolean;
 
-  @Prop({ type: String, ref: 'User', default: null })
+  @Prop({ type: String, ref: "User", default: null })
   publishedByUserId?: string | null;
 
   @Prop({ type: Date, default: null })

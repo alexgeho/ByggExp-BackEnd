@@ -2,7 +2,7 @@
 // period into dated pay items under the collective agreement version in force
 // on each day. Pure functions only — the service loads the data, this decides
 // the numbers, so every rule is unit-testable.
-import { round2 } from './payroll-math';
+import { round2 } from "./payroll-math";
 
 export type WageRuleSet = {
   id: string;
@@ -13,7 +13,7 @@ export type WageRuleSet = {
   hourTypeSupplements: Array<{
     hourType: string;
     label?: string;
-    kind: 'percent' | 'fixed';
+    kind: "percent" | "fixed";
     value: number;
   }>;
   vacationPayPercent: number | null;
@@ -25,7 +25,7 @@ export type WageRuleSet = {
   perDiemTaxFreeFull: number;
   perDiemTaxFreeHalf: number;
   atkPercent: number | null;
-  wageRaiseKind?: 'percent' | 'fixed' | null;
+  wageRaiseKind?: "percent" | "fixed" | null;
   wageRaiseValue?: number;
 };
 
@@ -67,11 +67,11 @@ export function toWageShifts(shift: StoredWageShift): WageShift[] {
       ? Number(shift.manualDurationMs)
       : Number(shift.durationMs) || 0;
   const overtimeMs =
-    shift.overtimeStatus === 'approved'
+    shift.overtimeStatus === "approved"
       ? Math.min(Math.max(0, Number(shift.overtimeMs) || 0), totalMs)
       : 0;
   const obMs =
-    shift.obStatus === 'approved'
+    shift.obStatus === "approved"
       ? Math.min(Math.max(0, Number(shift.obMs) || 0), totalMs - overtimeMs)
       : 0;
   const main: WageShift = {
@@ -88,7 +88,7 @@ export function toWageShifts(shift: StoredWageShift): WageShift[] {
     parts.push({
       shiftDate: shift.shiftDate,
       hours: overtimeMs / 3_600_000,
-      hourType: 'overtime',
+      hourType: "overtime",
       projectId: shift.projectId,
     });
   }
@@ -96,7 +96,7 @@ export function toWageShifts(shift: StoredWageShift): WageShift[] {
     parts.push({
       shiftDate: shift.shiftDate,
       hours: obMs / 3_600_000,
-      hourType: 'ob',
+      hourType: "ob",
       projectId: shift.projectId,
     });
   }
@@ -127,7 +127,8 @@ export type WageWorker = {
 export function rateOn(worker: WageWorker, date: string): number {
   let best: WageRateEntry | null = null;
   for (const r of worker.rates || []) {
-    if (r.validFrom <= date && (!best || r.validFrom > best.validFrom)) best = r;
+    if (r.validFrom <= date && (!best || r.validFrom > best.validFrom))
+      best = r;
   }
   return round2(Number(best ? best.hourlyRate : worker.hourlyRate) || 0);
 }
@@ -139,31 +140,34 @@ export function rateOn(worker: WageWorker, date: string): number {
 const CATEGORY_FACTORS: Record<string, number> = { ovriga_1: 0.88 };
 
 export function minimumWageFor(
-  rules: Pick<WageRuleSet, 'minimumWages'>,
+  rules: Pick<WageRuleSet, "minimumWages">,
   category?: string | null,
 ): number | null {
   if (!category) return null;
   const own = rules.minimumWages.find((m) => m.category === category)?.hourly;
   if (own != null) return own;
   const factor = CATEGORY_FACTORS[category];
-  const base = rules.minimumWages.find((m) => m.category === 'yrkesarbetare')?.hourly;
+  const base = rules.minimumWages.find(
+    (m) => m.category === "yrkesarbetare",
+  )?.hourly;
   return factor && base != null ? round2(base * factor) : null;
 }
 
 export function proposeRaisedRate(
   currentRate: number,
-  rules: Pick<WageRuleSet, 'wageRaiseKind' | 'wageRaiseValue' | 'minimumWages'>,
+  rules: Pick<WageRuleSet, "wageRaiseKind" | "wageRaiseValue" | "minimumWages">,
   category?: string | null,
 ): number {
   const value = Number(rules.wageRaiseValue) || 0;
   let raised = currentRate;
-  if (rules.wageRaiseKind === 'fixed') raised = currentRate + value;
-  else if (rules.wageRaiseKind === 'percent') raised = currentRate * (1 + value / 100);
+  if (rules.wageRaiseKind === "fixed") raised = currentRate + value;
+  else if (rules.wageRaiseKind === "percent")
+    raised = currentRate * (1 + value / 100);
   const minimum = minimumWageFor(rules, category);
   return round2(Math.max(raised, minimum ?? 0));
 }
 
-export type WageItemKind = 'salary' | 'absence';
+export type WageItemKind = "salary" | "absence";
 
 export type WageItem = {
   code: string;
@@ -171,7 +175,7 @@ export type WageItem = {
   kind: WageItemKind;
   date: string;
   quantity: number;
-  unit: 'h' | 'km' | 'day' | 'sek';
+  unit: "h" | "km" | "day" | "sek";
   unitPrice: number;
   amount: number;
   taxFree: boolean;
@@ -199,37 +203,37 @@ export type WorkerWageBasis = {
 // Wage-basis item codes. These are the keys the company maps to the
 // lönearter / frånvarokoder in PayrollSettings.
 export const SALARY_ITEM_LABELS: Record<string, string> = {
-  hours_normal: 'Timlön',
-  hours_overtime: 'Timlön övertid',
-  hours_ob: 'Timlön OB',
-  supplement_overtime: 'Övertidstillägg',
-  supplement_ob: 'OB-tillägg',
-  travel_time: 'Restidsersättning',
-  mileage_taxfree: 'Bilersättning skattefri',
-  mileage_taxable: 'Bilersättning skattepliktig',
-  per_diem_full_taxfree: 'Traktamente heldag skattefritt',
-  per_diem_half_taxfree: 'Traktamente halvdag skattefritt',
-  per_diem_taxable: 'Traktamente skattepliktigt',
-  vacation_pay: 'Semesterersättning',
-  atk: 'Arbetstidsförkortning (ATK)',
+  hours_normal: "Timlön",
+  hours_overtime: "Timlön övertid",
+  hours_ob: "Timlön OB",
+  supplement_overtime: "Övertidstillägg",
+  supplement_ob: "OB-tillägg",
+  travel_time: "Restidsersättning",
+  mileage_taxfree: "Bilersättning skattefri",
+  mileage_taxable: "Bilersättning skattepliktig",
+  per_diem_full_taxfree: "Traktamente heldag skattefritt",
+  per_diem_half_taxfree: "Traktamente halvdag skattefritt",
+  per_diem_taxable: "Traktamente skattepliktigt",
+  vacation_pay: "Semesterersättning",
+  atk: "Arbetstidsförkortning (ATK)",
 };
 
 export const ABSENCE_ITEM_LABELS: Record<string, string> = {
-  absence_sick: 'Sjukfrånvaro',
-  absence_vacation: 'Semester',
-  absence_vab: 'VAB',
-  absence_parental: 'Föräldraledighet',
-  absence_leave: 'Tjänstledighet',
-  absence_other: 'Övrig frånvaro',
+  absence_sick: "Sjukfrånvaro",
+  absence_vacation: "Semester",
+  absence_vab: "VAB",
+  absence_parental: "Föräldraledighet",
+  absence_leave: "Tjänstledighet",
+  absence_other: "Övrig frånvaro",
 };
 
 // Standard PAXml frånvarokoder; the company can override them in settings.
 export const DEFAULT_ABSENCE_CODES: Record<string, string> = {
-  absence_sick: 'SJK',
-  absence_vacation: 'SEM',
-  absence_vab: 'VAB',
-  absence_parental: 'FPE',
-  absence_leave: 'TJL',
+  absence_sick: "SJK",
+  absence_vacation: "SEM",
+  absence_vab: "VAB",
+  absence_parental: "FPE",
+  absence_leave: "TJL",
 };
 
 // Byggavtalet's ordinary working time is 40 h/week; a full absence day on a
@@ -238,12 +242,12 @@ export const ABSENCE_HOURS_PER_DAY = 8;
 
 // Pay that semesterersättning and ATK are calculated on.
 const VACATION_BASIS_CODES = new Set([
-  'hours_normal',
-  'hours_overtime',
-  'hours_ob',
-  'supplement_overtime',
-  'supplement_ob',
-  'travel_time',
+  "hours_normal",
+  "hours_overtime",
+  "hours_ob",
+  "supplement_overtime",
+  "supplement_ob",
+  "travel_time",
 ]);
 
 export function ruleSetForDate(
@@ -269,8 +273,8 @@ const isWeekend = (date: string): boolean => {
 };
 
 function hourTypeKey(hourType?: string): string {
-  const t = String(hourType || 'normal').toLowerCase();
-  return t || 'normal';
+  const t = String(hourType || "normal").toLowerCase();
+  return t || "normal";
 }
 
 export function buildWorkerWageBasis(
@@ -288,20 +292,20 @@ export function buildWorkerWageBasis(
 
   if (!rate) {
     warnings.push({
-      code: 'missing_rate',
-      message: 'Timlön saknas — sätt timlön på den anställde.',
+      code: "missing_rate",
+      message: "Timlön saknas — sätt timlön på den anställde.",
     });
   }
   if (!category) {
     warnings.push({
-      code: 'missing_category',
+      code: "missing_category",
       message:
-        'Lönekategori enligt avtalet saknas — minimilönen kan inte kontrolleras.',
+        "Lönekategori enligt avtalet saknas — minimilönen kan inte kontrolleras.",
     });
   }
 
-  const push = (item: Omit<WageItem, 'label'> & { label?: string }) => {
-    if (!item.amount && item.kind === 'salary') return;
+  const push = (item: Omit<WageItem, "label"> & { label?: string }) => {
+    if (!item.amount && item.kind === "salary") return;
     items.push({
       ...item,
       label:
@@ -326,7 +330,7 @@ export function buildWorkerWageBasis(
     const type = hourTypeKey(shift.hourType);
     const dayRate = rateOn(worker, date);
     const base = {
-      kind: 'salary' as const,
+      kind: "salary" as const,
       date,
       projectId: shift.projectId,
       ruleSetId: rules?.id,
@@ -338,18 +342,18 @@ export function buildWorkerWageBasis(
         ...base,
         code: `hours_${type}`,
         quantity: hours,
-        unit: 'h',
+        unit: "h",
         unitPrice: dayRate,
         amount: round2(hours * dayRate),
       });
 
-      if (type !== 'normal') {
+      if (type !== "normal") {
         const supplement = rules?.hourTypeSupplements.find(
           (s) => hourTypeKey(s.hourType) === type,
         );
         if (supplement) {
           const perHour =
-            supplement.kind === 'fixed'
+            supplement.kind === "fixed"
               ? round2(supplement.value)
               : round2((dayRate * supplement.value) / 100);
           push({
@@ -357,13 +361,13 @@ export function buildWorkerWageBasis(
             code: `supplement_${type}`,
             label: supplement.label || undefined,
             quantity: hours,
-            unit: 'h',
+            unit: "h",
             unitPrice: perHour,
             amount: round2(hours * perHour),
           });
         } else if (rules) {
           warnings.push({
-            code: 'missing_supplement',
+            code: "missing_supplement",
             message: `Avtalsversionen "${rules.name}" har inget tillägg för timtyp "${type}".`,
             date,
           });
@@ -377,9 +381,9 @@ export function buildWorkerWageBasis(
     if (travelHours > 0 && rules.travelTimeRatePerHour > 0) {
       push({
         ...base,
-        code: 'travel_time',
+        code: "travel_time",
         quantity: travelHours,
-        unit: 'h',
+        unit: "h",
         unitPrice: rules.travelTimeRatePerHour,
         amount: round2(travelHours * rules.travelTimeRatePerHour),
       });
@@ -393,9 +397,9 @@ export function buildWorkerWageBasis(
       );
       push({
         ...base,
-        code: 'mileage_taxfree',
+        code: "mileage_taxfree",
         quantity: km,
-        unit: 'km',
+        unit: "km",
         unitPrice: taxFreePerKm,
         amount: round2(km * taxFreePerKm),
         taxFree: true,
@@ -403,17 +407,17 @@ export function buildWorkerWageBasis(
       const taxablePerKm = round2(rules.mileageRatePerKm - taxFreePerKm);
       push({
         ...base,
-        code: 'mileage_taxable',
+        code: "mileage_taxable",
         quantity: km,
-        unit: 'km',
+        unit: "km",
         unitPrice: taxablePerKm,
         amount: round2(km * taxablePerKm),
       });
     }
 
-    const perDiem = String(shift.perDiem || 'none');
-    if (perDiem === 'full' || perDiem === 'half') {
-      const full = perDiem === 'full';
+    const perDiem = String(shift.perDiem || "none");
+    if (perDiem === "full" || perDiem === "half") {
+      const full = perDiem === "full";
       const paid = full ? rules.perDiemFull : rules.perDiemHalf;
       const taxFree = Math.min(
         full ? rules.perDiemTaxFreeFull : rules.perDiemTaxFreeHalf,
@@ -421,25 +425,25 @@ export function buildWorkerWageBasis(
       );
       if (!paid) {
         warnings.push({
-          code: 'missing_per_diem',
+          code: "missing_per_diem",
           message: `Traktamentsbelopp saknas i avtalsversionen "${rules.name}".`,
           date,
         });
       }
       push({
         ...base,
-        code: full ? 'per_diem_full_taxfree' : 'per_diem_half_taxfree',
+        code: full ? "per_diem_full_taxfree" : "per_diem_half_taxfree",
         quantity: 1,
-        unit: 'day',
+        unit: "day",
         unitPrice: taxFree,
         amount: round2(taxFree),
         taxFree: true,
       });
       push({
         ...base,
-        code: 'per_diem_taxable',
+        code: "per_diem_taxable",
         quantity: 1,
-        unit: 'day',
+        unit: "day",
         unitPrice: round2(paid - taxFree),
         amount: round2(paid - taxFree),
       });
@@ -460,11 +464,11 @@ export function buildWorkerWageBasis(
     for (let date = from; date <= to; date = addDays(date, 1)) {
       if (isWeekend(date)) continue;
       push({
-        code: ABSENCE_ITEM_LABELS[code] ? code : 'absence_other',
-        kind: 'absence',
+        code: ABSENCE_ITEM_LABELS[code] ? code : "absence_other",
+        kind: "absence",
         date,
         quantity: hoursPerDay,
-        unit: 'h',
+        unit: "h",
         unitPrice: 0,
         amount: 0,
         taxFree: false,
@@ -477,23 +481,25 @@ export function buildWorkerWageBasis(
   for (const rules of usedRuleSets.values()) {
     const basis = round2(
       items
-        .filter((i) => i.ruleSetId === rules.id && VACATION_BASIS_CODES.has(i.code))
+        .filter(
+          (i) => i.ruleSetId === rules.id && VACATION_BASIS_CODES.has(i.code),
+        )
         .reduce((s, i) => s + i.amount, 0),
     );
     const date =
       rules.validTo && rules.validTo < period.to ? rules.validTo : period.to;
     const accruals: Array<[string, number | null]> = [
-      ['vacation_pay', rules.vacationPayPercent],
-      ['atk', rules.atkPercent],
+      ["vacation_pay", rules.vacationPayPercent],
+      ["atk", rules.atkPercent],
     ];
     for (const [code, percent] of accruals) {
       if (percent == null || !basis) continue;
       push({
         code,
-        kind: 'salary',
+        kind: "salary",
         date,
         quantity: percent,
-        unit: 'sek',
+        unit: "sek",
         unitPrice: basis,
         amount: round2((basis * percent) / 100),
         taxFree: false,
@@ -502,17 +508,21 @@ export function buildWorkerWageBasis(
     }
 
     const minimumHourly = minimumWageFor(rules, category);
-    if (category && category !== 'other' && minimumHourly == null) {
+    if (category && category !== "other" && minimumHourly == null) {
       warnings.push({
-        code: 'missing_minimum_wage',
+        code: "missing_minimum_wage",
         message: `Avtalsversionen "${rules.name}" saknar minimilön för kategorin "${category}".`,
       });
     }
     // Checked at the last day this version covers in the period.
     const versionRate = rateOn(worker, date);
-    if (minimumHourly != null && versionRate > 0 && versionRate < minimumHourly) {
+    if (
+      minimumHourly != null &&
+      versionRate > 0 &&
+      versionRate < minimumHourly
+    ) {
       warnings.push({
-        code: 'below_minimum_wage',
+        code: "below_minimum_wage",
         message: `Timlönen ${versionRate} kr är lägre än avtalets minimilön ${minimumHourly} kr (${rules.name}).`,
       });
     }
@@ -521,8 +531,8 @@ export function buildWorkerWageBasis(
   if (missingRuleDates.size) {
     const dates = [...missingRuleDates].sort();
     warnings.push({
-      code: 'missing_rule_set',
-      message: `Ingen publicerad avtalsversion gäller ${dates[0]}${dates.length > 1 ? ` – ${dates[dates.length - 1]}` : ''}. Endast grundlön är beräknad för dessa dagar.`,
+      code: "missing_rule_set",
+      message: `Ingen publicerad avtalsversion gäller ${dates[0]}${dates.length > 1 ? ` – ${dates[dates.length - 1]}` : ""}. Endast grundlön är beräknad för dessa dagar.`,
     });
   }
 
@@ -542,16 +552,16 @@ export function buildWorkerWageBasis(
     totals: {
       workedHours: round2(
         items
-          .filter((i) => i.code.startsWith('hours_'))
+          .filter((i) => i.code.startsWith("hours_"))
           .reduce((s, i) => s + i.quantity, 0),
       ),
       absenceHours: round2(
         items
-          .filter((i) => i.kind === 'absence')
+          .filter((i) => i.kind === "absence")
           .reduce((s, i) => s + i.quantity, 0),
       ),
-      taxableAmount: sum((i) => i.kind === 'salary' && !i.taxFree),
-      taxFreeAmount: sum((i) => i.kind === 'salary' && i.taxFree),
+      taxableAmount: sum((i) => i.kind === "salary" && !i.taxFree),
+      taxFreeAmount: sum((i) => i.kind === "salary" && i.taxFree),
     },
   };
 }

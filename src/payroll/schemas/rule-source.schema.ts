@@ -1,5 +1,5 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { HydratedDocument } from "mongoose";
 
 // A web page ByggExp watches for changes that can affect pay rules: Byggnads'
 // agreement pages, Skatteverket's per diem / employer fee / AGI pages. A change
@@ -8,9 +8,9 @@ import { HydratedDocument } from 'mongoose';
 export type RuleSourceDocument = HydratedDocument<RuleSource>;
 
 export const RULE_SOURCE_AREAS = [
-  'agreement', // Byggavtalet: wages, supplements
-  'tax', // tax tables, per diem, mileage, employer fees
-  'agi', // arbetsgivardeklaration format
+  "agreement", // Byggavtalet: wages, supplements
+  "tax", // tax tables, per diem, mileage, employer fees
+  "agi", // arbetsgivardeklaration format
 ] as const;
 export type RuleSourceArea = (typeof RULE_SOURCE_AREAS)[number];
 
@@ -25,18 +25,18 @@ export class RuleSource {
   @Prop({ required: true })
   url: string;
 
-  @Prop({ type: String, enum: RULE_SOURCE_AREAS, default: 'agreement' })
+  @Prop({ type: String, enum: RULE_SOURCE_AREAS, default: "agreement" })
   area: RuleSourceArea;
 
   @Prop({ type: Boolean, default: true })
   enabled: boolean;
 
   // sha256 of the page's visible text at the last check.
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   lastHash: string;
 
   // A short excerpt of the text at the last check, to show what it says now.
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   lastExcerpt: string;
 
   @Prop({ type: Date, default: null })
@@ -45,7 +45,7 @@ export class RuleSource {
   @Prop({ type: Date, default: null })
   lastChangedAt?: Date | null;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   lastError: string;
 
   // Set when a change has been seen and not yet reviewed by a superadmin.
@@ -55,7 +55,7 @@ export class RuleSource {
   @Prop({ type: Date, default: null })
   reviewedAt?: Date | null;
 
-  @Prop({ type: String, ref: 'User', default: null })
+  @Prop({ type: String, ref: "User", default: null })
   reviewedByUserId?: string | null;
 
   // Agreement PDFs linked from the page, so a new or changed document is

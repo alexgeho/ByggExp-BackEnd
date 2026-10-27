@@ -1,10 +1,10 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { HydratedDocument } from "mongoose";
 
 export enum PayrollStatus {
-  Draft = 'draft',
-  Approved = 'approved',
-  Paid = 'paid',
+  Draft = "draft",
+  Approved = "approved",
+  Paid = "paid",
 }
 
 // One worker's line in a payroll run. Rate is snapshotted at run time so later
@@ -14,7 +14,7 @@ export class PayrollLine {
   @Prop({ type: String, required: true })
   userId: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: "" })
   name: string;
 
   @Prop({ type: Number, default: 0 })
@@ -27,7 +27,7 @@ export class PayrollLine {
   @Prop({ type: Number, default: 1 })
   multiplier: number;
 
-  @Prop({ default: 'normal' })
+  @Prop({ default: "normal" })
   hourType: string;
 
   // amount = gross = hours × rate × multiplier.
@@ -47,7 +47,7 @@ export type PayrollRunDocument = HydratedDocument<PayrollRun>;
 
 @Schema({ timestamps: true })
 export class PayrollRun {
-  @Prop({ type: String, ref: 'Company', required: true, index: true })
+  @Prop({ type: String, ref: "Company", required: true, index: true })
   companyId: string;
 
   // Period the hours were worked in, as plain YYYY-MM-DD strings (same format as
@@ -59,13 +59,18 @@ export class PayrollRun {
   periodTo: string;
 
   // Which measure the hours came from: contracted "planned" or measured "actual".
-  @Prop({ default: 'planned' })
+  @Prop({ default: "planned" })
   basis: string;
 
-  @Prop({ type: String, ref: 'Project', default: null })
+  @Prop({ type: String, ref: "Project", default: null })
   projectId?: string | null;
 
-  @Prop({ type: String, enum: PayrollStatus, default: PayrollStatus.Draft, index: true })
+  @Prop({
+    type: String,
+    enum: PayrollStatus,
+    default: PayrollStatus.Draft,
+    index: true,
+  })
   status: PayrollStatus;
 
   @Prop({ type: [PayrollLineSchema], default: [] })
@@ -100,7 +105,7 @@ export class PayrollRun {
   @Prop({ type: Number, default: 0 })
   totalEmployerCost: number;
 
-  @Prop({ type: String, ref: 'User', default: null })
+  @Prop({ type: String, ref: "User", default: null })
   createdByUserId?: string | null;
 
   @Prop({ type: Date, default: null })

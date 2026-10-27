@@ -4,14 +4,14 @@
 // can tell the user. The mapped rows are then written as:
 //   - PAXml 2.0: the common Swedish import format (Fortnox, Visma, Hogia, Crona …)
 //   - CSV: a plain spreadsheet for a system without PAXml import.
-import type { WageItem, WorkerWageBasis } from './wage-basis';
+import type { WageItem, WorkerWageBasis } from "./wage-basis";
 
 export type ExportInput = {
   companyName: string;
   orgNumber: string;
   generatedAt: Date;
   workers: Array<
-    Pick<WorkerWageBasis, 'userId' | 'name' | 'items'> & {
+    Pick<WorkerWageBasis, "userId" | "name" | "items"> & {
       employeeId: string; // anställningsnummer in the payroll system
     }
   >;
@@ -23,7 +23,7 @@ export type ExportSkipped = {
   userId: string;
   name: string;
   code: string;
-  reason: 'no_employee_id' | 'no_code';
+  reason: "no_employee_id" | "no_code";
 };
 
 export type ExportRow = {
@@ -50,20 +50,30 @@ export function collectExportRows(input: ExportInput): {
   };
 
   for (const worker of input.workers) {
-    const employeeId = String(worker.employeeId || '').trim();
+    const employeeId = String(worker.employeeId || "").trim();
     if (!employeeId) {
       if (worker.items.length) {
-        skip({ userId: worker.userId, name: worker.name, code: '*', reason: 'no_employee_id' });
+        skip({
+          userId: worker.userId,
+          name: worker.name,
+          code: "*",
+          reason: "no_employee_id",
+        });
       }
       continue;
     }
     for (const item of worker.items) {
-      const isAbsence = item.kind === 'absence';
+      const isAbsence = item.kind === "absence";
       const code = String(
-        (isAbsence ? input.absenceCodes : input.salaryCodes)[item.code] || '',
+        (isAbsence ? input.absenceCodes : input.salaryCodes)[item.code] || "",
       ).trim();
       if (!code) {
-        skip({ userId: worker.userId, name: worker.name, code: item.code, reason: 'no_code' });
+        skip({
+          userId: worker.userId,
+          name: worker.name,
+          code: item.code,
+          reason: "no_code",
+        });
         continue;
       }
       const row = { employeeId, name: worker.name, code, item };
@@ -77,19 +87,20 @@ export function collectExportRows(input: ExportInput): {
 // ---- PAXml ---------------------------------------------------------------
 
 const esc = (value: unknown) =>
-  String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 
-const num = (n: number) => (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
+const num = (n: number) =>
+  (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
 
 function salaryTrans({ employeeId, code, item }: ExportRow) {
   // Accruals (semesterersättning, ATK) are plain amounts; everything else is
   // quantity × unit price.
-  const amountOnly = item.unit === 'sek';
+  const amountOnly = item.unit === "sek";
   return [
     `    <lonetrans anstid="${esc(employeeId)}">`,
     `      <lonart>${esc(code)}</lonart>`,
@@ -102,7 +113,7 @@ function salaryTrans({ employeeId, code, item }: ExportRow) {
         ]),
     `      <belopp>${num(item.amount)}</belopp>`,
     `    </lonetrans>`,
-  ].join('\n');
+  ].join("\n");
 }
 
 function timeTrans({ employeeId, code, item }: ExportRow) {
@@ -112,7 +123,7 @@ function timeTrans({ employeeId, code, item }: ExportRow) {
     `      <datum>${esc(item.date)}</datum>`,
     `      <timmar>${num(item.quantity)}</timmar>`,
     `    </tidtrans>`,
-  ].join('\n');
+  ].join("\n");
 }
 
 export function buildPaxml(input: ExportInput) {
@@ -120,22 +131,30 @@ export function buildPaxml(input: ExportInput) {
   const xml = [
     '<?xml version="1.0" encoding="utf-8"?>',
     '<paxml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.paxml.se/2.0/paxml.xsd">',
-    '  <header>',
-    '    <format>LÖNIN</format>',
-    '    <version>2.0</version>',
+    "  <header>",
+    "    <format>LÖNIN</format>",
+    "    <version>2.0</version>",
     `    <datum>${input.generatedAt.toISOString().slice(0, 19)}</datum>`,
     `    <foretagnamn>${esc(input.companyName)}</foretagnamn>`,
     `    <foretagorgnr>${esc(input.orgNumber)}</foretagorgnr>`,
-    '  </header>',
+    "  </header>",
     ...(salary.length
-      ? ['  <lonetransaktioner>', ...salary.map(salaryTrans), '  </lonetransaktioner>']
+      ? [
+          "  <lonetransaktioner>",
+          ...salary.map(salaryTrans),
+          "  </lonetransaktioner>",
+        ]
       : []),
     ...(absence.length
-      ? ['  <tidtransaktioner>', ...absence.map(timeTrans), '  </tidtransaktioner>']
+      ? [
+          "  <tidtransaktioner>",
+          ...absence.map(timeTrans),
+          "  </tidtransaktioner>",
+        ]
       : []),
-    '</paxml>',
-    '',
-  ].join('\n');
+    "</paxml>",
+    "",
+  ].join("\n");
   return {
     content: xml,
     skipped,
@@ -148,52 +167,52 @@ export function buildPaxml(input: ExportInput) {
 
 // Swedish Excel conventions: semicolon separator, decimal comma, UTF-8 BOM.
 const csvCell = (value: unknown) => {
-  const s = String(value ?? '');
+  const s = String(value ?? "");
   return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
-const csvNum = (n: number) => num(n).replace('.', ',');
+const csvNum = (n: number) => num(n).replace(".", ",");
 
 export function buildCsv(input: ExportInput) {
   const { salary, absence, skipped } = collectExportRows(input);
   const header = [
-    'Anställningsnr',
-    'Namn',
-    'Datum',
-    'Typ',
-    'Löneart/Frånvarokod',
-    'Benämning',
-    'Antal',
-    'Enhet',
-    'À-pris',
-    'Belopp',
+    "Anställningsnr",
+    "Namn",
+    "Datum",
+    "Typ",
+    "Löneart/Frånvarokod",
+    "Benämning",
+    "Antal",
+    "Enhet",
+    "À-pris",
+    "Belopp",
   ];
-  const unit = { h: 'tim', km: 'km', day: 'dag', sek: 'kr' } as const;
+  const unit = { h: "tim", km: "km", day: "dag", sek: "kr" } as const;
   const rows = [...salary, ...absence]
     .sort((a, b) =>
       a.employeeId === b.employeeId
         ? a.item.date.localeCompare(b.item.date)
-        : a.employeeId.localeCompare(b.employeeId, 'sv', { numeric: true }),
+        : a.employeeId.localeCompare(b.employeeId, "sv", { numeric: true }),
     )
     .map(({ employeeId, name, code, item }) => {
-      const amountOnly = item.unit === 'sek';
-      const isAbsence = item.kind === 'absence';
+      const amountOnly = item.unit === "sek";
+      const isAbsence = item.kind === "absence";
       return [
         employeeId,
         name,
         item.date,
-        isAbsence ? 'Frånvaro' : 'Lön',
+        isAbsence ? "Frånvaro" : "Lön",
         code,
         item.label,
-        amountOnly ? '' : csvNum(item.quantity),
-        amountOnly ? '' : unit[item.unit],
-        amountOnly || isAbsence ? '' : csvNum(item.unitPrice),
-        isAbsence ? '' : csvNum(item.amount),
+        amountOnly ? "" : csvNum(item.quantity),
+        amountOnly ? "" : unit[item.unit],
+        amountOnly || isAbsence ? "" : csvNum(item.unitPrice),
+        isAbsence ? "" : csvNum(item.amount),
       ];
     });
   const content =
-    '﻿' +
-    [header, ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n') +
-    '\r\n';
+    "﻿" +
+    [header, ...rows].map((r) => r.map(csvCell).join(";")).join("\r\n") +
+    "\r\n";
   return {
     content,
     skipped,

@@ -4,29 +4,25 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-} from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { cronsDisabled } from '../common/cron.util';
-import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
+} from "@nestjs/common";
+import { Cron } from "@nestjs/schedule";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { cronsDisabled } from "../common/cron.util";
+import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
 import {
   AgreementRuleSet,
   AgreementRuleSetDocument,
   AgreementRuleSetStatus,
-} from './schemas/agreement-rule-set.schema';
+} from "./schemas/agreement-rule-set.schema";
 import {
   PayrollSettings,
   PayrollSettingsDocument,
-} from './schemas/payroll-settings.schema';
-import { WageRate, WageRateDocument } from './schemas/wage-rate.schema';
-import { ApplyRaiseDto, WageRateDto } from './dto/agreement-rule-set.dto';
-import { WageRuleSet, proposeRaisedRate } from './wage-basis';
-import {
-  latestRate,
-  recordWageRate,
-  swedishToday,
-} from './wage-history';
+} from "./schemas/payroll-settings.schema";
+import { WageRate, WageRateDocument } from "./schemas/wage-rate.schema";
+import { ApplyRaiseDto, WageRateDto } from "./dto/agreement-rule-set.dto";
+import { WageRuleSet, proposeRaisedRate } from "./wage-basis";
+import { latestRate, recordWageRate, swedishToday } from "./wage-history";
 
 type AuthUser = {
   role: UserRole;
@@ -77,7 +73,7 @@ export class WageRatesService {
       userId: dto.userId,
       hourlyRate: dto.hourlyRate,
       validFrom: dto.validFrom,
-      reason: 'manual',
+      reason: "manual",
       previousRate: worker.hourlyRate ?? null,
       createdByUserId: user.userId ?? null,
     });
@@ -87,7 +83,7 @@ export class WageRatesService {
 
   async removeRate(id: string, user: AuthUser) {
     const rate = await this.wageRateModel.findById(id).exec();
-    if (!rate) throw new NotFoundException('Wage rate not found');
+    if (!rate) throw new NotFoundException("Wage rate not found");
     await this.companyWorker(rate.userId, user);
     await rate.deleteOne();
     await this.syncCurrentRate(rate.userId);
@@ -100,12 +96,15 @@ export class WageRatesService {
   // hasn't handled yet, oldest first.
   async pendingRaises(user: AuthUser) {
     const companyId = this.resolveCompanyId(user);
-    const settings = await this.settingsModel.findOne({ companyId }).lean().exec();
+    const settings = await this.settingsModel
+      .findOne({ companyId })
+      .lean()
+      .exec();
     const handled = new Set(settings?.handledRaises || []);
     const versions = await this.ruleSetModel
       .find({
         status: AgreementRuleSetStatus.Published,
-        wageRaiseKind: { $in: ['percent', 'fixed'] },
+        wageRaiseKind: { $in: ["percent", "fixed"] },
         wageRaiseValue: { $gt: 0 },
       })
       .sort({ validFrom: 1 })
@@ -132,26 +131,26 @@ export class WageRatesService {
 
     const workers = await this.userModel
       .find({ companyId, erasedAt: null, role: { $ne: UserRole.SuperAdmin } })
-      .select('name hourlyRate wageCategory')
+      .select("name hourlyRate wageCategory")
       .lean()
       .exec();
     const ids = workers.map((w) => String(w._id));
     const rates = await this.wageRateModel
       .find({ userId: { $in: ids } })
-      .select('userId validFrom hourlyRate')
+      .select("userId validFrom hourlyRate")
       .lean()
       .exec();
 
     const items = workers
       // Only workers under the agreement; salaried / "other" are left out.
-      .filter((w) => w.wageCategory && w.wageCategory !== 'other')
+      .filter((w) => w.wageCategory && w.wageCategory !== "other")
       .map((w) => {
         const own = rates.filter((r) => String(r.userId) === String(w._id));
         const current = latestRate(own, dayBefore) ?? Number(w.hourlyRate) ?? 0;
         const already = own.find((r) => r.validFrom === version.validFrom);
         return {
           userId: String(w._id),
-          name: w.name || '',
+          name: w.name || "",
           wageCategory: w.wageCategory,
           currentRate: current || 0,
           proposedRate: current
@@ -160,11 +159,11 @@ export class WageRatesService {
           alreadySet: already ? already.hourlyRate : null,
         };
       })
-      .sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+      .sort((a, b) => a.name.localeCompare(b.name, "sv"));
 
     const uncategorized = workers
       .filter((w) => !w.wageCategory)
-      .map((w) => ({ userId: String(w._id), name: w.name || '' }));
+      .map((w) => ({ userId: String(w._id), name: w.name || "" }));
 
     return {
       ruleSet: {
@@ -185,7 +184,7 @@ export class WageRatesService {
     const ids = dto.items.map((i) => i.userId);
     const workers = await this.userModel
       .find({ _id: { $in: ids }, companyId })
-      .select('hourlyRate')
+      .select("hourlyRate")
       .lean()
       .exec();
     const byId = new Map(workers.map((w) => [String(w._id), w]));
@@ -198,7 +197,7 @@ export class WageRatesService {
         userId: item.userId,
         hourlyRate: item.hourlyRate,
         validFrom: version.validFrom,
-        reason: 'agreement_raise',
+        reason: "agreement_raise",
         previousRate: worker.hourlyRate ?? null,
         ruleSetId: String(version._id),
         createdByUserId: user.userId ?? null,
@@ -226,18 +225,18 @@ export class WageRatesService {
 
   // A raise dated 1 May is entered weeks ahead; on the day, the worker's
   // current wage (shown across the app) moves to it. Daily at 00:20.
-  @Cron('20 0 * * *', { timeZone: 'Europe/Stockholm' })
+  @Cron("20 0 * * *", { timeZone: "Europe/Stockholm" })
   async syncAll(): Promise<void> {
     if (cronsDisabled() || this.running) return;
     this.running = true;
     try {
       const today = swedishToday();
       const userIds = await this.wageRateModel
-        .distinct('userId', { validFrom: today })
+        .distinct("userId", { validFrom: today })
         .exec();
       for (const id of userIds) await this.syncCurrentRate(String(id));
     } catch (error) {
-      this.logger.error('Wage rate sync failed', error);
+      this.logger.error("Wage rate sync failed", error);
     } finally {
       this.running = false;
     }
@@ -246,7 +245,7 @@ export class WageRatesService {
   private async syncCurrentRate(userId: string): Promise<void> {
     const rates = await this.wageRateModel
       .find({ userId })
-      .select('validFrom hourlyRate')
+      .select("validFrom hourlyRate")
       .lean()
       .exec();
     const current = latestRate(rates, swedishToday());
@@ -262,10 +261,10 @@ export class WageRatesService {
   private async publishedVersion(id: string) {
     const version = await this.ruleSetModel.findById(id).lean().exec();
     if (!version || version.status !== AgreementRuleSetStatus.Published) {
-      throw new NotFoundException('Published agreement version not found');
+      throw new NotFoundException("Published agreement version not found");
     }
     if (!version.wageRaiseKind || !(Number(version.wageRaiseValue) > 0)) {
-      throw new BadRequestException('This agreement version has no wage raise');
+      throw new BadRequestException("This agreement version has no wage raise");
     }
     return version;
   }
@@ -274,16 +273,17 @@ export class WageRatesService {
     const companyId = this.resolveCompanyId(user);
     const worker = await this.userModel
       .findOne({ _id: userId, companyId })
-      .select('hourlyRate companyId')
+      .select("hourlyRate companyId")
       .lean()
       .exec();
-    if (!worker) throw new NotFoundException('Worker not found in your company');
+    if (!worker)
+      throw new NotFoundException("Worker not found in your company");
     return worker;
   }
 
   private resolveCompanyId(user: AuthUser): string {
     if (!user.companyId) {
-      throw new ForbiddenException('Your account is not attached to a company');
+      throw new ForbiddenException("Your account is not attached to a company");
     }
     return user.companyId;
   }

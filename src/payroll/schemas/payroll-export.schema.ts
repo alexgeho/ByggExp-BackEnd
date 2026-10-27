@@ -1,5 +1,5 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { HydratedDocument } from "mongoose";
 
 // One downloaded lönerunderlag file: which period and which workers went to
 // the payroll system. Lets the admin see who is already exported and whether
@@ -8,7 +8,7 @@ export type PayrollExportDocument = HydratedDocument<PayrollExport>;
 
 @Schema({ timestamps: true })
 export class PayrollExport {
-  @Prop({ type: String, ref: 'Company', required: true, index: true })
+  @Prop({ type: String, ref: "Company", required: true, index: true })
   companyId: string;
 
   // YYYY-MM-DD, inclusive.
@@ -22,10 +22,10 @@ export class PayrollExport {
   @Prop({ type: [String], default: [] })
   userIds: string[];
 
-  @Prop({ type: String, default: 'paxml' })
+  @Prop({ type: String, default: "paxml" })
   format: string;
 
-  @Prop({ type: String, ref: 'User', default: null })
+  @Prop({ type: String, ref: "User", default: null })
   exportedByUserId?: string | null;
 
   createdAt?: Date;

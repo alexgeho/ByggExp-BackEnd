@@ -1,28 +1,28 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { BadRequestException, Injectable, Logger } from "@nestjs/common";
+import { Cron } from "@nestjs/schedule";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
 import {
   ClaudeBlock,
   callClaude,
   claudeEnabled,
   parseJsonObject,
-} from '../common/anthropic.client';
-import { cronsDisabled } from '../common/cron.util';
+} from "../common/anthropic.client";
+import { cronsDisabled } from "../common/cron.util";
 import {
   AgreementRuleSet,
   AgreementRuleSetDocument,
   AgreementRuleSetStatus,
-} from './schemas/agreement-rule-set.schema';
-import { RuleSource, RuleSourceDocument } from './schemas/rule-source.schema';
-import { RuleWatchService } from './rule-watch.service';
-import { textHash } from './rule-watch.util';
+} from "./schemas/agreement-rule-set.schema";
+import { RuleSource, RuleSourceDocument } from "./schemas/rule-source.schema";
+import { RuleWatchService } from "./rule-watch.service";
+import { textHash } from "./rule-watch.util";
 import {
   Extracted,
   agreementPdfLinks,
   draftsFromExtraction,
-} from './agreement-draft.util';
-import { swedishToday } from './wage-history';
+} from "./agreement-draft.util";
+import { swedishToday } from "./wage-history";
 
 // Reads agreement documents (Byggavtalet, a Byggnads / Byggföretagen circular,
 // or pasted text) and turns the figures they state into DRAFT agreement
@@ -32,7 +32,7 @@ import { swedishToday } from './wage-history';
 // lists where each figure was found. A superadmin checks every number before
 // publishing — nothing here is ever published automatically.
 
-const MODEL = process.env.PAYROLL_RULES_MODEL || 'claude-opus-5-5';
+const MODEL = process.env.PAYROLL_RULES_MODEL || "claude-opus-5-5";
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
 
 type PdfInput = { buffer: Buffer; name: string };
@@ -88,16 +88,17 @@ export class AgreementDraftService {
     sourceLabel?: string;
   }): { accepted: true; startedAt: string } {
     this.assertEnabled();
-    if (input.file && input.file.mimetype !== 'application/pdf') {
-      throw new BadRequestException('Upload a PDF, or paste the text instead');
+    if (input.file && input.file.mimetype !== "application/pdf") {
+      throw new BadRequestException("Upload a PDF, or paste the text instead");
     }
     if (!input.file && !input.text?.trim()) {
-      throw new BadRequestException('Provide a PDF file or the document text');
+      throw new BadRequestException("Provide a PDF file or the document text");
     }
     const pdfs = input.file
       ? [{ buffer: input.file.buffer, name: input.file.originalname }]
       : [];
-    const source = input.sourceLabel || input.file?.originalname || 'inklistrad text';
+    const source =
+      input.sourceLabel || input.file?.originalname || "inklistrad text";
     return this.runInBackground(source, () =>
       this.draftFromDocuments({ pdfs, text: input.text, source }),
     );
@@ -117,21 +118,23 @@ export class AgreementDraftService {
     if (all) this.assertEnabled();
     const startedAt = new Date().toISOString();
     const sources = await this.sourceModel
-      .find({ enabled: true, area: 'agreement' })
+      .find({ enabled: true, area: "agreement" })
       .exec();
     const errors: string[] = [];
     const found = new Map<string, RuleSourceDocument>();
     for (const source of sources) {
       try {
         const res = await fetch(source.url, {
-          headers: { 'User-Agent': 'ByggExp regelbevakning' },
+          headers: { "User-Agent": "ByggExp regelbevakning" },
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         for (const url of agreementPdfLinks(await res.text(), source.url)) {
           if (!found.has(url)) found.set(url, source);
         }
       } catch (error) {
-        errors.push(`${source.name}: ${String((error as Error)?.message || error)}`);
+        errors.push(
+          `${source.name}: ${String((error as Error)?.message || error)}`,
+        );
       }
     }
 
@@ -141,12 +144,13 @@ export class AgreementDraftService {
       const firstLook = !source.documentsBaselinedAt;
       try {
         const res = await fetch(url, {
-          headers: { 'User-Agent': 'ByggExp regelbevakning' },
+          headers: { "User-Agent": "ByggExp regelbevakning" },
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const buffer = Buffer.from(await res.arrayBuffer());
-        if (buffer.length > MAX_PDF_BYTES) throw new Error('file is larger than 25 MB');
-        const hash = textHash(buffer.toString('base64'));
+        if (buffer.length > MAX_PDF_BYTES)
+          throw new Error("file is larger than 25 MB");
+        const hash = textHash(buffer.toString("base64"));
         const isNew = !known || known.hash !== hash;
         if (all || (isNew && !firstLook)) {
           pdfs.push({ buffer, name: url });
@@ -162,7 +166,8 @@ export class AgreementDraftService {
       }
     }
     for (const source of sources) {
-      if (!source.documentsBaselinedAt) source.documentsBaselinedAt = new Date();
+      if (!source.documentsBaselinedAt)
+        source.documentsBaselinedAt = new Date();
       await source.save();
     }
 
@@ -170,37 +175,42 @@ export class AgreementDraftService {
       return { accepted: false, startedAt, documents: [], errors };
     }
     this.assertEnabled();
-    const label = pdfs.map((p) => p.name).join(', ');
+    const label = pdfs.map((p) => p.name).join(", ");
     this.runInBackground(label, async () => {
       const drafts = await this.draftFromDocuments({ pdfs, source: label });
       if (!all) {
         await this.ruleWatch.alertSuperadmins(
-          'Nytt avtalsutkast från Byggnads',
+          "Nytt avtalsutkast från Byggnads",
           [
-            'Byggnads har publicerat nya avtalsdokument. ByggExp har läst dem och skapat utkast:',
+            "Byggnads har publicerat nya avtalsdokument. ByggExp har läst dem och skapat utkast:",
             ...drafts.map((d) => `• ${d.name} (från ${d.validFrom})`),
-            '',
-            'Kontrollera varje belopp mot dokumenten och publicera i Avtalsregler:',
+            "",
+            "Kontrollera varje belopp mot dokumenten och publicera i Avtalsregler:",
             ...pdfs.map((p) => p.name),
-          ].join('\n'),
+          ].join("\n"),
         );
       }
     });
-    return { accepted: true, startedAt, documents: pdfs.map((p) => p.name), errors };
+    return {
+      accepted: true,
+      startedAt,
+      documents: pdfs.map((p) => p.name),
+      errors,
+    };
   }
 
   // Weekly, Monday 05:45 (after the page check at 05:15).
-  @Cron('45 5 * * 1')
+  @Cron("45 5 * * 1")
   async discoverScheduled(): Promise<void> {
     if (cronsDisabled() || this.discovering || !claudeEnabled()) return;
     this.discovering = true;
     try {
       const result = await this.discoverDocuments(false);
       if (result.errors.length) {
-        this.logger.warn(`Agreement discovery: ${result.errors.join('; ')}`);
+        this.logger.warn(`Agreement discovery: ${result.errors.join("; ")}`);
       }
     } catch (error) {
-      this.logger.error('Agreement discovery failed', error);
+      this.logger.error("Agreement discovery failed", error);
     } finally {
       this.discovering = false;
     }
@@ -213,20 +223,20 @@ export class AgreementDraftService {
   }): Promise<AgreementRuleSetDocument[]> {
     this.assertEnabled();
     const content: ClaudeBlock[] = input.pdfs.map((pdf) => ({
-      type: 'document',
+      type: "document",
       source: {
-        type: 'base64',
-        media_type: 'application/pdf',
-        data: pdf.buffer.toString('base64'),
+        type: "base64",
+        media_type: "application/pdf",
+        data: pdf.buffer.toString("base64"),
       },
     }));
     if (input.text?.trim()) {
-      content.push({ type: 'text', text: `DOCUMENT:\n${input.text.trim()}` });
+      content.push({ type: "text", text: `DOCUMENT:\n${input.text.trim()}` });
     }
     if (!content.length) {
-      throw new BadRequestException('Provide a PDF file or the document text');
+      throw new BadRequestException("Provide a PDF file or the document text");
     }
-    content.push({ type: 'text', text: PROMPT });
+    content.push({ type: "text", text: PROMPT });
 
     const reply = await callClaude({ model: MODEL, maxTokens: 12000, content });
     let data: Extracted;
@@ -234,7 +244,7 @@ export class AgreementDraftService {
       data = parseJsonObject<Extracted>(reply);
     } catch {
       this.logger.warn(`Unparseable extraction reply: ${reply.slice(0, 300)}`);
-      throw new BadRequestException('Could not read figures from the document');
+      throw new BadRequestException("Could not read figures from the document");
     }
 
     // Start from the latest published version so unstated rules carry over.
@@ -258,7 +268,7 @@ export class AgreementDraftService {
 
   private assertEnabled() {
     if (!claudeEnabled()) {
-      throw new BadRequestException('AI is not configured on this server');
+      throw new BadRequestException("AI is not configured on this server");
     }
   }
 
@@ -271,7 +281,7 @@ export class AgreementDraftService {
       this.logger.error(`Draft from ${source} failed`, error);
       await this.ruleWatch
         .alertSuperadmins(
-          'Utkast från dokument misslyckades',
+          "Utkast från dokument misslyckades",
           `ByggExp kunde inte skapa ett avtalsutkast från ${source}: ${String((error as Error)?.message || error)}`,
         )
         .catch(() => undefined);

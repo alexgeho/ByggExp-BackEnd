@@ -20,12 +20,12 @@ const int = (s: string): number => (/^\d+$/.test(s) ? Number(s) : NaN);
 
 export function parseTaxTableFile(text: string): TaxTableRow[] {
   const rows: TaxTableRow[] = [];
-  for (const raw of text.replace(/^﻿/, '').split(/\r?\n/)) {
-    const line = raw.replace(/\s+$/, '');
+  for (const raw of text.replace(/^﻿/, "").split(/\r?\n/)) {
+    const line = raw.replace(/\s+$/, "");
     if (line.length < 24) continue;
-    if (line.slice(0, 2) !== '30') continue; // monthly rows only
+    if (line.slice(0, 2) !== "30") continue; // monthly rows only
     const kind = line[2];
-    if (kind !== 'B' && kind !== '%') continue;
+    if (kind !== "B" && kind !== "%") continue;
     const table = int(line.slice(3, 5));
     const from = int(line.slice(5, 12).trim());
     const toText = line.slice(12, 19).trim();
@@ -45,7 +45,7 @@ export function parseTaxTableFile(text: string): TaxTableRow[] {
     ) {
       throw new Error(`Unreadable tax table row: "${line}"`);
     }
-    rows.push({ table, from, to, percent: kind === '%', columns });
+    rows.push({ table, from, to, percent: kind === "%", columns });
   }
   return rows;
 }
@@ -62,7 +62,8 @@ export function lookupTax(
   const income = Math.floor(Number(monthlyGross) || 0);
   if (income <= 0) return 0;
   const row = rows.find(
-    (r) => r.table === table && income >= r.from && (r.to == null || income <= r.to),
+    (r) =>
+      r.table === table && income >= r.from && (r.to == null || income <= r.to),
   );
   const value = row?.columns[column - 1];
   if (row == null || value == null) return null;

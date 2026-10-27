@@ -300,7 +300,9 @@ export function findMonthlyFileUrl(html: string, year: number): string | null {
     const before = html
       .slice(Math.max(0, link.index - 4000), link.index)
       .replace(/<[^>]+>/g, " ");
-    const years = [...before.matchAll(/\b(20\d{2})\b/g)].map((m) => Number(m[1]));
+    const years = [...before.matchAll(/\b(20\d{2})\b/g)].map((m) =>
+      Number(m[1]),
+    );
     if (years[years.length - 1] === year) {
       const href = link.href.replace(/&amp;/g, "&");
       return href.startsWith("http")

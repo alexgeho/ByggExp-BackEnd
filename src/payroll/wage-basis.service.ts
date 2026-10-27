@@ -3,30 +3,30 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
-import { Company, CompanyDocument } from '../company/schemas/company.schema';
-import { Shift, ShiftDocument } from '../shifts/schemas/shift.schema';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
+import { Company, CompanyDocument } from "../company/schemas/company.schema";
+import { Shift, ShiftDocument } from "../shifts/schemas/shift.schema";
 import {
   LeaveRequest,
   LeaveRequestDocument,
   LeaveStatus,
-} from '../leave/schemas/leave-request.schema';
+} from "../leave/schemas/leave-request.schema";
 import {
   AgreementRuleSet,
   AgreementRuleSetDocument,
   AgreementRuleSetStatus,
-} from './schemas/agreement-rule-set.schema';
+} from "./schemas/agreement-rule-set.schema";
 import {
   PayrollSettings,
   PayrollSettingsDocument,
-} from './schemas/payroll-settings.schema';
+} from "./schemas/payroll-settings.schema";
 import {
   AgreementRuleSetDto,
   PayrollSettingsDto,
-} from './dto/agreement-rule-set.dto';
+} from "./dto/agreement-rule-set.dto";
 import {
   ABSENCE_ITEM_LABELS,
   DEFAULT_ABSENCE_CODES,
@@ -35,14 +35,14 @@ import {
   WorkerWageBasis,
   buildWorkerWageBasis,
   toWageShifts,
-} from './wage-basis';
-import { ExportSkipped, buildCsv, buildPaxml } from './wage-export';
-import { ExportFormat } from './schemas/payroll-settings.schema';
-import { WageRate, WageRateDocument } from './schemas/wage-rate.schema';
+} from "./wage-basis";
+import { ExportSkipped, buildCsv, buildPaxml } from "./wage-export";
+import { ExportFormat } from "./schemas/payroll-settings.schema";
+import { WageRate, WageRateDocument } from "./schemas/wage-rate.schema";
 import {
   PayrollExport,
   PayrollExportDocument,
-} from './schemas/payroll-export.schema';
+} from "./schemas/payroll-export.schema";
 
 type AuthUser = {
   role: UserRole;
@@ -87,7 +87,7 @@ export class WageBasisService {
     dto: AgreementRuleSetDto,
   ): Promise<AgreementRuleSetDocument> {
     if (!dto.name || !dto.validFrom) {
-      throw new BadRequestException('name and validFrom are required');
+      throw new BadRequestException("name and validFrom are required");
     }
     this.assertValidRange(dto.validFrom, dto.validTo);
     return new this.ruleSetModel({
@@ -124,9 +124,9 @@ export class WageBasisService {
       const keys = Object.keys(dto).filter(
         (k) => (dto as Record<string, unknown>)[k] !== undefined,
       );
-      if (keys.some((k) => k !== 'validTo' && k !== 'sourceNote')) {
+      if (keys.some((k) => k !== "validTo" && k !== "sourceNote")) {
         throw new BadRequestException(
-          'A published agreement version is locked — duplicate it to make changes',
+          "A published agreement version is locked — duplicate it to make changes",
         );
       }
     }
@@ -147,18 +147,16 @@ export class WageBasisService {
     if (ruleSet.status === AgreementRuleSetStatus.Published) return ruleSet;
     if (ruleSet.aiDraft && !confirmed) {
       throw new BadRequestException(
-        'This draft was read by AI — confirm that every figure has been checked against the source',
+        "This draft was read by AI — confirm that every figure has been checked against the source",
       );
     }
     if (!ruleSet.sourceNote?.trim()) {
       throw new BadRequestException(
-        'Add the source (agreement section / circular) before publishing',
+        "Add the source (agreement section / circular) before publishing",
       );
     }
     if (!ruleSet.minimumWages?.length) {
-      throw new BadRequestException(
-        'Add the minimum wages before publishing',
-      );
+      throw new BadRequestException("Add the minimum wages before publishing");
     }
     ruleSet.status = AgreementRuleSetStatus.Published;
     ruleSet.publishedAt = new Date();
@@ -170,7 +168,7 @@ export class WageBasisService {
     const ruleSet = await this.getRuleSet(id);
     if (ruleSet.status === AgreementRuleSetStatus.Published) {
       throw new BadRequestException(
-        'A published agreement version cannot be deleted',
+        "A published agreement version cannot be deleted",
       );
     }
     await ruleSet.deleteOne();
@@ -186,7 +184,7 @@ export class WageBasisService {
 
   private assertValidRange(from?: string, to?: string) {
     if (from && to && to < from) {
-      throw new BadRequestException('validTo must be on or after validFrom');
+      throw new BadRequestException("validTo must be on or after validFrom");
     }
   }
 
@@ -194,14 +192,20 @@ export class WageBasisService {
 
   async getSettings(user: AuthUser) {
     const companyId = this.resolveCompanyId(user);
-    const settings = await this.settingsModel.findOne({ companyId }).lean().exec();
+    const settings = await this.settingsModel
+      .findOne({ companyId })
+      .lean()
+      .exec();
     return {
       companyId,
-      agreement: settings?.agreement || 'byggavtalet',
-      payrollSystem: settings?.payrollSystem || 'fortnox',
-      exportFormat: settings?.exportFormat || 'paxml',
+      agreement: settings?.agreement || "byggavtalet",
+      payrollSystem: settings?.payrollSystem || "fortnox",
+      exportFormat: settings?.exportFormat || "paxml",
       salaryCodes: settings?.salaryCodes || {},
-      absenceCodes: { ...DEFAULT_ABSENCE_CODES, ...(settings?.absenceCodes || {}) },
+      absenceCodes: {
+        ...DEFAULT_ABSENCE_CODES,
+        ...(settings?.absenceCodes || {}),
+      },
       handledRaises: settings?.handledRaises || [],
       salaryItems: SALARY_ITEM_LABELS,
       absenceItems: ABSENCE_ITEM_LABELS,
@@ -215,8 +219,10 @@ export class WageBasisService {
         ? undefined
         : Object.fromEntries(
             Object.entries(codes)
-              .filter(([k]) => k in SALARY_ITEM_LABELS || k in ABSENCE_ITEM_LABELS)
-              .map(([k, v]) => [k, String(v ?? '').trim()]),
+              .filter(
+                ([k]) => k in SALARY_ITEM_LABELS || k in ABSENCE_ITEM_LABELS,
+              )
+              .map(([k, v]) => [k, String(v ?? "").trim()]),
           );
     const update: Record<string, unknown> = {};
     const salaryCodes = clean(dto.salaryCodes);
@@ -250,12 +256,12 @@ export class WageBasisService {
         // Versions saved before `agreement` was always set carry null; they
         // are Byggavtalet, the only agreement so far.
         agreement:
-          settings.agreement === 'byggavtalet'
-            ? { $in: ['byggavtalet', null] }
+          settings.agreement === "byggavtalet"
+            ? { $in: ["byggavtalet", null] }
             : settings.agreement,
         status: AgreementRuleSetStatus.Published,
         validFrom: { $lte: to },
-        $or: [{ validTo: '' }, { validTo: { $gte: from } }],
+        $or: [{ validTo: "" }, { validTo: { $gte: from } }],
       })
       .lean()
       .exec();
@@ -270,14 +276,16 @@ export class WageBasisService {
         erasedAt: null,
         ...(userIds.length ? { _id: { $in: userIds } } : {}),
       })
-      .select('name hourlyRate wageCategory payrollEmployeeId fortnoxEmployeeId')
+      .select(
+        "name hourlyRate wageCategory payrollEmployeeId fortnoxEmployeeId",
+      )
       .lean()
       .exec();
     const workerIds = workers.map((w) => String(w._id));
 
     const rateDocs = await this.wageRateModel
       .find({ userId: { $in: workerIds }, validFrom: { $lte: to } })
-      .select('userId validFrom hourlyRate')
+      .select("userId validFrom hourlyRate")
       .lean()
       .exec();
 
@@ -285,10 +293,10 @@ export class WageBasisService {
       .find({
         workerId: { $in: workerIds },
         shiftDate: { $gte: from, $lte: to },
-        status: 'completed',
+        status: "completed",
       })
       .select(
-        'workerId projectId shiftDate durationMs manualDurationMs hourType overtimeMs overtimeStatus obMs obStatus travelKm travelMinutes perDiem',
+        "workerId projectId shiftDate durationMs manualDurationMs hourType overtimeMs overtimeStatus obMs obStatus travelKm travelMinutes perDiem",
       )
       .lean()
       .exec();
@@ -332,7 +340,7 @@ export class WageBasisService {
             shiftDate: { $gte: from, $lte: to },
             updatedAt: { $gt: oldest },
           })
-          .select('workerId updatedAt')
+          .select("workerId updatedAt")
           .lean()
           .exec(),
         this.leaveModel
@@ -343,7 +351,7 @@ export class WageBasisService {
             endDate: { $gte: from },
             updatedAt: { $gt: oldest },
           })
-          .select('userId updatedAt')
+          .select("userId updatedAt")
           .lean()
           .exec(),
       ]);
@@ -380,7 +388,7 @@ export class WageBasisService {
       const basis = buildWorkerWageBasis(
         {
           userId: id,
-          name: w.name || '',
+          name: w.name || "",
           hourlyRate: w.hourlyRate ?? null,
           wageCategory: w.wageCategory ?? null,
           rates: rateDocs
@@ -412,12 +420,16 @@ export class WageBasisService {
         ruleSets,
         { from, to },
       );
-      const employeeId = (w.payrollEmployeeId || w.fortnoxEmployeeId || '').trim();
+      const employeeId = (
+        w.payrollEmployeeId ||
+        w.fortnoxEmployeeId ||
+        ""
+      ).trim();
       if (!employeeId) {
         basis.warnings.push({
-          code: 'missing_employee_id',
+          code: "missing_employee_id",
           message:
-            'Anställningsnummer i lönesystemet saknas — personen kommer inte med i exporten.',
+            "Anställningsnummer i lönesystemet saknas — personen kommer inte med i exporten.",
         });
       }
       result.push({
@@ -428,7 +440,7 @@ export class WageBasisService {
       });
     }
 
-    result.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+    result.sort((a, b) => a.name.localeCompare(b.name, "sv"));
 
     // Items the company hasn't mapped to a löneart would silently vanish
     // from the export — surface them once for the whole period.
@@ -436,8 +448,10 @@ export class WageBasisService {
     for (const w of result) {
       for (const item of w.items) {
         const codes =
-          item.kind === 'absence' ? settings.absenceCodes : settings.salaryCodes;
-        if (!String(codes[item.code] || '').trim()) unmapped.add(item.code);
+          item.kind === "absence"
+            ? settings.absenceCodes
+            : settings.salaryCodes;
+        if (!String(codes[item.code] || "").trim()) unmapped.add(item.code);
       }
     }
 
@@ -447,7 +461,7 @@ export class WageBasisService {
         id: r.id,
         name: r.name,
         validFrom: r.validFrom,
-        validTo: r.validTo || '',
+        validTo: r.validTo || "",
       })),
       // Agreement raises in force in this period that the company hasn't
       // applied to its workers' wages yet.
@@ -488,13 +502,13 @@ export class WageBasisService {
     const settings = await this.getSettings(user);
     const company = await this.companyModel
       .findById(settings.companyId)
-      .select('name orgNumber')
+      .select("name orgNumber")
       .lean()
       .exec();
 
     const input = {
-      companyName: company?.name || '',
-      orgNumber: company?.orgNumber || '',
+      companyName: company?.name || "",
+      orgNumber: company?.orgNumber || "",
       generatedAt: new Date(),
       workers: basis.workers.map((w) => ({
         userId: w.userId,
@@ -505,7 +519,7 @@ export class WageBasisService {
       salaryCodes: settings.salaryCodes,
       absenceCodes: settings.absenceCodes,
     };
-    const csv = (format || settings.exportFormat) === 'csv';
+    const csv = (format || settings.exportFormat) === "csv";
     const { content, skipped } = csv ? buildCsv(input) : buildPaxml(input);
 
     // Remember who is in the file (people with an employee number and rows).
@@ -518,16 +532,18 @@ export class WageBasisService {
         from,
         to,
         userIds: exportedIds,
-        format: csv ? 'csv' : 'paxml',
+        format: csv ? "csv" : "paxml",
         exportedByUserId: user.userId || null,
       });
     }
 
     return {
       content,
-      contentType: csv ? 'text/csv; charset=utf-8' : 'application/xml; charset=utf-8',
+      contentType: csv
+        ? "text/csv; charset=utf-8"
+        : "application/xml; charset=utf-8",
       skipped,
-      filename: `lonerunderlag-${from}-${to}.${csv ? 'csv' : 'xml'}`,
+      filename: `lonerunderlag-${from}-${to}.${csv ? "csv" : "xml"}`,
     };
   }
 
@@ -547,7 +563,7 @@ export class WageBasisService {
 
   private resolveCompanyId(user: AuthUser): string {
     if (!user.companyId) {
-      throw new ForbiddenException('Your account is not attached to a company');
+      throw new ForbiddenException("Your account is not attached to a company");
     }
     return user.companyId;
   }

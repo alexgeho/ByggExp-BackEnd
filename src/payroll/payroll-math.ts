@@ -23,8 +23,12 @@ export function computeRunTotals(
   employerContribution: number;
   totalEmployerCost: number;
 } {
-  const totalHours = round2(lines.reduce((s, l) => s + (Number(l.hours) || 0), 0));
-  const totalGross = round2(lines.reduce((s, l) => s + (Number(l.amount) || 0), 0));
+  const totalHours = round2(
+    lines.reduce((s, l) => s + (Number(l.hours) || 0), 0),
+  );
+  const totalGross = round2(
+    lines.reduce((s, l) => s + (Number(l.amount) || 0), 0),
+  );
   const totalTax = round2(lines.reduce((s, l) => s + (Number(l.tax) || 0), 0));
   const totalNet = round2(lines.reduce((s, l) => s + (Number(l.net) || 0), 0));
   const employerContribution = round2(totalGross * (employerRate / 100));

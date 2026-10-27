@@ -1,5 +1,5 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Schema as MongooseSchema } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { HydratedDocument, Schema as MongooseSchema } from "mongoose";
 
 // Per-company payroll settings for the lönerunderlag export: which payroll
 // system the company runs, the file format it imports, and which löneart /
@@ -11,29 +11,29 @@ export type PayrollSettingsDocument = HydratedDocument<PayrollSettings>;
 // Systems we name in the UI. PAXml is the common Swedish import format; CSV is
 // the fallback for a system that only takes a spreadsheet.
 export const PAYROLL_SYSTEMS = [
-  'fortnox',
-  'visma',
-  'hogia',
-  'crona',
-  'other',
+  "fortnox",
+  "visma",
+  "hogia",
+  "crona",
+  "other",
 ] as const;
 export type PayrollSystem = (typeof PAYROLL_SYSTEMS)[number];
 
-export const EXPORT_FORMATS = ['paxml', 'csv'] as const;
+export const EXPORT_FORMATS = ["paxml", "csv"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
 @Schema({ timestamps: true })
 export class PayrollSettings {
-  @Prop({ type: String, ref: 'Company', required: true, unique: true })
+  @Prop({ type: String, ref: "Company", required: true, unique: true })
   companyId: string;
 
-  @Prop({ default: 'byggavtalet' })
+  @Prop({ default: "byggavtalet" })
   agreement: string;
 
-  @Prop({ type: String, enum: PAYROLL_SYSTEMS, default: 'fortnox' })
+  @Prop({ type: String, enum: PAYROLL_SYSTEMS, default: "fortnox" })
   payrollSystem: PayrollSystem;
 
-  @Prop({ type: String, enum: EXPORT_FORMATS, default: 'paxml' })
+  @Prop({ type: String, enum: EXPORT_FORMATS, default: "paxml" })
   exportFormat: ExportFormat;
 
   // Wage-basis item code (see wage-basis.ts) → löneart in the payroll system.

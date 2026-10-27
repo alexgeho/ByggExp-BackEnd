@@ -80,7 +80,10 @@ export class RuleWatchService implements OnModuleInit {
     return source;
   }
 
-  async update(id: string, dto: { name?: string; url?: string; enabled?: boolean }) {
+  async update(
+    id: string,
+    dto: { name?: string; url?: string; enabled?: boolean },
+  ) {
     const source = await this.get(id);
     if (dto.name != null) source.name = String(dto.name).trim();
     if (dto.url != null) {
@@ -198,7 +201,9 @@ export class RuleWatchService implements OnModuleInit {
           html: `<p>${esc(body).replace(/\n/g, "<br>")}</p>`,
         });
       } catch (error) {
-        this.logger.warn(`Alert e-mail to ${admin.email} failed: ${String(error)}`);
+        this.logger.warn(
+          `Alert e-mail to ${admin.email} failed: ${String(error)}`,
+        );
       }
     }
   }

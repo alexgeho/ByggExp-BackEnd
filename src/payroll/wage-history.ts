@@ -1,16 +1,13 @@
-import { Model } from 'mongoose';
-import {
-  WageRateDocument,
-  WageRateReason,
-} from './schemas/wage-rate.schema';
+import { Model } from "mongoose";
+import { WageRateDocument, WageRateReason } from "./schemas/wage-rate.schema";
 
 // Today in Sweden as YYYY-MM-DD (dates in ByggExp are Swedish calendar days).
 export function swedishToday(now = new Date()): string {
-  return now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
+  return now.toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" });
 }
 
 // Earliest possible date: the rate a worker had before history was kept.
-export const INITIAL_RATE_DATE = '2000-01-01';
+export const INITIAL_RATE_DATE = "2000-01-01";
 
 // Records a new dated rate. The first time a worker's rate changes, their
 // previous rate is stored as the starting point so earlier periods keep being
@@ -35,7 +32,7 @@ export async function recordWageRate(
       userId: entry.userId,
       hourlyRate: entry.previousRate,
       validFrom: INITIAL_RATE_DATE,
-      reason: 'initial',
+      reason: "initial",
     });
   }
   await model
@@ -62,7 +59,8 @@ export function latestRate(
 ): number | null {
   let best: { validFrom: string; hourlyRate: number } | null = null;
   for (const e of entries) {
-    if (e.validFrom <= date && (!best || e.validFrom > best.validFrom)) best = e;
+    if (e.validFrom <= date && (!best || e.validFrom > best.validFrom))
+      best = e;
   }
   return best ? best.hourlyRate : null;
 }
