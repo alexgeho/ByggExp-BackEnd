@@ -111,6 +111,14 @@ const users = [
     personalNumber: "",
     erasedAt: new Date("2026-10-20"),
   },
+  {
+    _id: "u4",
+    name: "Dan",
+    hourlyRate: null,
+    taxTable: null,
+    taxColumn: null,
+    personalNumber: "20050101-1234",
+  },
 ];
 
 function setup(company: Record<string, unknown> = { plan: "faktura" }) {
@@ -131,7 +139,13 @@ function setup(company: Record<string, unknown> = { plan: "faktura" }) {
   const payrollModel: any = FakeRun;
   payrollModel.findById = (id: string) =>
     q(saved.find((r) => r._id === id) || null);
-  payrollModel.find = () => q(saved);
+  // Honours `_id: { $lt }` (only runs created before this one count).
+  payrollModel.find = (filter?: { _id?: { $lt?: string } }) =>
+    q(
+      saved.filter(
+        (r) => !filter?._id?.$lt || (r._id != null && r._id < filter._id.$lt),
+      ),
+    );
   // Mimics the guarded update: matches only while every filter field holds.
   payrollModel.findOneAndUpdate = (
     filter: Record<string, unknown>,
@@ -432,6 +446,52 @@ describe("payroll status", () => {
     await expect(service.reopen("r1", admin)).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+});
+
+describe("employer fee (age-based, per pay month)", () => {
+  const youth = (periodTo: string) => ({
+    periodFrom: `${periodTo.slice(0, 7)}-01`,
+    periodTo,
+    employees: [{ userId: "u4", items: [{ type: "monthly", amount: 20000 }] }],
+  });
+
+  it("youth cap of 25 000 kr is shared by runs in the same month", async () => {
+    const { service } = setup();
+    const a: any = await service.createManual(youth("2026-10-31"), admin);
+    const b: any = await service.createManual(youth("2026-10-31"), admin);
+    expect(a.lines[0]).toMatchObject({
+      employerRate: 20.81,
+      employerFee: 4162,
+    });
+    // 5 000 kr left under the cap, 15 000 kr at 31.42 %.
+    expect(b.lines[0].employerFee).toBe(5753.5);
+    expect(a.employerContribution).toBe(4162);
+
+    a.status = PayrollStatus.Approved;
+    b.status = PayrollStatus.Approved;
+    const { summary } = await service.agi("202610", admin);
+    // Recomputed on the month's merged 40 000 kr.
+    expect(summary.employerFee).toBe(
+      Math.round(25000 * 0.2081 + 15000 * 0.3142),
+    );
+    expect(summary.toPay).toBe(summary.tax + summary.employerFee);
+  });
+
+  it("recomputes with the pay date when the run is paid", async () => {
+    const { service } = setup();
+    const run: any = await service.createManual(youth("2026-03-31"), admin);
+    run._id = "r9";
+    // March pay: before the youth reduction starts.
+    expect(run.lines[0].employerRate).toBe(31.42);
+    run.paidAt = new Date("2026-04-25T10:00:00Z");
+    await service.setStatus("r9", admin, PayrollStatus.Paid);
+    expect(run.lines[0]).toMatchObject({
+      employerRate: 20.81,
+      employerFee: 4162,
+    });
+    expect(run.employerContribution).toBe(4162);
+    expect(run.totalEmployerCost).toBe(24162);
   });
 });
 

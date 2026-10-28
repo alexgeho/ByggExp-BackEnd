@@ -2,6 +2,7 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsMongoId,
   IsNumber,
   IsOptional,
   IsString,
@@ -93,7 +94,7 @@ export class CreateInvoiceDto {
   // invoice is saved.
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @IsMongoId({ each: true })
   ataIds?: string[];
 
   @IsOptional()

@@ -275,7 +275,14 @@ export class InvoicesService {
     await this.invoiceModel.db
       .model("Ata")
       .updateMany(
-        { _id: { $in: ids }, companyId, status: "approved" },
+        {
+          _id: { $in: ids },
+          companyId,
+          status: "approved",
+          ...(invoice.projectId
+            ? { projectId: String(invoice.projectId) }
+            : {}),
+        },
         {
           $set: {
             status: "invoiced",
@@ -324,7 +331,17 @@ export class InvoicesService {
 
     const saved = await invoice.save();
     await this.markRebilled(companyId, dto.supplierInvoiceIds, saved);
-    await this.markAtaInvoiced(companyId, dto.ataIds, saved);
+    // The invoice is saved — a failed ÄTA stamp must not make the request
+    // look failed (a retry would create a duplicate invoice).
+    try {
+      await this.markAtaInvoiced(companyId, dto.ataIds, saved);
+    } catch (err) {
+      this.logger.error(
+        `Invoice ${String(saved._id)} saved, but marking ÄTA invoiced failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
     return saved;
   }
 

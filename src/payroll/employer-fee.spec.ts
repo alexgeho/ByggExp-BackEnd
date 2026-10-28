@@ -2,6 +2,7 @@ import {
   birthYearFromPersonalNumber,
   employerFeeFor,
   EMPLOYER_FEE_GENERAL,
+  runPayDate,
 } from "./employer-fee";
 import { payslipTaxLabel } from "./templates/payslip-pdf.template";
 
@@ -47,6 +48,53 @@ describe("employerFeeFor (Skatteverket 2026)", () => {
   it("no youth reduction before April 2026 or after September 2027", () => {
     expect(employerFeeFor(20000, 2005, "2026-03-31").rate).toBe(31.42);
     expect(employerFeeFor(20000, 2005, "2027-10-31").rate).toBe(31.42);
+  });
+});
+
+describe("youth cap across runs in the same month", () => {
+  it("only the rest of the 25 000 kr is reduced after earlier pay", () => {
+    // 20 000 already paid this month → 5 000 reduced, 15 000 at full rate.
+    expect(employerFeeFor(20000, 2005, "2026-05-31", 20000).fee).toBe(
+      Math.round((5000 * 0.2081 + 15000 * 0.3142) * 100) / 100,
+    );
+    // Cap used up → full rate.
+    expect(employerFeeFor(10000, 2005, "2026-05-31", 30000).fee).toBe(3142);
+  });
+
+  it("two runs together pay the same as one run with the month's pay", () => {
+    const a = employerFeeFor(18000, 2004, "2026-06-30").fee;
+    const b = employerFeeFor(18000, 2004, "2026-06-30", 18000).fee;
+    expect(Math.round((a + b) * 100) / 100).toBe(
+      employerFeeFor(36000, 2004, "2026-06-30").fee,
+    );
+  });
+
+  it("prior pay does not change linear rates", () => {
+    expect(employerFeeFor(10000, 1980, "2026-05-31", 50000).fee).toBe(3142);
+    expect(employerFeeFor(10000, 1950, "2026-05-31", 50000).fee).toBe(1021);
+  });
+});
+
+describe("runPayDate", () => {
+  it("uses paidAt once paid, else the period end", () => {
+    expect(
+      runPayDate({
+        paidAt: new Date("2026-04-02T10:00:00Z"),
+        periodTo: "2026-03-31",
+      }),
+    ).toBe("2026-04-02");
+    expect(runPayDate({ paidAt: null, periodTo: "2026-03-31" })).toBe(
+      "2026-03-31",
+    );
+  });
+
+  it("a March run paid in April gets the youth reduction", () => {
+    const pay = runPayDate({
+      paidAt: new Date("2026-04-25T10:00:00Z"),
+      periodTo: "2026-03-31",
+    });
+    expect(employerFeeFor(20000, 2005, pay).rate).toBe(20.81);
+    expect(employerFeeFor(20000, 2005, "2026-03-31").rate).toBe(31.42);
   });
 });
 

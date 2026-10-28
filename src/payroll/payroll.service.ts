@@ -25,6 +25,7 @@ import {
   birthYearFromPersonalNumber,
   EMPLOYER_FEE_GENERAL,
   employerFeeFor,
+  runPayDate,
 } from "./employer-fee";
 import {
   CreatePayrollRunDto,
@@ -110,7 +111,7 @@ export class PayrollService {
     const ids = [...new Set(dto.lines.map((l) => String(l.userId)))];
     const users = await this.userModel
       .find({ _id: { $in: ids }, companyId })
-      .select("name hourlyRate taxTable taxColumn +personalNumber")
+      .select("name hourlyRate taxTable taxColumn")
       .exec();
     const byId = new Map(users.map((u) => [String(u._id), u]));
 
@@ -151,7 +152,6 @@ export class PayrollService {
             tax,
             net,
             ...taxBasis,
-            ...this.employerFeeLine(u, gross, dto.periodTo),
           };
         }),
     );
@@ -161,6 +161,12 @@ export class PayrollService {
         "No matching workers for this company in the payroll run",
       );
     }
+    const feeLines = await this.withEmployerFees(
+      lines,
+      companyId,
+      dto.periodTo,
+      null,
+    );
 
     const run = new this.payrollModel({
       companyId,
@@ -169,7 +175,7 @@ export class PayrollService {
       basis: dto.basis || "planned",
       projectId: dto.projectId || null,
       status: PayrollStatus.Draft,
-      ...runFigures(lines, taxRate, employerRate),
+      ...runFigures(feeLines, taxRate, employerRate),
       createdByUserId: user.userId || null,
     });
     return run.save();
@@ -189,7 +195,12 @@ export class PayrollService {
     await this.assertPayrollEnabled(companyId);
     const taxRate = dto.taxRate ?? 30;
     const employerRate = EMPLOYER_FEE_GENERAL;
-    const lines = await this.buildManualLines(dto, companyId, taxRate, []);
+    const lines = await this.withEmployerFees(
+      await this.buildManualLines(dto, companyId, taxRate, []),
+      companyId,
+      dto.periodTo,
+      null,
+    );
     const run = new this.payrollModel({
       companyId,
       periodFrom: dto.periodFrom,
@@ -219,11 +230,16 @@ export class PayrollService {
     await this.assertPayrollEnabled(run.companyId);
     const taxRate = dto.taxRate ?? run.taxRate ?? 30;
     // Workers already in the run stay editable even if erased since.
-    const lines = await this.buildManualLines(
-      dto,
+    const lines = await this.withEmployerFees(
+      await this.buildManualLines(
+        dto,
+        run.companyId,
+        taxRate,
+        (run.lines || []).map((l) => String(l.userId)),
+      ),
       run.companyId,
-      taxRate,
-      (run.lines || []).map((l) => String(l.userId)),
+      runPayDate({ paidAt: run.paidAt, periodTo: dto.periodTo }),
+      String(run._id),
     );
     // Write only if it is still a manual draft of this company — an approve
     // or delete in between wins instead of being overwritten.
@@ -279,7 +295,7 @@ export class PayrollService {
         companyId,
         $or: [{ erasedAt: null }, { _id: { $in: keepUserIds } }],
       })
-      .select("name hourlyRate taxTable taxColumn +personalNumber")
+      .select("name hourlyRate taxTable taxColumn")
       .exec();
     const byId = new Map(users.map((u) => [String(u._id), u]));
     const unknown = ids.filter((uid) => !byId.has(uid));
@@ -320,7 +336,6 @@ export class PayrollService {
         net: round2(m.gross - tax),
         items: m.items,
         ...taxBasis,
-        ...this.employerFeeLine(u, m.gross, dto.periodTo),
       });
     }
     if (!lines.length) {
@@ -367,16 +382,66 @@ export class PayrollService {
     };
   }
 
-  // Age-based arbetsgivaravgift for one worker (general rate when the
-  // personnummer is missing).
-  private employerFeeLine(
-    u: { personalNumber?: string } | undefined,
-    gross: number,
-    periodTo: string,
-  ): { employerRate: number; employerFee: number } {
-    const birthYear = birthYearFromPersonalNumber(u?.personalNumber, periodTo);
-    const { rate, fee } = employerFeeFor(gross, birthYear, periodTo);
-    return { employerRate: rate, employerFee: fee };
+  // Age-based arbetsgivaravgift per line (general rate when the personnummer
+  // is missing). The youth cap is per worker and calendar month, so pay the
+  // worker already has in earlier runs paid out the same month counts first.
+  // runId = this run when it already exists (only runs created before it
+  // count, so two runs never both claim the same reduced part).
+  private async withEmployerFees<T extends { userId: string; amount: number }>(
+    lines: T[],
+    companyId: string,
+    payDate: string,
+    runId: string | null,
+  ): Promise<Array<T & { employerRate: number; employerFee: number }>> {
+    const ids = [...new Set(lines.map((l) => String(l.userId)))];
+    const ym = payDate.slice(0, 7);
+    const monthStart = new Date(`${ym}-01T00:00:00.000Z`);
+    const nextMonth = new Date(monthStart);
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+    const [users, others] = await Promise.all([
+      this.userModel
+        .find({ _id: { $in: ids }, companyId })
+        .select("+personalNumber")
+        .lean()
+        .exec(),
+      this.payrollModel
+        .find({
+          companyId,
+          ...(runId ? { _id: { $lt: runId } } : {}),
+          "lines.userId": { $in: ids },
+          $or: [
+            { paidAt: { $gte: monthStart, $lt: nextMonth } },
+            { paidAt: null, periodTo: { $gte: `${ym}-01`, $lte: `${ym}-31` } },
+          ],
+        })
+        .select("paidAt periodTo lines.userId lines.amount")
+        .lean()
+        .exec(),
+    ]);
+    const pn = new Map(
+      users.map((u) => [String(u._id), u.personalNumber || ""]),
+    );
+    const prior = new Map<string, number>();
+    for (const r of others) {
+      if (runPayDate(r).slice(0, 7) !== ym) continue;
+      for (const l of r.lines || []) {
+        const key = String(l.userId);
+        prior.set(key, (prior.get(key) || 0) + (Number(l.amount) || 0));
+      }
+    }
+    return lines.map((l) => {
+      const key = String(l.userId);
+      const birthYear = birthYearFromPersonalNumber(pn.get(key), payDate);
+      const { rate, fee } = employerFeeFor(
+        l.amount,
+        birthYear,
+        payDate,
+        prior.get(key) || 0,
+      );
+      // Two lines of one worker in the same run share the cap too.
+      prior.set(key, (prior.get(key) || 0) + (Number(l.amount) || 0));
+      return { ...l, employerRate: rate, employerFee: fee };
+    });
   }
 
   // Manual runs belong to the payroll module (sold without shifts).
@@ -430,12 +495,38 @@ export class PayrollService {
     } else if (status === PayrollStatus.Paid) {
       run.approvedAt = run.approvedAt || new Date();
       run.paidAt = run.paidAt || new Date();
+      await this.refreshEmployerFees(run);
     } else if (status === PayrollStatus.Draft) {
       run.approvedAt = null;
       run.paidAt = null;
     }
     await run.save();
     return run;
+  }
+
+  // Fee rules follow the actual pay date: once paid, recompute every line's
+  // fee (and the run totals) with paidAt instead of the period end.
+  private async refreshEmployerFees(run: PayrollRunDocument): Promise<void> {
+    const plain = (run.lines || []).map((l) => ({
+      userId: String(l.userId),
+      amount: Number(l.amount) || 0,
+    }));
+    const fees = await this.withEmployerFees(
+      plain,
+      run.companyId,
+      runPayDate(run),
+      String(run._id),
+    );
+    run.lines.forEach((l, i) => {
+      l.employerRate = fees[i].employerRate;
+      l.employerFee = fees[i].employerFee;
+    });
+    const totals = computeRunTotals(
+      run.lines,
+      run.employerRate ?? EMPLOYER_FEE_GENERAL,
+    );
+    run.employerContribution = totals.employerContribution;
+    run.totalEmployerCost = totals.totalEmployerCost;
   }
 
   // Explicit action: an approved (not paid) run back to draft.
@@ -493,11 +584,7 @@ export class PayrollService {
         })
         .lean()
         .exec()
-    ).filter((r) =>
-      (r.paidAt ? new Date(r.paidAt).toISOString() : String(r.periodTo))
-        .slice(0, 7)
-        .startsWith(ym),
-    );
+    ).filter((r) => runPayDate(r).slice(0, 7) === ym);
     const userIds = [
       ...new Set(runs.flatMap((r) => r.lines.map((l) => l.userId))),
     ];
@@ -554,6 +641,21 @@ export class PayrollService {
     };
     const sum = (f: (r: (typeof runs)[number]) => number) =>
       Math.round(runs.reduce((a, r) => a + (f(r) || 0), 0));
+    // Employer fee per person on the month's merged pay, so the youth cap
+    // (25 000 kr/month) holds across runs. Rate rules only change at month
+    // boundaries, so the 1st of the month stands in for the pay date.
+    const employerFee = Math.round(
+      input.employees.reduce(
+        (a, e) =>
+          a +
+          employerFeeFor(
+            e.gross,
+            birthYearFromPersonalNumber(e.personalNumber, `${ym}-01`),
+            `${ym}-01`,
+          ).fee,
+        0,
+      ),
+    );
     return {
       input,
       problems: agiProblems(input),
@@ -563,8 +665,8 @@ export class PayrollService {
         employees: input.employees.length,
         gross: sum((r) => r.totalGross),
         tax: sum((r) => r.totalTax),
-        employerFee: sum((r) => r.employerContribution),
-        toPay: sum((r) => (r.totalTax || 0) + (r.employerContribution || 0)),
+        employerFee,
+        toPay: sum((r) => r.totalTax) + employerFee,
       },
     };
   }
