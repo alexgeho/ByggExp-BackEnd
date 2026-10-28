@@ -89,6 +89,13 @@ export class CreateInvoiceDto {
   @IsString({ each: true })
   supplierInvoiceIds?: string[];
 
+  // Approved ÄTA billed with this invoice — marked "invoiced" only once the
+  // invoice is saved.
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  ataIds?: string[];
+
   @IsOptional()
   @IsString()
   companyId?: string;

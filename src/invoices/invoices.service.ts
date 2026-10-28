@@ -262,6 +262,30 @@ export class InvoicesService {
       .exec();
   }
 
+  // ÄTA put on this customer invoice ("Skapa faktura" on the ÄTA tab): flip
+  // the approved ones to "invoiced" now that the invoice exists, so cancelling
+  // the invoice form leaves the ÄTA untouched. Ata is registered by its own
+  // module on the same connection.
+  private async markAtaInvoiced(
+    companyId: string,
+    ids: string[] | undefined,
+    invoice: InvoiceDocument,
+  ) {
+    if (!ids?.length) return;
+    await this.invoiceModel.db
+      .model("Ata")
+      .updateMany(
+        { _id: { $in: ids }, companyId, status: "approved" },
+        {
+          $set: {
+            status: "invoiced",
+            invoicedInvoiceId: String(invoice._id),
+          },
+        },
+      )
+      .exec();
+  }
+
   async create(dto: CreateInvoiceDto, user: AuthUser): Promise<Invoice> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
     const invoiceNumber = await this.getNextInvoiceNumber(companyId);
@@ -300,6 +324,7 @@ export class InvoicesService {
 
     const saved = await invoice.save();
     await this.markRebilled(companyId, dto.supplierInvoiceIds, saved);
+    await this.markAtaInvoiced(companyId, dto.ataIds, saved);
     return saved;
   }
 

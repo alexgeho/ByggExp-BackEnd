@@ -17,6 +17,12 @@ export type PayslipLine = {
   amount?: number;
   tax?: number;
   net?: number;
+  // How the tax was withheld (null on lines stored before this was saved).
+  taxTable?: number | null;
+  taxColumn?: number | null;
+  taxPercent?: number | null;
+  employerRate?: number | null;
+  employerFee?: number | null;
 };
 
 export type PayslipData = {
@@ -78,10 +84,46 @@ function payslipRows(l: PayslipLine): string {
     .join("\n        ");
 }
 
+const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+const isNum = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+
+// The tax label shows the basis actually used for this line: the worker's
+// tax table/column, or the flat percentage. Older lines don't store it — the
+// run's percentage is shown only when it reproduces the withheld amount.
+export function payslipTaxLabel(l: PayslipLine, runTaxRate?: number): string {
+  if (isNum(l.taxTable) && isNum(l.taxColumn)) {
+    return `Preliminär skatt (tabell ${l.taxTable}, kolumn ${l.taxColumn})`;
+  }
+  if (isNum(l.taxPercent)) {
+    return `Preliminär skatt (${money(l.taxPercent)}%)`;
+  }
+  if (
+    isNum(runTaxRate) &&
+    round2((Number(l.amount) || 0) * (runTaxRate / 100)) ===
+      round2(Number(l.tax) || 0)
+  ) {
+    return `Preliminär skatt (${money(runTaxRate)}%)`;
+  }
+  return "Preliminär skatt";
+}
+
 export function buildPayslipHtml(data: PayslipData): string {
   const l = data.line;
-  const employerCost =
-    (Number(l.amount) || 0) * (1 + (Number(data.employerRate) || 0) / 100);
+  const gross = Number(l.amount) || 0;
+  const employerRate = isNum(l.employerRate)
+    ? l.employerRate
+    : Number(data.employerRate) || 0;
+  const employerFee = isNum(l.employerFee)
+    ? l.employerFee
+    : gross * (employerRate / 100);
+  const employerCost = gross + employerFee;
+  // A youth-reduced fee above the monthly cap mixes two rates — no single %.
+  const employerLabel =
+    round2(gross * (employerRate / 100)) === round2(employerFee)
+      ? `Arbetsgivaravgift (${money(employerRate)}%)`
+      : "Arbetsgivaravgift";
+  const tableTax = isNum(l.taxTable) && isNum(l.taxColumn);
 
   return `<!DOCTYPE html>
 <html lang="sv">
@@ -133,14 +175,17 @@ export function buildPayslipHtml(data: PayslipData): string {
 
     <table class="totals">
       <tr><td>Bruttolön</td><td class="r">${money(l.amount)} kr</td></tr>
-      <tr><td>Preliminär skatt (${money(data.taxRate)}%)</td><td class="r">-${money(l.tax)} kr</td></tr>
+      <tr><td>${esc(payslipTaxLabel(l, data.taxRate))}</td><td class="r">-${money(l.tax)} kr</td></tr>
       <tr class="grand"><td>Nettolön</td><td class="r">${money(l.net)} kr</td></tr>
     </table>
 
     <p class="foot">
-      Arbetsgivaravgift (${money(data.employerRate)}%) tillkommer för arbetsgivaren.
-      Total arbetsgivarkostnad för denna rad: ${money(employerCost)} kr.
-      Skatten är en förenklad schablon — kontrollera mot Skatteverkets tabell.
+      ${employerLabel} tillkommer för arbetsgivaren.
+      Total arbetsgivarkostnad för denna rad: ${money(employerCost)} kr.${
+        tableTax
+          ? ""
+          : "\n      Skatten är en förenklad schablon — kontrollera mot Skatteverkets tabell."
+      }
     </p>
   </main>
 </body>

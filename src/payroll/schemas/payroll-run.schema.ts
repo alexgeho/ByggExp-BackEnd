@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { HydratedDocument } from "mongoose";
+import { EMPLOYER_FEE_GENERAL } from "../employer-fee";
 
 // basis of a run entered by hand on Löner → Ny lönekörning (no shifts). The
 // hours grid's own "manual" measure stays "manual" and is not editable here.
@@ -69,6 +70,26 @@ export class PayrollLine {
   @Prop({ type: Number, default: 0 })
   net: number;
 
+  // How `tax` was withheld: the worker's Skatteverket table/column, or the
+  // flat percentage when no table applied. Null on runs made before this was
+  // stored.
+  @Prop({ type: Number, default: null })
+  taxTable?: number | null;
+
+  @Prop({ type: Number, default: null })
+  taxColumn?: number | null;
+
+  @Prop({ type: Number, default: null })
+  taxPercent?: number | null;
+
+  // Arbetsgivaravgift for this worker (age-based rate, see employer-fee.ts).
+  // Null on older runs — those use the run's employerRate.
+  @Prop({ type: Number, default: null })
+  employerRate?: number | null;
+
+  @Prop({ type: Number, default: null })
+  employerFee?: number | null;
+
   // Manual runs only: the rows behind amount (empty for runs from the hours
   // grid). hours/rate/amount above stay the line totals either way, so AGI,
   // payslip and exports read the same fields.
@@ -131,8 +152,9 @@ export class PayrollRun {
   @Prop({ type: Number, default: 0 })
   totalNet: number;
 
-  // Arbetsgivaravgift (employer social fees) — default 31.42% of gross.
-  @Prop({ type: Number, default: 31.42 })
+  // Arbetsgivaravgift (employer social fees) — the general rate; lines carry
+  // their own (age-based) rate and fee.
+  @Prop({ type: Number, default: EMPLOYER_FEE_GENERAL })
   employerRate: number;
 
   @Prop({ type: Number, default: 0 })

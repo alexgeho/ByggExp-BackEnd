@@ -13,7 +13,13 @@ export function computeLineAmounts(
 }
 
 export function computeRunTotals(
-  lines: Array<{ hours?: number; amount?: number; tax?: number; net?: number }>,
+  lines: Array<{
+    hours?: number;
+    amount?: number;
+    tax?: number;
+    net?: number;
+    employerFee?: number | null;
+  }>,
   employerRate: number,
 ): {
   totalHours: number;
@@ -31,7 +37,17 @@ export function computeRunTotals(
   );
   const totalTax = round2(lines.reduce((s, l) => s + (Number(l.tax) || 0), 0));
   const totalNet = round2(lines.reduce((s, l) => s + (Number(l.net) || 0), 0));
-  const employerContribution = round2(totalGross * (employerRate / 100));
+  // A line's own employer fee (age-based) wins; older lines use the run rate.
+  const employerContribution = round2(
+    lines.reduce(
+      (s, l) =>
+        s +
+        (typeof l.employerFee === "number"
+          ? l.employerFee
+          : (Number(l.amount) || 0) * (employerRate / 100)),
+      0,
+    ),
+  );
   return {
     totalHours,
     totalGross,

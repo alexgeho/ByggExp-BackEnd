@@ -22,6 +22,11 @@ import { TaxTableService } from "./tax-table.service";
 import { Project, ProjectDocument } from "../projects/schemas/project.schema";
 import { AgiEmployee, agiProblems, buildAgiXml, mergeEmployees } from "./agi";
 import {
+  birthYearFromPersonalNumber,
+  EMPLOYER_FEE_GENERAL,
+  employerFeeFor,
+} from "./employer-fee";
+import {
   CreatePayrollRunDto,
   ManualPayrollRunDto,
 } from "./dto/create-payroll-run.dto";
@@ -105,12 +110,12 @@ export class PayrollService {
     const ids = [...new Set(dto.lines.map((l) => String(l.userId)))];
     const users = await this.userModel
       .find({ _id: { $in: ids }, companyId })
-      .select("name hourlyRate taxTable taxColumn")
+      .select("name hourlyRate taxTable taxColumn +personalNumber")
       .exec();
     const byId = new Map(users.map((u) => [String(u._id), u]));
 
     const taxRate = dto.taxRate ?? 30;
-    const employerRate = 31.42;
+    const employerRate = EMPLOYER_FEE_GENERAL;
 
     const lines = await Promise.all(
       dto.lines
@@ -127,7 +132,13 @@ export class PayrollService {
             multiplier,
             taxRate,
           );
-          const tax = await this.taxFor(u, gross, pctTax, dto.periodTo);
+          const { tax, ...taxBasis } = await this.taxFor(
+            u,
+            gross,
+            pctTax,
+            taxRate,
+            dto.periodTo,
+          );
           const net = round2(gross - tax);
           return {
             userId: String(l.userId),
@@ -139,6 +150,8 @@ export class PayrollService {
             amount: gross,
             tax,
             net,
+            ...taxBasis,
+            ...this.employerFeeLine(u, gross, dto.periodTo),
           };
         }),
     );
@@ -175,7 +188,7 @@ export class PayrollService {
     const companyId = this.resolveCompanyId(user);
     await this.assertPayrollEnabled(companyId);
     const taxRate = dto.taxRate ?? 30;
-    const employerRate = 31.42;
+    const employerRate = EMPLOYER_FEE_GENERAL;
     const lines = await this.buildManualLines(dto, companyId, taxRate, []);
     const run = new this.payrollModel({
       companyId,
@@ -226,7 +239,11 @@ export class PayrollService {
           $set: {
             periodFrom: dto.periodFrom,
             periodTo: dto.periodTo,
-            ...runFigures(lines, taxRate, run.employerRate ?? 31.42),
+            ...runFigures(
+              lines,
+              taxRate,
+              run.employerRate ?? EMPLOYER_FEE_GENERAL,
+            ),
           },
         },
         { new: true },
@@ -262,7 +279,7 @@ export class PayrollService {
         companyId,
         $or: [{ erasedAt: null }, { _id: { $in: keepUserIds } }],
       })
-      .select("name hourlyRate taxTable taxColumn")
+      .select("name hourlyRate taxTable taxColumn +personalNumber")
       .exec();
     const byId = new Map(users.map((u) => [String(u._id), u]));
     const unknown = ids.filter((uid) => !byId.has(uid));
@@ -284,7 +301,13 @@ export class PayrollService {
         );
       }
       const { tax: pctTax } = computeLineAmounts(m.gross, 1, 1, taxRate);
-      const tax = await this.taxFor(u, m.gross, pctTax, dto.periodTo);
+      const { tax, ...taxBasis } = await this.taxFor(
+        u,
+        m.gross,
+        pctTax,
+        taxRate,
+        dto.periodTo,
+      );
       lines.push({
         userId: String(u._id),
         name: u.name || "",
@@ -296,6 +319,8 @@ export class PayrollService {
         tax,
         net: round2(m.gross - tax),
         items: m.items,
+        ...taxBasis,
+        ...this.employerFeeLine(u, m.gross, dto.periodTo),
       });
     }
     if (!lines.length) {
@@ -306,20 +331,52 @@ export class PayrollService {
 
   // Prefer the worker's Skatteverket tax table when set (and available);
   // otherwise fall back to the flat percentage. Tax tables are per income
-  // year: the year the period ends in.
+  // year: the year the period ends in. Also returns which basis was used, so
+  // the payslip can print it.
   private async taxFor(
     u: { taxTable?: number | null; taxColumn?: number | null } | undefined,
     gross: number,
     pctTax: number,
+    taxRate: number,
     periodTo: string,
-  ): Promise<number> {
+  ): Promise<{
+    tax: number;
+    taxTable: number | null;
+    taxColumn: number | null;
+    taxPercent: number | null;
+  }> {
     const tableTax = await this.taxTableService.lookupMonthlyTax(
       u?.taxTable,
       u?.taxColumn,
       gross,
       Number(String(periodTo).slice(0, 4)) || undefined,
     );
-    return tableTax == null ? pctTax : round2(tableTax);
+    if (tableTax == null) {
+      return {
+        tax: pctTax,
+        taxTable: null,
+        taxColumn: null,
+        taxPercent: taxRate,
+      };
+    }
+    return {
+      tax: round2(tableTax),
+      taxTable: Number(u?.taxTable),
+      taxColumn: Number(u?.taxColumn),
+      taxPercent: null,
+    };
+  }
+
+  // Age-based arbetsgivaravgift for one worker (general rate when the
+  // personnummer is missing).
+  private employerFeeLine(
+    u: { personalNumber?: string } | undefined,
+    gross: number,
+    periodTo: string,
+  ): { employerRate: number; employerFee: number } {
+    const birthYear = birthYearFromPersonalNumber(u?.personalNumber, periodTo);
+    const { rate, fee } = employerFeeFor(gross, birthYear, periodTo);
+    return { employerRate: rate, employerFee: fee };
   }
 
   // Manual runs belong to the payroll module (sold without shifts).
