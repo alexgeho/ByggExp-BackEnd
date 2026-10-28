@@ -132,3 +132,27 @@ describe("leads waiting for an answer", () => {
     ]);
   });
 });
+
+describe("lead stage", () => {
+  const { leadStage, waitingLeads } = jest.requireActual(
+    "./mailer-funnel-parse",
+  );
+  const m = (x: object) => ({
+    email: "a@x.se",
+    receivedAt: "2026-10-01",
+    category: "interest",
+    ...x,
+  });
+
+  it("derives replied / answered / lost, a manual stage wins", () => {
+    expect(leadStage(m({}))).toBe("replied");
+    expect(leadStage(m({ answered: true }))).toBe("answered");
+    expect(leadStage(m({ category: "no" }))).toBe("lost");
+    expect(leadStage(m({ category: "no", stage: "offer" }))).toBe("offer");
+    expect(leadStage(m({ stage: "bogus" }))).toBe("replied");
+  });
+
+  it("a lead with a stage set by hand no longer waits", () => {
+    expect(waitingLeads([m({ stage: "meeting" })])).toEqual([]);
+  });
+});

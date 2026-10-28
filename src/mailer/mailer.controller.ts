@@ -96,6 +96,7 @@ export class MailerController {
       category: typeof body.category === "string" ? body.category : undefined,
       note: typeof body.note === "string" ? body.note : undefined,
       answered: typeof body.answered === "boolean" ? body.answered : undefined,
+      stage: typeof body.stage === "string" ? body.stage : undefined,
     });
   }
   @Post("funnel/replies/:id/draft") draftReply(@Param("id") id: string) {
@@ -127,7 +128,10 @@ export class MailerController {
     return this.funnel.share();
   }
   @Put("funnel/share") setShare(@Body() body: AnyBody) {
-    return this.funnel.setShare(Boolean(body.enabled));
+    return this.funnel.setShare(
+      Boolean(body.enabled),
+      typeof body.edit === "boolean" ? body.edit : undefined,
+    );
   }
   // `brand` = that brand's own reply mailbox (empty = the main one).
   @Get("funnel/inbox") getInbox(@Query("brand") brand?: string) {
@@ -344,7 +348,7 @@ export class MailerPublicController {
     private readonly funnel: MailerFunnelService,
   ) {}
 
-  // Read-only funnel for the share link (no e-mail addresses or mail texts).
+  // Funnel for the share link (read-only: no e-mail addresses or mail texts).
   @Get("funnel/:token")
   publicFunnel(
     @Param("token") token: string,
@@ -356,6 +360,21 @@ export class MailerPublicController {
       brand: brand || undefined,
       from,
       to,
+    });
+  }
+
+  // Edit link only: sort a lead (category, note, stage, answered).
+  @Put("funnel/:token/replies/:id")
+  publicUpdateReply(
+    @Param("token") token: string,
+    @Param("id") id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.funnel.publicUpdateReply(token, id, {
+      category: typeof body.category === "string" ? body.category : undefined,
+      note: typeof body.note === "string" ? body.note : undefined,
+      answered: typeof body.answered === "boolean" ? body.answered : undefined,
+      stage: typeof body.stage === "string" ? body.stage : undefined,
     });
   }
 

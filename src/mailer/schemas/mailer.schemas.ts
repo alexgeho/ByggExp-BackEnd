@@ -446,6 +446,10 @@ export class MailReply {
   @Prop({ default: false })
   answered: boolean;
 
+  // Lead stage set by hand (LEAD_STAGES); "" = derived (leadStage()).
+  @Prop({ default: "" })
+  stage: string;
+
   @Prop({ type: [{ name: String, size: Number, _id: false }], default: [] })
   files: { name: string; size: number }[];
 
@@ -507,6 +511,10 @@ export class MailerFunnelConfig {
   // Read-only public funnel link (/m/funnel/:token). "" = sharing off.
   @Prop({ default: "" })
   shareToken: string;
+
+  // The share link may also sort leads (category, note, stage, answered).
+  @Prop({ default: false })
+  shareEdit: boolean;
 }
 export const MailerFunnelConfigSchema =
   SchemaFactory.createForClass(MailerFunnelConfig);
