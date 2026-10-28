@@ -33,6 +33,8 @@ import {
   isCompanyDomain,
   isSystemSender,
   replySnippet,
+  LEAD_STAGES,
+  leadStage,
   waitingLeads,
 } from "./mailer-funnel-parse";
 import { senderKeysOf } from "./mailer-campaigns.service";
@@ -298,6 +300,7 @@ export class MailerFunnelService {
           snippet: publicView ? "" : r.snippet,
           note: r.note,
           category: r.category,
+          stage: leadStage(r),
           competitor: r.competitor,
           campaignName: nameOf.get(String(r.campaignId)) || "",
           receivedAt: r.receivedAt,
@@ -570,11 +573,24 @@ export class MailerFunnelService {
 
   async updateReply(
     id: string,
-    input: { category?: string; note?: string; answered?: boolean },
+    input: {
+      category?: string;
+      note?: string;
+      answered?: boolean;
+      stage?: string;
+    },
   ) {
     if (!isValidObjectId(id)) throw new NotFoundException("Not found");
     const set: Partial<MailReply> = {};
     if (input.answered !== undefined) set.answered = input.answered;
+    if (input.stage !== undefined) {
+      if (
+        input.stage &&
+        !(LEAD_STAGES as readonly string[]).includes(input.stage)
+      )
+        throw new BadRequestException("Okänt steg");
+      set.stage = input.stage;
+    }
     if (input.category !== undefined) {
       if (!(REPLY_CATEGORIES as readonly string[]).includes(input.category))
         throw new BadRequestException("Okänd kategori");
@@ -592,24 +608,43 @@ export class MailerFunnelService {
 
   async share() {
     const c = await this.cfg();
-    return { token: c.shareToken };
+    return { token: c.shareToken, edit: Boolean(c.shareEdit) };
   }
 
-  async setShare(enabled: boolean) {
+  async setShare(enabled: boolean, edit?: boolean) {
     const c = await this.cfg();
     c.shareToken = enabled ? c.shareToken || newToken() : "";
+    if (edit !== undefined) c.shareEdit = edit;
+    if (!enabled) c.shareEdit = false;
     await c.save();
-    return { token: c.shareToken };
+    return { token: c.shareToken, edit: Boolean(c.shareEdit) };
   }
 
+  private async sharedCfg(token: string) {
+    const c = await this.cfg();
+    if (!c.shareToken || token !== c.shareToken)
+      throw new NotFoundException("Not found");
+    return c;
+  }
+
+  // Read-only link: no addresses or mail texts. Edit link: the full lists.
   async publicFunnel(
     token: string,
     q: { brand?: string; from?: string; to?: string },
   ) {
-    const c = await this.cfg();
-    if (!c.shareToken || token !== c.shareToken)
-      throw new NotFoundException("Not found");
-    return this.funnel(q, true);
+    const c = await this.sharedCfg(token);
+    const data = await this.funnel(q, !c.shareEdit);
+    return { ...data, canEdit: Boolean(c.shareEdit) };
+  }
+
+  async publicUpdateReply(
+    token: string,
+    id: string,
+    input: Parameters<MailerFunnelService["updateReply"]>[1],
+  ) {
+    const c = await this.sharedCfg(token);
+    if (!c.shareEdit) throw new NotFoundException("Not found");
+    return this.updateReply(id, input);
   }
 
   // ---------- leads waiting for an answer ----------
@@ -628,32 +663,39 @@ export class MailerFunnelService {
         ],
       })
       .lean();
-    const boxes = new Map(
-      (
-        await this.config.find({}, { key: 1, imapHost: 1, imapUser: 1 }).lean()
-      ).map((c) => [c.key, c]),
+    const cfgs = await this.config
+      .find({}, { key: 1, imapHost: 1, imapUser: 1 })
+      .lean();
+    const boxes = new Map(cfgs.map((c) => [c.key, c]));
+    // Our own test mails between our mailboxes are not leads.
+    const own = new Set(
+      cfgs
+        .map((c) => domainOf(c.imapUser || ""))
+        .filter((d) => d && isCompanyDomain(d)),
     );
-    return waitingLeads(mails).map((m) => {
-      const c = boxes.get(m.inbox || "main");
-      return {
-        _id: String(m._id),
-        name: m.name,
-        email: m.email,
-        company: m.company || domainOf(m.email),
-        subject: m.subject,
-        snippet: m.snippet,
-        note: m.note,
-        category: m.category,
-        direct: Boolean(m.direct),
-        files: m.files || [],
-        receivedAt: m.receivedAt,
-        mailbox: c?.imapUser || "",
-        openUrl:
-          c?.imapHost && m.uid
-            ? `https://${c.imapHost}/webmail/?_task=mail&_mbox=INBOX&_uid=${m.uid}&_action=show`
-            : "",
-      };
-    });
+    return waitingLeads(mails.filter((m) => !own.has(domainOf(m.email)))).map(
+      (m) => {
+        const c = boxes.get(m.inbox || "main");
+        return {
+          _id: String(m._id),
+          name: m.name,
+          email: m.email,
+          company: m.company || domainOf(m.email),
+          subject: m.subject,
+          snippet: m.snippet,
+          note: m.note,
+          category: m.category,
+          direct: Boolean(m.direct),
+          files: m.files || [],
+          receivedAt: m.receivedAt,
+          mailbox: c?.imapUser || "",
+          openUrl:
+            c?.imapHost && m.uid
+              ? `https://${c.imapHost}/webmail/?_task=mail&_mbox=INBOX&_uid=${m.uid}&_action=show`
+              : "",
+        };
+      },
+    );
   }
 
   // Every hour in the working day: leads waiting > 4 h get one mail to the

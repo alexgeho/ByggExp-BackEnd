@@ -126,7 +126,26 @@ type LeadMail = {
   receivedAt: Date | string | null;
   answered?: boolean;
   category: string;
+  stage?: string;
 };
+
+// Where a lead stopped. Set by hand; "" = derived from the mail itself.
+export const LEAD_STAGES = [
+  "replied",
+  "answered",
+  "meeting",
+  "offer",
+  "won",
+  "lost",
+] as const;
+export type LeadStage = (typeof LEAD_STAGES)[number];
+
+export function leadStage(m: LeadMail): LeadStage {
+  if ((LEAD_STAGES as readonly string[]).includes(m.stage || ""))
+    return m.stage as LeadStage;
+  if (m.category === "no" || m.category === "unsubscribe") return "lost";
+  return m.answered ? "answered" : "replied";
+}
 
 // "Att svara": one row per sender — their latest mail, when it is unanswered
 // and still wants an answer. Oldest waiting first.
@@ -138,7 +157,7 @@ export function waitingLeads<T extends LeadMail>(mails: T[]): T[] {
       latest.set(m.email, m);
   }
   return [...latest.values()]
-    .filter((m) => !m.answered && NEEDS_ANSWER.has(m.category))
+    .filter((m) => !m.answered && !m.stage && NEEDS_ANSWER.has(m.category))
     .sort(
       (a, b) =>
         new Date(a.receivedAt || 0).getTime() -
