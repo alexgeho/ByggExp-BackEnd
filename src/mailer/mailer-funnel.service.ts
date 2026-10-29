@@ -1106,7 +1106,7 @@ Items with "direct": true are not replies but new mails to our inbox. A request 
 
 Also return:
 - "competitor": the product they already use, as its usual name (e.g. "Softone", "Bygglet", "Fieldly", "Fortnox", "SmartDok"), "Eget system" if they built their own, else "".
-- "note": at most 6 words in Russian summarising the reply (e.g. "Softone, довольны", "Позвонить в понедельник", "Не интересно").
+- "note": at most 6 words in Russian with only what the mail actually says — never add a wish it does not state (no "хотят встречу" unless they ask for a meeting); a question they ask goes in as the question (e.g. "Softone, довольны", "Чертежи; спрашивают про снос", "Не интересно").
 
 Return only JSON: {"items":[{"id":"...","category":"...","competitor":"...","note":"..."}]}
 
