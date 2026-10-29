@@ -148,10 +148,12 @@ export function leadStage(m: LeadMail): LeadStage {
 }
 
 // "Att svara": one row per sender — their latest mail, when it is unanswered
-// and still wants an answer. Oldest waiting first.
+// and still wants an answer. Oldest waiting first. Auto-replies and empty
+// follow-ups ("auto") never hide the real mail before them.
 export function waitingLeads<T extends LeadMail>(mails: T[]): T[] {
   const latest = new Map<string, T>();
   for (const m of mails) {
+    if (m.category === "auto") continue;
     const cur = latest.get(m.email);
     if (!cur || new Date(m.receivedAt || 0) > new Date(cur.receivedAt || 0))
       latest.set(m.email, m);

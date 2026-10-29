@@ -155,4 +155,14 @@ describe("lead stage", () => {
   it("a lead with a stage set by hand no longer waits", () => {
     expect(waitingLeads([m({ stage: "meeting" })])).toEqual([]);
   });
+
+  it("an auto-reply after a real mail does not hide it", () => {
+    const rows = waitingLeads([
+      m({ receivedAt: "2026-10-28T10:00", category: "interest" }),
+      m({ receivedAt: "2026-10-28T10:01", category: "auto" }),
+    ]);
+    expect(rows.map((r: { category: string }) => r.category)).toEqual([
+      "interest",
+    ]);
+  });
 });
