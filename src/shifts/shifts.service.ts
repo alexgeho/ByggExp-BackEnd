@@ -2036,7 +2036,7 @@ export class ShiftsService {
       { header: "OB", key: "obStatus", width: 12 },
       { header: "Travel km", key: "travelKm", width: 12 },
       { header: "Travel h", key: "travelHours", width: 12 },
-      { header: "Per diem", key: "perDiem", width: 12 },
+      { header: "Daily allowance", key: "perDiem", width: 16 },
       { header: "Approved", key: "approved", width: 12 },
       { header: "Note", key: "note", width: 40 },
     ];
@@ -2072,7 +2072,7 @@ export class ShiftsService {
       obStatus: "OB",
       travelKm: "Travel km",
       travelHours: "Travel h",
-      perDiem: "Per diem",
+      perDiem: "Daily allowance",
       approved: "Approved",
       note: "Note",
     });
