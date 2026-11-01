@@ -19,8 +19,8 @@ import { FilesInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
 import * as fs from "fs";
 import { diskStorage } from "multer";
-import { extname } from "path";
 import { Roles } from "../common/decorators/roles.decorator";
+import { imageFileFilter, safeImageExtension } from "../common/image-upload";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../users/schemas/user.schema";
 import { LABELS } from "./deviation.logic";
@@ -34,8 +34,6 @@ import {
 import { DeviationsService } from "./deviations.service";
 import type { UploadedDeviationPhoto } from "./deviations.service";
 
-const IMAGE_OR_HEIC = /^image\/|heic|heif/i;
-
 const photoStorage = diskStorage({
   destination: (_req, _file, cb) => {
     const dir = "./uploads/deviation-photos";
@@ -43,7 +41,7 @@ const photoStorage = diskStorage({
     cb(null, dir);
   },
   filename: (_req, file, cb) => {
-    const ext = (extname(file.originalname || "") || ".jpg").toLowerCase();
+    const ext = safeImageExtension(file) || ".jpg"; // filter already rejected non-images
     cb(null, `avvik-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
   },
 });
@@ -171,12 +169,7 @@ export class DeviationsController {
     FilesInterceptor("photos", 10, {
       storage: photoStorage,
       limits: { fileSize: 20 * 1024 * 1024 },
-      fileFilter: (_req, file, cb) =>
-        cb(
-          null,
-          IMAGE_OR_HEIC.test(file.mimetype) ||
-            IMAGE_OR_HEIC.test(file.originalname),
-        ),
+      fileFilter: imageFileFilter,
     }),
   )
   addPhotos(
