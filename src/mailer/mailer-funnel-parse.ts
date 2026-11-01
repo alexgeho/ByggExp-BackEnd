@@ -215,8 +215,9 @@ export function formLead(
     field(/^\s*E-post\s*:\s*(.+)$/im),
     field(/^\s*Telefon\s*:\s*(.+)$/im),
   ].join(" ");
+  const rt = /^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$/.test(replyTo) ? replyTo : "";
   const mail =
-    (replyTo && domainOf(replyTo) !== ownDomain ? replyTo : "") ||
+    (rt && domainOf(rt) !== ownDomain ? rt : "") ||
     (contact.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/)?.[0] || "").toLowerCase();
   const digits = (contact.match(/\+?\d[\d\s-]{6,}\d/)?.[0] || "").replace(
     /\D/g,

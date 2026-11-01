@@ -217,6 +217,13 @@ describe("formLead", () => {
     expect(
       formLead("Namn/företag: TEST Claude – diagnostik", "", "x.se"),
     ).toBeNull();
+    expect(
+      formLead(
+        "Kontakt: 0761288880/k.moe@gmail.com",
+        "0761288880/k.moe@gmail.com",
+        "x.se",
+      )?.email,
+    ).toBe("k.moe@gmail.com");
     expect(leadKey("tel 0729-958330")).toBe(leadKey("Tel 0729958330"));
   });
 });

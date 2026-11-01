@@ -100,7 +100,7 @@ export type InboxInput = {
 
 const MIN_REAL_CAMPAIGN = 10;
 const REPLY_SORT_VERSION = 4; // 4: direct inquiries
-const PARSE_VERSION = 4; // 4: site form mails from no-reply@ on our domain
+const PARSE_VERSION = 5; // 5: form lead e-mail fixed on re-read
 
 // "ByggExp (Brevo)" → "ByggExp"; campaigns of deleted senders fall back to
 // the first word of the campaign name ("Nordkod – utan hemsida").
@@ -1075,7 +1075,10 @@ export class MailerFunnelService {
       .findOne({ messageId }, { snippet: 1 })
       .lean();
     if (existing) {
-      await this.replies.updateOne({ _id: existing._id }, lead);
+      await this.replies.updateOne(
+        { _id: existing._id },
+        fromOwn ? { ...lead, email, name: fromName } : lead,
+      );
       // Re-read after a parser fix: fill a snippet that came out empty and
       // let it be sorted again.
       const snippet = replySnippet(text);
