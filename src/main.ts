@@ -114,6 +114,9 @@ async function bootstrap() {
     "https://www.bygghub.nu",
     "https://byggexp.se",
     "https://www.byggexp.se",
+    // Norwegian marketing site: lead forms (mail/demo-request) post from here.
+    "https://byggexp.no",
+    "https://www.byggexp.no",
     "https://tot-bygghub-admin-site.vercel.app",
     "http://localhost:8081",
     "https://admin.byggexp.se",
