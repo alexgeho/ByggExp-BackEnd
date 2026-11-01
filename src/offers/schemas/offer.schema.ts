@@ -71,6 +71,14 @@ export class Offer {
   @Prop({ default: "" })
   validUntil: string;
 
+  // Seller country + currency snapshotted at creation. No defaults: older
+  // offers fall back to the company at render time.
+  @Prop({ type: String })
+  country?: string;
+
+  @Prop({ type: String })
+  currency?: string;
+
   @Prop({ default: "" })
   subtitle: string;
 

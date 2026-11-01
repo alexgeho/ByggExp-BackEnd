@@ -55,8 +55,17 @@ export function calculateInvoiceTotals(
 
 export function deriveInvoiceSettlement(
   total: number,
-  opts: { rotEnabled?: boolean; rotLaborAmount?: number; deductionType?: string } = {},
+  opts: {
+    rotEnabled?: boolean;
+    rotLaborAmount?: number;
+    deductionType?: string;
+    // Norway: pay the exact amount to the øre (no öresavrundning, no ROT).
+    exact?: boolean;
+  } = {},
 ): { rotDeduction: number; rounding: number; roundedTotal: number } {
+  if (opts.exact) {
+    return { rotDeduction: 0, rounding: 0, roundedTotal: round2(total) };
+  }
   const { rate, max } = deductionMeta(opts.deductionType);
   const rotDeduction = opts.rotEnabled
     ? Math.min(round2(rate * (Number(opts.rotLaborAmount) || 0)), max)

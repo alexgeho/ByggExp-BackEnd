@@ -17,6 +17,7 @@ import { UserRole } from "../users/schemas/user.schema";
 import { CreateInvoiceDto, InvoiceItemDto } from "./dto/create-invoice.dto";
 import { UpdateInvoiceDto } from "./dto/update-invoice.dto";
 import { generateOCR } from "./generate-ocr";
+import { generateKid, isNorway, vatRatesForCountry } from "./norway";
 import {
   calculateInvoiceTotals,
   deriveInvoiceSettlement,
@@ -94,12 +95,14 @@ export class InvoicesService {
     }
     const pdf = await this.buildInvoicePdf(id, user);
     await reserveOutgoingEmail(this.companyModel, String(invoice.companyId));
+    const country = await this.countryOf(invoice);
     const result = await this.mailService.sendInvoiceEmail(to, {
       invoiceNumber: invoice.invoiceNumber,
       senderName: invoice.companyFooter?.name,
       dueDate: invoice.dueDate,
       message,
       pdf,
+      ...(isNorway(country) ? { lang: "nb" as const } : {}),
     });
 
     // Emailing a draft moves it to "sent" (a paid invoice stays paid).
@@ -214,7 +217,7 @@ export class InvoicesService {
     const existing = await this.invoiceModel
       .find({
         companyId: source.companyId,
-        creditOfId: String(source._id),
+        creditOfId: String((source as InvoiceDocument)._id),
       })
       .select("subtotal")
       .lean()
@@ -233,9 +236,55 @@ export class InvoicesService {
       rotEnabled?: boolean;
       rotLaborAmount?: number;
       deductionType?: string;
+      exact?: boolean;
     },
   ): { rotDeduction: number; rounding: number; roundedTotal: number } {
     return deriveInvoiceSettlement(total, dto);
+  }
+
+  // Seller country of an invoice: the snapshot on the document, else the
+  // company's current country (documents made before the snapshot existed).
+  private async countryOf(invoice: {
+    country?: string;
+    companyId: string;
+  }): Promise<string> {
+    if (invoice.country) return invoice.country;
+    const company = await this.companyModel
+      .findById(invoice.companyId)
+      .select("country")
+      .lean()
+      .exec();
+    return company?.country || "SE";
+  }
+
+  // Norway: only Norwegian MVA rates (25/15/12/0) are allowed on a document.
+  private assertNoVatRates(items: InvoiceItemDto[] | undefined): void {
+    const allowed = vatRatesForCountry("NO");
+    const bad = (items || []).find(
+      (it) =>
+        !it?.isText &&
+        it?.vatRate !== undefined &&
+        it?.vatRate !== null &&
+        !allowed.includes(Number(it.vatRate)),
+    );
+    if (bad) {
+      throw new BadRequestException(
+        `VAT rate ${bad.vatRate}% is not valid in Norway (use ${allowed.join(", ")})`,
+      );
+    }
+  }
+
+  // KID for a Norwegian invoice number, per the company's KID setting.
+  private async kidFor(
+    companyId: string,
+    invoiceNumber: number,
+  ): Promise<string> {
+    const company = await this.companyModel
+      .findById(companyId)
+      .select("kidMode")
+      .lean()
+      .exec();
+    return generateKid(invoiceNumber, company?.kidMode);
   }
 
   // Purchase invoices put on this customer invoice ("Fakturera"): stamp them
@@ -296,20 +345,35 @@ export class InvoicesService {
   async create(dto: CreateInvoiceDto, user: AuthUser): Promise<Invoice> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
     const invoiceNumber = await this.getNextInvoiceNumber(companyId);
-    const totals = this.calculateTotals(
-      dto.items || [],
-      dto.reverseVAT === "true",
-    );
-    const settlement = this.deriveSettlement(totals.total, dto);
-    const companyFooter = await this.resolveCompanyFooter(companyId, dto);
     // Snapshot the company logo onto the invoice so the PDF shows it (and stays
     // fixed even if the company later changes its logo).
     const company = await this.companyModel
       .findById(companyId)
-      .select("logoUrl")
+      .select("logoUrl country currency kidMode")
       .lean()
       .exec();
     const logoUrl = dto.logoUrl ?? company?.logoUrl ?? null;
+    const no = isNorway(company?.country);
+    // Norway: Swedish-only features (ROT, omvänd byggmoms) never apply, VAT
+    // rates are Norwegian and the amount is paid exactly (no rounding).
+    if (no) {
+      this.assertNoVatRates(dto.items);
+      dto = { ...dto, reverseVAT: "false", rotEnabled: false };
+    }
+    const totals = this.calculateTotals(
+      dto.items || [],
+      dto.reverseVAT === "true",
+    );
+    const settlement = this.deriveSettlement(totals.total, {
+      ...dto,
+      exact: no,
+    });
+    const companyFooter = await this.resolveCompanyFooter(companyId, dto);
+    const marketFields = {
+      country: company?.country || "SE",
+      currency: company?.currency || (no ? "NOK" : "SEK"),
+      ...(no ? { kid: generateKid(invoiceNumber, company?.kidMode) } : {}),
+    };
 
     const invoice = new this.invoiceModel({
       ...dto,
@@ -327,6 +391,7 @@ export class InvoicesService {
       status: dto.status || InvoiceStatus.Draft,
       companyFooter,
       logoUrl,
+      ...marketFields,
     });
 
     const saved = await invoice.save();
@@ -388,6 +453,11 @@ export class InvoicesService {
   ): Promise<InvoiceDocument> {
     const invoice = await this.findOne(id, user);
     this.assertDraft(invoice, "edited");
+    const no = isNorway(await this.countryOf(invoice));
+    if (no) {
+      this.assertNoVatRates(dto.items);
+      dto = { ...dto, reverseVAT: "false", rotEnabled: false };
+    }
     const items = dto.items ?? invoice.items;
     const isReverseVAT = (dto.reverseVAT ?? invoice.reverseVAT) === "true";
     const totals = this.calculateTotals(items || [], isReverseVAT);
@@ -395,6 +465,7 @@ export class InvoicesService {
       rotEnabled: dto.rotEnabled ?? invoice.rotEnabled,
       rotLaborAmount: dto.rotLaborAmount ?? invoice.rotLaborAmount,
       deductionType: dto.deductionType ?? invoice.deductionType,
+      exact: no,
     });
 
     Object.assign(invoice, {
@@ -439,6 +510,9 @@ export class InvoicesService {
       ...payload,
       invoiceNumber,
       ocr: generateOCR(invoiceNumber),
+      ...(isNorway(source.country)
+        ? { kid: await this.kidFor(source.companyId, invoiceNumber) }
+        : {}),
       status: InvoiceStatus.Draft,
       createdByUserId: user.userId,
     });
@@ -505,19 +579,24 @@ export class InvoicesService {
     // rounding and "Att betala" all carry the right sign consistently.
     const negTotal = neg(source.total) * share;
     const rotLaborAmount = neg(source.rotLaborAmount) * share;
+    const no = isNorway(await this.countryOf(source));
     const settlement = this.deriveSettlement(negTotal, {
       rotEnabled: source.rotEnabled,
       rotLaborAmount,
       deductionType: source.deductionType,
+      exact: no,
     });
 
     const creditNote = new this.invoiceModel({
       ...raw,
       invoiceNumber,
       ocr: generateOCR(invoiceNumber),
+      ...(no
+        ? { kid: await this.kidFor(source.companyId, invoiceNumber) }
+        : {}),
       status: InvoiceStatus.Draft,
       createdByUserId: user.userId,
-      creditOfId: String((source as InvoiceDocument)._id),
+      creditOfId: String(source._id),
       creditOfNumber: source.invoiceNumber,
       date: new Date().toISOString().slice(0, 10),
       items: (source.items || []).map((it) => ({
@@ -564,6 +643,13 @@ export class InvoicesService {
   async buildInvoiceHtml(id: string, user: AuthUser): Promise<string> {
     const invoice = await this.findOne(id, user);
     const data = this.toPdfData(invoice);
+    const country = await this.countryOf(invoice);
+    const no = isNorway(country);
+    if (no) {
+      data.country = "NO";
+      data.currency = invoice.currency || "NOK";
+      data.kid = invoice.kid || "";
+    }
 
     // Logo, giro AND the footer identity (address/phone/org/VAT/email/website)
     // are snapshotted at invoice creation, so an invoice made BEFORE the company
@@ -583,7 +669,7 @@ export class InvoicesService {
       !footer.vatNumber ||
       !footer.vatStatus ||
       (!footer.bankgiro && !footer.plusgiro);
-    if (!logoUrl || footerBlank) {
+    if (!logoUrl || footerBlank || no) {
       const company = await this.companyModel
         .findById(invoice.companyId)
         .lean()
@@ -602,7 +688,14 @@ export class InvoicesService {
         footer.vatNumber = footer.vatNumber || company.vatNumber || "";
         footer.bankgiro = footer.bankgiro || company.bankgiro || "";
         footer.plusgiro = footer.plusgiro || company.plusgiro || "";
-        if (!footer.vatStatus) {
+        if (no) {
+          footer.kontonummer = footer.kontonummer || company.kontonummer || "";
+          footer.mvaRegistered =
+            footer.mvaRegistered ?? Boolean(company.mvaRegistered);
+          footer.foretaksregisteret =
+            footer.foretaksregisteret ?? Boolean(company.foretaksregisteret);
+        }
+        if (!no && !footer.vatStatus) {
           const fskatt = company.vatStatus;
           footer.vatStatus =
             fskatt === "true"
@@ -616,16 +709,19 @@ export class InvoicesService {
     data.companyFooter = footer;
     const logoDataUrl = await this.getLogoDataUrl(logoUrl);
 
-    data.qrDataUrl = await buildInvoiceQrDataUrl({
-      companyName: footer.name || data.companyName,
-      orgNumber: footer.orgNumber,
-      ocr: data.ocr || data.invoiceNumber,
-      invoiceDate: data.date,
-      dueDate: data.dueDate,
-      amount: data.roundedTotal ?? data.total,
-      bankgiro: footer.bankgiro,
-      plusgiro: footer.plusgiro,
-    });
+    // The payment QR is the Swedish BGC format — Norway has none.
+    data.qrDataUrl = no
+      ? undefined
+      : await buildInvoiceQrDataUrl({
+          companyName: footer.name || data.companyName,
+          orgNumber: footer.orgNumber,
+          ocr: data.ocr || data.invoiceNumber,
+          invoiceDate: data.date,
+          dueDate: data.dueDate,
+          amount: data.roundedTotal ?? data.total,
+          bankgiro: footer.bankgiro,
+          plusgiro: footer.plusgiro,
+        });
 
     return buildInvoicePdfHtmlPuppeteer(data, logoDataUrl);
   }
@@ -682,11 +778,24 @@ export class InvoicesService {
     companyId: string,
     dto: CreateInvoiceDto | UpdateInvoiceDto,
   ) {
-    if (dto.companyFooter) {
-      return dto.companyFooter;
-    }
-
     const company = await this.companyModel.findById(companyId).lean().exec();
+    // Norway: snapshot the payment account and legal identity flags too.
+    const noFields = isNorway(company?.country)
+      ? {
+          kontonummer: company?.kontonummer || "",
+          mvaRegistered: Boolean(company?.mvaRegistered),
+          foretaksregisteret: Boolean(company?.foretaksregisteret),
+          vatStatus: "",
+          bankgiro: "",
+          plusgiro: "",
+        }
+      : null;
+
+    if (dto.companyFooter) {
+      return noFields
+        ? { ...dto.companyFooter, ...noFields }
+        : dto.companyFooter;
+    }
 
     // The F-skatt toggle is stored as a boolean-ish flag ("true"/"false"); turn
     // it into the label the invoice footer should print.
@@ -710,6 +819,7 @@ export class InvoicesService {
       vatStatus,
       bankgiro: company?.bankgiro || "",
       plusgiro: company?.plusgiro || "",
+      ...(noFields || {}),
     };
   }
 

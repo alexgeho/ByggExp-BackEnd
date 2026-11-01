@@ -1,0 +1,69 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`invoice / quote cover e-mails Swedish invoice e-mail is unchanged 1`] = `
+{
+  "attachments": [
+    {
+      "content": {
+        "data": [
+          120,
+        ],
+        "type": "Buffer",
+      },
+      "contentType": "application/pdf",
+      "filename": "faktura-39.pdf",
+    },
+  ],
+  "from": ""ByggExp" <noreply@byggexp.se>",
+  "html": "
+      <p>Hej,</p>
+      <p>Bifogat finner du <strong>faktura 39</strong> från <strong>Geal AB</strong>.</p>
+      <p>Förfallodatum: 2026-09-12.</p>
+      
+      <p>Med vänliga hälsningar<br>Geal AB</p>
+    ",
+  "subject": "Faktura 39 — Geal AB",
+  "text": "Hej,
+
+Bifogat finner du faktura 39 från Geal AB.
+Förfallodatum: 2026-09-12.
+
+Med vänliga hälsningar
+Geal AB",
+  "to": "a@b.se",
+}
+`;
+
+exports[`invoice / quote cover e-mails Swedish offer e-mail is unchanged 1`] = `
+{
+  "attachments": [
+    {
+      "content": {
+        "data": [
+          120,
+        ],
+        "type": "Buffer",
+      },
+      "contentType": "application/pdf",
+      "filename": "offert-7.pdf",
+    },
+  ],
+  "from": ""ByggExp" <noreply@byggexp.se>",
+  "html": "
+      <p>Hej,</p>
+      <p>Bifogat finner du <strong>offert 7</strong> från <strong>Geal AB</strong>.</p>
+      <p>Giltig till: 2026-09-12.</p>
+      
+      <p>Med vänliga hälsningar<br>Geal AB</p>
+    ",
+  "subject": "Offert 7 — Geal AB",
+  "text": "Hej,
+
+Bifogat finner du offert 7 från Geal AB.
+Giltig till: 2026-09-12.
+
+Med vänliga hälsningar
+Geal AB",
+  "to": "a@b.se",
+}
+`;

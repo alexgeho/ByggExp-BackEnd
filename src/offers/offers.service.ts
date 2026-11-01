@@ -19,6 +19,7 @@ import { UpdateOfferDto } from './dto/update-offer.dto';
 import { Offer, OfferDocument, OfferStatus } from './schemas/offer.schema';
 import { MailService } from '../mail/mail.service';
 import { reserveOutgoingEmail } from '../mail/outgoing-mail-quota';
+import { isNorway, vatRatesForCountry } from '../invoices/norway';
 
 type AuthUser = {
   role: UserRole;
@@ -52,13 +53,15 @@ export class OffersService {
   async create(dto: CreateOfferDto, user: AuthUser): Promise<Offer> {
     const companyId = this.resolveCompanyId(dto.companyId, user);
     const offerNumber = await this.getNextOfferNumber(companyId);
-    const totals = this.computeOfferTotals(dto.items || []);
     // Snapshot the company logo so the offer PDF shows it.
     const company = await this.companyModel
       .findById(companyId)
-      .select('logoUrl')
+      .select('logoUrl country currency')
       .lean()
       .exec();
+    const no = isNorway(company?.country);
+    if (no) this.assertNoVatRates(dto.items);
+    const totals = this.computeOfferTotals(dto.items || []);
 
     const offer = new this.offerModel({
       ...dto,
@@ -73,9 +76,35 @@ export class OffersService {
       total: totals.total,
       status: dto.status || OfferStatus.Draft,
       logoUrl: dto.logoUrl ?? company?.logoUrl ?? null,
+      country: company?.country || 'SE',
+      currency: company?.currency || (no ? 'NOK' : 'SEK'),
     });
 
     return offer.save();
+  }
+
+  // Norway: only Norwegian MVA rates (25/15/12/0) are allowed.
+  private assertNoVatRates(items?: Array<{ vatRate?: number }>): void {
+    const allowed = vatRatesForCountry('NO');
+    const bad = (items || []).find(
+      (it) => it?.vatRate !== undefined && it?.vatRate !== null && !allowed.includes(Number(it.vatRate)),
+    );
+    if (bad) {
+      throw new BadRequestException(
+        `VAT rate ${bad.vatRate}% is not valid in Norway (use ${allowed.join(', ')})`,
+      );
+    }
+  }
+
+  // Seller country: the snapshot on the offer, else the company's current one.
+  private async countryOf(offer: { country?: string; companyId: string }): Promise<string> {
+    if (offer.country) return offer.country;
+    const company = await this.companyModel
+      .findById(offer.companyId)
+      .select('country')
+      .lean()
+      .exec();
+    return company?.country || 'SE';
   }
 
   async buildOfferHtml(id: string, user: AuthUser): Promise<string> {
@@ -120,6 +149,7 @@ export class OffersService {
       total: offer.total,
       companyFooter,
     };
+    if (isNorway(await this.countryOf(offer))) data.country = 'NO';
 
     return buildOfferPdfHtml(data, logoDataUrl);
   }
@@ -160,12 +190,14 @@ export class OffersService {
     const footer = await this.resolveCompanyFooter(offer.companyId);
     const pdf = await this.buildOfferPdf(id, user);
     await reserveOutgoingEmail(this.companyModel, String(offer.companyId));
+    const no = isNorway(await this.countryOf(offer));
     const result = await this.mailService.sendOfferEmail(to, {
       offerNumber: offer.offerNumber,
       senderName: footer.name,
       validUntil: offer.validUntil,
       message,
       pdf,
+      ...(no ? { lang: 'nb' as const } : {}),
     });
 
     // Emailing a draft moves it to "sent".
@@ -197,6 +229,13 @@ export class OffersService {
       orgNumber: company?.orgNumber || '',
       vatNumber: company?.vatNumber || '',
       vatStatus,
+      // Norway only — the Swedish footer never prints these.
+      ...(isNorway(company?.country)
+        ? {
+            mvaRegistered: Boolean(company?.mvaRegistered),
+            foretaksregisteret: Boolean(company?.foretaksregisteret),
+          }
+        : {}),
     };
   }
 
@@ -249,6 +288,7 @@ export class OffersService {
 
   async update(id: string, dto: UpdateOfferDto, user: AuthUser): Promise<OfferDocument> {
     const offer = await this.findOne(id, user);
+    if (isNorway(await this.countryOf(offer))) this.assertNoVatRates(dto.items);
 
     const items = dto.items ?? offer.items;
     const totals = this.computeOfferTotals(items || []);

@@ -114,6 +114,23 @@ export class Company {
   @Prop({ default: "SEK" })
   currency: string;
 
+  // ---- Norway (country = "NO") payment + legal identity on invoices ----
+  // 11-digit bank account (kontonummer, MOD11-checked). Replaces Bankgiro.
+  @Prop({ default: "" })
+  kontonummer: string;
+
+  // KID on invoices: "none" | "mod10" | "mod11" (invoice number + check digit).
+  @Prop({ default: "none" })
+  kidMode: string;
+
+  // Registered in Merverdiavgiftsregisteret → org.nr is printed with «MVA».
+  @Prop({ type: Boolean, default: false })
+  mvaRegistered: boolean;
+
+  // Registered in Foretaksregisteret (AS/ASA/NUF) → the word is printed.
+  @Prop({ type: Boolean, default: false })
+  foretaksregisteret: boolean;
+
   // Relative URL under /uploads (e.g. /uploads/company-logos/xyz.png); shown on
   // invoice/offer PDFs as the sender logo.
   @Prop({ default: "" })

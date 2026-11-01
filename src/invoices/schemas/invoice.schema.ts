@@ -76,6 +76,16 @@ export class InvoiceCompanyFooter {
 
   @Prop({ default: "" })
   plusgiro?: string;
+
+  // Norway only (no defaults, so Swedish documents stay as they were).
+  @Prop({ type: String })
+  kontonummer?: string;
+
+  @Prop({ type: Boolean })
+  mvaRegistered?: boolean;
+
+  @Prop({ type: Boolean })
+  foretaksregisteret?: boolean;
 }
 
 const InvoiceCompanyFooterSchema =
@@ -97,6 +107,18 @@ export class Invoice {
 
   @Prop({ default: "" })
   ocr: string;
+
+  // Seller country + currency snapshotted at creation ("SE"/"SEK", "NO"/"NOK").
+  // No defaults: older documents fall back to the company at render time.
+  @Prop({ type: String })
+  country?: string;
+
+  @Prop({ type: String })
+  currency?: string;
+
+  // Norway: KID payment reference (empty when the company uses none).
+  @Prop({ type: String })
+  kid?: string;
 
   @Prop({ default: "" })
   orderReference: string;

@@ -4,7 +4,12 @@ import {
   IsNotEmpty,
   IsOptional,
   IsArray,
+  IsBoolean,
+  IsIn,
+  ValidateBy,
+  ValidateIf,
 } from "class-validator";
+import { isValidKontonummer, KID_MODES } from "../../invoices/norway";
 
 export class CreateCompanyDto {
   // Only email is required — it becomes the login of the company's first admin.
@@ -80,6 +85,31 @@ export class CreateCompanyDto {
   @IsString()
   @IsOptional()
   logoUrl?: string;
+
+  // Norway: bank account (11 digits, MOD11). Empty clears it.
+  @IsOptional()
+  @ValidateIf((_, v) => v !== "")
+  @ValidateBy({
+    name: "isKontonummer",
+    validator: {
+      validate: (v) => typeof v === "string" && isValidKontonummer(v),
+      defaultMessage: () =>
+        "kontonummer must be 11 digits with a valid MOD11 check digit",
+    },
+  })
+  kontonummer?: string;
+
+  @IsOptional()
+  @IsIn(KID_MODES)
+  kidMode?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  mvaRegistered?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  foretaksregisteret?: boolean;
 
   @IsArray()
   @IsString({ each: true })

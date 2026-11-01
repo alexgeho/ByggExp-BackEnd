@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import nodemailer, { Transporter } from "nodemailer";
 import { existsSync } from "fs";
 import { join } from "path";
+import { formatNoDate } from "../invoices/norway";
 import {
   MailLang,
   MAIL_LANGS,
@@ -527,8 +528,12 @@ export class MailService {
       dueDate?: string;
       message?: string;
       pdf: Buffer;
+      // "nb" for Norwegian sellers; omitted = Swedish (unchanged).
+      lang?: "nb";
     },
   ): Promise<{ sent: boolean; to: string }> {
+    if (opts.lang === "nb")
+      return this.sendNoDocumentEmail(to, "invoice", opts);
     const nr = String(opts.invoiceNumber);
     const subject = `Faktura ${nr}${opts.senderName ? ` — ${opts.senderName}` : ""}`;
     const text = [
@@ -679,6 +684,78 @@ export class MailService {
     return { sent: true, to };
   }
 
+  // Norwegian (bokmål) cover e-mail for an invoice (faktura) or quote (tilbud)
+  // sent by a Norwegian company. Dates in dd.mm.yyyy.
+  private async sendNoDocumentEmail(
+    to: string,
+    kind: "invoice" | "offer",
+    opts: {
+      invoiceNumber?: string | number;
+      offerNumber?: string | number;
+      senderName?: string;
+      dueDate?: string;
+      validUntil?: string;
+      message?: string;
+      pdf: Buffer;
+    },
+  ): Promise<{ sent: boolean; to: string }> {
+    const isInvoice = kind === "invoice";
+    const nr = String(isInvoice ? opts.invoiceNumber : opts.offerNumber);
+    const word = isInvoice ? "faktura" : "tilbud";
+    const Word = isInvoice ? "Faktura" : "Tilbud";
+    const dateLine = isInvoice
+      ? opts.dueDate
+        ? `Forfallsdato: ${formatNoDate(opts.dueDate)}.`
+        : ""
+      : opts.validUntil
+        ? `Gyldig til: ${formatNoDate(opts.validUntil)}.`
+        : "";
+    const from = opts.senderName ? ` fra ${opts.senderName}` : "";
+    const subject = `${Word} ${nr}${opts.senderName ? ` — ${opts.senderName}` : ""}`;
+    const text = [
+      "Hei,",
+      "",
+      `Vedlagt finner du ${word} ${nr}${from}.`,
+      dateLine,
+      opts.message || "",
+      "",
+      "Med vennlig hilsen",
+      opts.senderName || "",
+    ]
+      .filter((line, i, arr) => line !== "" || (arr[i - 1] !== "" && i !== 0))
+      .join("\n");
+    const html = `
+      <p>Hei,</p>
+      <p>Vedlagt finner du <strong>${word} ${this.escapeHtml(nr)}</strong>${opts.senderName ? ` fra <strong>${this.escapeHtml(opts.senderName)}</strong>` : ""}.</p>
+      ${dateLine ? `<p>${this.escapeHtml(dateLine)}</p>` : ""}
+      ${opts.message ? `<p>${this.escapeHtml(opts.message)}</p>` : ""}
+      <p>Med vennlig hilsen<br>${this.escapeHtml(opts.senderName || "")}</p>
+    `;
+
+    if (!this.transporter) {
+      this.logger.log(
+        `${Word} email for ${to} (${word} ${nr}) — SMTP not configured, skipped`,
+      );
+      return { sent: false, to };
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to,
+      subject,
+      text,
+      html,
+      attachments: [
+        {
+          filename: `${word}-${nr}.pdf`,
+          content: opts.pdf,
+          contentType: "application/pdf",
+        },
+      ],
+    });
+    return { sent: true, to };
+  }
+
   async sendOfferEmail(
     to: string,
     opts: {
@@ -687,8 +764,11 @@ export class MailService {
       validUntil?: string;
       message?: string;
       pdf: Buffer;
+      // "nb" for Norwegian sellers; omitted = Swedish (unchanged).
+      lang?: "nb";
     },
   ): Promise<{ sent: boolean; to: string }> {
+    if (opts.lang === "nb") return this.sendNoDocumentEmail(to, "offer", opts);
     const nr = String(opts.offerNumber);
     const subject = `Offert ${nr}${opts.senderName ? ` — ${opts.senderName}` : ""}`;
     const text = [
