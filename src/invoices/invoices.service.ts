@@ -130,6 +130,13 @@ export class InvoicesService {
     reminderCount: number;
   }> {
     const invoice = await this.findOne(id, user);
+    // Betalningspåminnelse follows Swedish rules (räntelagen, påminnelseavgift)
+    // and Swedish text — not offered for Norwegian companies.
+    if (isNorway(await this.countryOf(invoice))) {
+      throw new BadRequestException(
+        "Payment reminders are not available for Norwegian companies",
+      );
+    }
     const to = (body.email || invoice.email || "").trim();
     if (!to) {
       throw new BadRequestException(
