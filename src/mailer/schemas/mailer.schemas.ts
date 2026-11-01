@@ -497,6 +497,16 @@ export class MailerFunnelConfig {
   @Prop({ default: "" })
   lastError: string;
 
+  // Google Sheet (tab = #gid) that new leads of this mailbox are appended to.
+  @Prop({ default: "" })
+  sheetUrl: string;
+
+  @Prop({ default: "" })
+  sheetError: string;
+
+  @Prop({ type: Date, default: null })
+  sheetAt: Date | null;
+
   // Weekly conclusions written by Claude (Russian, 3–5 points).
   @Prop({ type: [String], default: [] })
   insights: string[];

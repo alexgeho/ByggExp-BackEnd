@@ -167,9 +167,9 @@ export function leadList<T extends LeadMail>(
       if (st === "lost" || st === "won") return false;
       return Boolean(m.stage) || NEEDS_ANSWER.has(m.category);
     })
-    .map((m) => ({
+    .map((m): T & { turn: "us" | "them" } => ({
       ...m,
-      turn: (leadStage(m) === "replied" ? "us" : "them") as "us" | "them",
+      turn: leadStage(m) === "replied" ? "us" : "them",
     }));
   return [
     ...rows.filter((r) => r.turn === "us").sort((a, b) => t(a) - t(b)),
@@ -196,3 +196,45 @@ export function waitingLeads<T extends LeadMail>(mails: T[]): T[] {
         new Date(b.receivedAt || 0).getTime(),
     );
 }
+
+// A site form mail ("Namn/företag: …, Kontakt: …") sent from our own domain:
+// the lead is the visitor — Reply-To, else the e-mail or phone in the text.
+// Phone-only leads get "tel 0707…" (digits only) as their key. null = our
+// own test or nothing to reach the visitor by.
+export function formLead(
+  text: string,
+  replyTo: string,
+  ownDomain: string,
+): { email: string; name: string } | null {
+  const field = (re: RegExp) => (text.match(re)?.[1] || "").trim();
+  const name =
+    field(/^\s*Namn(?:\s*\/\s*företag)?\s*:\s*(.+)$/im) ||
+    field(/^\s*Namn \/ företag\s*\n?\s*(.+)$/im);
+  const contact = [
+    field(/^\s*Kontakt\s*:\s*(.+)$/im),
+    field(/^\s*E-post\s*:\s*(.+)$/im),
+    field(/^\s*Telefon\s*:\s*(.+)$/im),
+  ].join(" ");
+  const mail =
+    (replyTo && domainOf(replyTo) !== ownDomain ? replyTo : "") ||
+    (contact.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/)?.[0] || "").toLowerCase();
+  const digits = (contact.match(/\+?\d[\d\s-]{6,}\d/)?.[0] || "").replace(
+    /\D/g,
+    "",
+  );
+  const all = `${name} ${mail} ${contact}`;
+  if (/\btest\b|example\.com|test@|diagnostik/i.test(all)) return null;
+  if (mail && domainOf(mail) === ownDomain) return null;
+  if (mail) return { email: mail.toLowerCase(), name };
+  if (digits.length >= 7) return { email: `tel ${digits}`, name };
+  return null;
+}
+
+// Key for comparing a lead with a sheet cell: "Tel 0707-93 12 02" and
+// "tel 0707931202" are the same lead.
+export const leadKey = (s: string) =>
+  String(s || "")
+    .toLowerCase()
+    .replace(/^tel[:\s]*/, "tel")
+    .replace(/[^a-z0-9@._+-]/g, "")
+    .replace(/-/g, "");

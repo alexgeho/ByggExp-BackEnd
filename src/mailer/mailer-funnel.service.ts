@@ -37,7 +37,10 @@ import {
   leadStage,
   waitingLeads,
   leadList,
+  formLead,
+  leadKey,
 } from "./mailer-funnel-parse";
+import { appendRows, sheetColumnA, sheetsAccount } from "./mailer-sheets";
 import { senderKeysOf } from "./mailer-campaigns.service";
 import { MailerListsService } from "./mailer-lists.service";
 import { mailerVisits } from "./mailer-ga";
@@ -92,6 +95,7 @@ export type InboxInput = {
   imapPort?: number;
   imapUser?: string;
   imapPass?: string;
+  sheetUrl?: string;
 };
 
 const MIN_REAL_CAMPAIGN = 10;
@@ -168,7 +172,13 @@ export class MailerFunnelService {
         c,
         brand: brandOf(senderLabel.get(senderKeysOf(c)[0]) || "", c.name),
       }));
-    const brands = [...new Set(rows.map((r) => r.brand).filter(Boolean))];
+    const boxes = await this.config.find({ key: /^inbox:/ }, { key: 1 }).lean();
+    const brands = [
+      ...new Set([
+        ...rows.map((r) => r.brand).filter(Boolean),
+        ...boxes.map((b) => b.key.slice("inbox:".length)).filter(Boolean),
+      ]),
+    ];
 
     const wanted = new Set(q.campaignIds?.filter(Boolean) ?? []);
     // Period = when the campaign started (a cohort), whole days, inclusive.
@@ -746,7 +756,7 @@ export class MailerFunnelService {
     const own = await this.config.findOne({ key: `inbox:${brand}` });
     if (own) return own;
     const addr = await this.replyAddressOf(brand);
-    if (!addr || addr === main.imapUser) return main;
+    if (addr && addr === main.imapUser) return main;
     // Not saved yet — the form opens prefilled with the brand's reply address.
     return new this.config({
       key: `inbox:${brand}`,
@@ -775,6 +785,10 @@ export class MailerFunnelService {
       imapPort: c.imapPort,
       imapUser: c.imapUser,
       hasPassword: Boolean(c.imapPassEnc),
+      sheetUrl: c.sheetUrl || "",
+      sheetError: c.sheetError || "",
+      sheetAt: c.sheetAt || null,
+      sheetAccount: sheetsAccount(),
       lastSyncAt: c.lastSyncAt,
       lastError: c.lastError,
     };
@@ -793,13 +807,18 @@ export class MailerFunnelService {
     c.imapUser = user;
     if (input.imapPort) c.imapPort = Number(input.imapPort) || 993;
     if (input.imapPass) c.imapPassEnc = encryptSecret(String(input.imapPass));
+    if (input.sheetUrl !== undefined) {
+      c.sheetUrl = String(input.sheetUrl).trim();
+      c.sheetError = "";
+    }
     await c.save();
     const added = await this.syncBox(c);
     await this.sortReplies();
+    if (brand) await this.exportSheet(c, brand);
     return { ...this.boxStatus(c), added };
   }
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
+  @Cron(CronExpression.EVERY_HOUR)
   async cron() {
     if (cronsDisabled()) return;
     await this.syncInbox().catch((err) =>
@@ -819,6 +838,57 @@ export class MailerFunnelService {
       await this.allInsights();
   }
 
+  // Appends this mailbox's new leads to its Google Sheet tab: only sorted
+  // leads (interest / later / other service or a stage set by hand) that are
+  // not in column A yet. Never rewrites rows — the owner edits them by hand.
+  private async exportSheet(c: MailerFunnelConfigDocument, brand: string) {
+    if (!c.sheetUrl) return;
+    try {
+      const { picked } = await this.pick({ brand });
+      const leads = (await this.waiting(
+        picked.map((r) => r.c._id),
+        brand,
+      )) as {
+        email: string;
+        turn: string;
+        category: string;
+        note?: string;
+        subject?: string;
+        receivedAt?: Date;
+        openUrl: string;
+      }[];
+      const { id, title, colA } = await sheetColumnA(c.sheetUrl);
+      const have = new Set(colA.map(leadKey));
+      const day = (d?: Date) =>
+        new Date(d || Date.now()).toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          timeZone: "Europe/Stockholm",
+        });
+      const q = (v: string) => v.replace(/"/g, "'");
+      const rows = leads
+        .filter(
+          (l) =>
+            l.category && l.category !== "no" && !have.has(leadKey(l.email)),
+        )
+        .map((l) => [
+          l.openUrl ? `=HYPERLINK("${q(l.openUrl)}","${q(l.email)}")` : l.email,
+          l.turn === "us" ? "ждет нас" : "ответили",
+          day(l.receivedAt),
+          l.note || l.subject || "",
+        ]);
+      await appendRows(id, title, rows);
+      c.sheetError = "";
+    } catch (err) {
+      c.sheetError = (err instanceof Error ? err.message : String(err)).slice(
+        0,
+        300,
+      );
+    }
+    c.sheetAt = new Date();
+    await c.save();
+  }
+
   // Reads every reply mailbox and stores the mails that answer a campaign.
   async syncInbox() {
     const main = await this.cfg();
@@ -826,6 +896,8 @@ export class MailerFunnelService {
     let added = 0;
     for (const c of [main, ...extra]) added += await this.syncBox(c);
     await this.sortReplies();
+    for (const c of extra)
+      await this.exportSheet(c, c.key.slice("inbox:".length));
     return { ...this.boxStatus(main), added };
   }
 
@@ -865,10 +937,10 @@ export class MailerFunnelService {
             .findOne({ startedAt: { $ne: null } }, { startedAt: 1 })
             .sort({ startedAt: 1 })
             .lean();
-          const found = await client.search(
-            { since: first?.startedAt || new Date() },
-            { uid: true },
-          );
+          const d90 = new Date(Date.now() - 90 * 864e5);
+          const since =
+            first?.startedAt && first.startedAt < d90 ? first.startedAt : d90;
+          const found = await client.search({ since }, { uid: true });
           range = found || [];
         }
         let maxUid = c.lastUid;
@@ -961,15 +1033,28 @@ export class MailerFunnelService {
   ): Promise<boolean> {
     const mail = await simpleParser(source);
     const from = mail.from?.value?.[0];
-    const email = String(from?.address || "")
+    let email = String(from?.address || "")
       .toLowerCase()
       .trim();
-    if (!email || isSystemSender(email) || email === box.own) return false;
+    let fromName = from?.name || "";
+    if (!email || isSystemSender(email)) return false;
     const received = mail.date || new Date();
     const messageId =
       mail.messageId || `${email}:${received.toISOString()}:${mail.subject}`;
     const text =
       mail.text || htmlToText(typeof mail.html === "string" ? mail.html : "");
+    // Site form (sent from our own domain): the lead is the visitor.
+    const ownDomain = domainOf(box.own);
+    if (email === box.own || (ownDomain && domainOf(email) === ownDomain)) {
+      const f = formLead(
+        text,
+        String(mail.replyTo?.value?.[0]?.address || "").toLowerCase(),
+        ownDomain,
+      );
+      if (!f) return false;
+      email = f.email;
+      fromName = f.name || fromName;
+    }
     const files = (mail.attachments || [])
       .filter((a) => a.contentDisposition !== "inline" && a.filename)
       .map((a) => ({ name: String(a.filename).slice(0, 200), size: a.size }));
@@ -1034,7 +1119,7 @@ export class MailerFunnelService {
         messageId,
         direct: true,
         email,
-        name: from?.name || "",
+        name: fromName,
         company: "",
         subject: (mail.subject || "").slice(0, 300),
         snippet: replySnippet(text),

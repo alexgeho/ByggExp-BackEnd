@@ -190,3 +190,33 @@ describe("leadList", () => {
     ).toEqual(["c@x.se:us", "b@x.se:us", "a@x.se:them"]);
   });
 });
+
+describe("formLead", () => {
+  const { formLead, leadKey } = jest.requireActual("./mailer-funnel-parse");
+  it("takes Reply-To, then e-mail, then phone; drops tests", () => {
+    expect(
+      formLead("Namn/företag: Kenth\nKontakt: 0707931202", "", "x.se"),
+    ).toEqual({ email: "tel 0707931202", name: "Kenth" });
+    expect(
+      formLead(
+        "Namn/företag: K\nKontakt: 0761288880/karolina.moe@gmail.com",
+        "",
+        "x.se",
+      ),
+    ).toEqual({ email: "karolina.moe@gmail.com", name: "K" });
+    expect(
+      formLead("Namn/företag: S AB\nE-post: a@b.se", "jj@s.com", "x.se")?.email,
+    ).toBe("jj@s.com");
+    expect(
+      formLead(
+        "Namn: Test\nTelefon: 070\nE-post: test@example.com",
+        "",
+        "x.se",
+      ),
+    ).toBeNull();
+    expect(
+      formLead("Namn/företag: TEST Claude – diagnostik", "", "x.se"),
+    ).toBeNull();
+    expect(leadKey("tel 0729-958330")).toBe(leadKey("Tel 0729958330"));
+  });
+});
