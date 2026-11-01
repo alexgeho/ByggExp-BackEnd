@@ -121,7 +121,50 @@ describe("overdue", () => {
       "2026-11-10T00:00:00.000Z",
     );
     expect(parseDueDate("")).toBeNull();
-    expect(parseDueDate("10.11.2026")).toBeNull();
+    expect(parseDueDate("10.11.2026")).toBeUndefined();
+    expect(parseDueDate("2026-02-31")).toBeUndefined();
+  });
+});
+
+describe("overdue on the Stockholm calendar", () => {
+  it("at 00:30 local time (still yesterday in UTC) yesterday's due date is overdue", () => {
+    const now = new Date("2026-11-09T23:30:00Z"); // 2026-11-10 00:30 in Stockholm
+    expect(isOverdue({ status: "open", dueDate: "2026-11-09" }, now)).toBe(
+      true,
+    );
+    expect(isOverdue({ status: "open", dueDate: "2026-11-10" }, now)).toBe(
+      false,
+    );
+  });
+});
+
+describe("CSV formula injection", () => {
+  it("prefixes cells starting with = + - @ tab or CR", () => {
+    const csv = buildCsv(
+      [
+        {
+          number: 1,
+          title: '=HYPERLINK("http://x")',
+          category: "hms",
+          severity: "low",
+          status: "open",
+          location: "+1",
+          description: "-2",
+          cause: "@SUM(A1)",
+          correctiveAction: "\tx",
+          closingComment: "\rboom",
+        },
+      ],
+      "sv",
+    );
+    const row = csv.split("\r\n")[1];
+    expect(row).toContain('"\'=HYPERLINK(""http://x"")"');
+    expect(row).toContain(";'+1;");
+    expect(row).toContain(";'-2;");
+    expect(row).toContain(";'@SUM(A1);");
+    expect(row).toContain(";'\tx;");
+    expect(row.endsWith("' boom")).toBe(true);
+    expect(row).not.toMatch(/;[=+@]/);
   });
 });
 
@@ -209,9 +252,9 @@ describe("labels, CSV, push", () => {
       "nb",
     );
     const [header, row] = csv.replace(/^﻿/, "").split("\r\n");
-    expect(header.startsWith("Nr;Tittel;Prosjekt;Kategori;Alvorlighet")).toBe(
-      true,
-    );
+    expect(
+      header.startsWith("Nr;Tittel;Prosjekt;Kategori;Alvorlighetsgrad;"),
+    ).toBe(true);
     expect(row).toContain('"Rekkverk ""mangler""; plan 2"');
     expect(row).toContain(";HMS;Høy;");
     expect(row).toContain("Under arbeid");

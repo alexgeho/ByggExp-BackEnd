@@ -162,11 +162,24 @@ export function canTransition(
   return (allowed[from] || []).includes(to);
 }
 
-// A due date is a calendar day; the deviation is overdue from the next day on.
+// A due date is a calendar day (stored as UTC midnight of that day); the
+// deviation is overdue from the next day on, counted on the Swedish/Norwegian
+// calendar (Europe/Stockholm = Europe/Oslo), not UTC — at 00:30 local time it
+// is already the next day.
+const STOCKHOLM_DAY = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: "Europe/Stockholm",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+export function localDay(now: Date): string {
+  return STOCKHOLM_DAY.format(now); // "YYYY-MM-DD"
+}
+
+// Today (Europe/Stockholm) as the stored due-date value: UTC midnight.
 export function startOfDayUtc(now: Date): Date {
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
+  return new Date(`${localDay(now)}T00:00:00.000Z`);
 }
 
 export function isOverdue(d: DeviationLike, now = new Date()): boolean {
@@ -176,13 +189,17 @@ export function isOverdue(d: DeviationLike, now = new Date()): boolean {
   return due.getTime() < startOfDayUtc(now).getTime();
 }
 
-// "YYYY-MM-DD" (or ISO) → Date at UTC midnight; ""/null → null.
-export function parseDueDate(value: unknown): Date | null {
+// "YYYY-MM-DD" (or ISO) → Date at UTC midnight; ""/null → null; anything
+// else (bad format, 2026-02-31) → undefined, which the service turns into 400.
+export function parseDueDate(value: unknown): Date | null | undefined {
   if (value === null || value === undefined || value === "") return null;
   const s = String(value).slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return undefined;
   const d = new Date(`${s}T00:00:00.000Z`);
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) {
+    return undefined;
+  }
+  return d;
 }
 
 export type DeviationListQuery = {
@@ -269,7 +286,7 @@ export const LABELS: Record<ReportLang, Record<string, string>> = {
     title: "Tittel",
     description: "Beskrivelse",
     category: "Kategori",
-    severity: "Alvorlighet",
+    severity: "Alvorlighetsgrad",
     location: "Sted",
     reportedBy: "Meldt av",
     reportedAt: "Meldt",
@@ -302,7 +319,7 @@ export const LABELS: Record<ReportLang, Record<string, string>> = {
     title: "Rubrik",
     description: "Beskrivning",
     category: "Kategori",
-    severity: "Allvarlighet",
+    severity: "Allvarlighetsgrad",
     location: "Plats",
     reportedBy: "Rapporterad av",
     reportedAt: "Rapporterad",
@@ -392,8 +409,12 @@ export type ExportRow = {
   closingComment?: string;
 };
 
+// Formula injection: a cell starting with = + - @ (or tab/CR) would run as a
+// formula in Excel — prefix it with ' so it stays text.
 const csvCell = (v: unknown) => {
-  const s = String(v ?? "").replace(/\r?\n/g, " ");
+  let s = String(v ?? "");
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  s = s.replace(/\r\n|\r|\n/g, " ");
   return /[;"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

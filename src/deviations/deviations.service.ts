@@ -7,7 +7,9 @@ import {
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Cron } from "@nestjs/schedule";
+import { unlink } from "fs/promises";
 import { Model } from "mongoose";
+import { join } from "path";
 import {
   Checklist,
   ChecklistDocument,
@@ -392,21 +394,39 @@ export class DeviationsService {
     throw new BadRequestException("checklistId or dagbokId is required");
   }
 
+  // Due date from the client: empty → null, invalid → 400 (never silently
+  // dropped).
+  private dueDateOf(value: unknown): Date | null {
+    const parsed = parseDueDate(value);
+    if (parsed === undefined) {
+      throw new BadRequestException("dueDate must be YYYY-MM-DD");
+    }
+    return parsed;
+  }
+
+  // The checklist / dagbok entry a deviation was made from must be in the
+  // caller's company and on the same project.
   private async assertSource(
     source: CreateDeviationDto["source"],
     companyId: string,
+    projectId: string,
   ) {
     if (!source) return null;
-    const model: Model<{ companyId: string }> =
+    type SourceDoc = { companyId: string; projectId: string };
+    const model: Model<SourceDoc> =
       source.type === "checklist"
-        ? (this.checklists as unknown as Model<{ companyId: string }>)
-        : (this.dagbok as unknown as Model<{ companyId: string }>);
+        ? (this.checklists as unknown as Model<SourceDoc>)
+        : (this.dagbok as unknown as Model<SourceDoc>);
     const found = await model
       .findById(source.id)
-      .select("companyId")
+      .select("companyId projectId")
       .lean()
       .exec();
-    if (!found || String(found.companyId) !== companyId) {
+    if (
+      !found ||
+      String(found.companyId) !== companyId ||
+      String(found.projectId) !== String(projectId)
+    ) {
       throw new BadRequestException("Source not found");
     }
     return {
@@ -444,7 +464,12 @@ export class DeviationsService {
     const responsible = manager
       ? await this.resolveResponsible(dto.responsibleUserId, companyId)
       : { id: null, name: "" };
-    const source = await this.assertSource(dto.source, companyId);
+    const source = await this.assertSource(
+      dto.source,
+      companyId,
+      String(project._id),
+    );
+    const dueDate = manager ? this.dueDateOf(dto.dueDate) : null;
     const number = await this.nextNumber(companyId);
 
     const doc = await this.deviations.create({
@@ -462,7 +487,7 @@ export class DeviationsService {
       reportedAt: new Date(),
       responsibleUserId: responsible.id,
       responsibleName: responsible.name,
-      dueDate: manager ? parseDueDate(dto.dueDate) : null,
+      dueDate,
       cause: (dto.cause || "").trim(),
       correctiveAction: (dto.correctiveAction || "").trim(),
       status: DeviationStatus.Open,
@@ -476,10 +501,14 @@ export class DeviationsService {
       await this.notify([responsible.id], "assigned", doc, project);
       notified.add(responsible.id);
     }
-    const managers = (await this.managerIds(project, companyId)).filter(
-      (id) => id !== String(user.userId) && !notified.has(id),
-    );
-    await this.notify(managers, "reported", doc, project);
+    // «New deviation» to the managers is off until the app release that can
+    // switch it off (DEVIATION_NEW_REPORT_PUSH=true turns it on).
+    if (process.env.DEVIATION_NEW_REPORT_PUSH === "true") {
+      const managers = (await this.managerIds(project, companyId)).filter(
+        (id) => id !== String(user.userId) && !notified.has(id),
+      );
+      await this.notify(managers, "reported", doc, project);
+    }
 
     return this.view(doc, user, project);
   }
@@ -497,7 +526,7 @@ export class DeviationsService {
     const next: Record<string, unknown> = {};
     for (const key of provided) {
       const value = (dto as Record<string, unknown>)[key];
-      if (key === "dueDate") next.dueDate = parseDueDate(value);
+      if (key === "dueDate") next.dueDate = this.dueDateOf(value);
       else if (key === "responsibleUserId")
         next.responsibleUserId = value || null;
       else if (typeof value === "string") next[key] = value.trim();
@@ -689,6 +718,17 @@ export class DeviationsService {
       );
     }
     await this.deviations.findByIdAndDelete(doc._id).exec();
+    // Photo files go with it (best effort: a missing file never fails this).
+    await Promise.all(
+      (doc.photos || [])
+        .map((p) => String(p.url || ""))
+        .filter((url) => url.startsWith("/uploads/deviation-photos/"))
+        .map((url) =>
+          unlink(join(process.cwd(), url.replace(/^\//, ""))).catch(
+            () => undefined,
+          ),
+        ),
+    );
     return { deleted: true };
   }
 
@@ -812,43 +852,89 @@ export class DeviationsService {
     }
   }
 
+  // Companies whose plan includes avvik (others get no reminders).
+  private async companiesWithAvvik(companyIds: string[]) {
+    const unique = [...new Set(companyIds.map(String).filter(Boolean))];
+    if (!unique.length) return [];
+    const rows = await this.companies
+      .find({ _id: { $in: unique } })
+      .select("plan moduleOverrides maxUsers")
+      .lean()
+      .exec();
+    return rows
+      .filter((c) => resolveModules(c).enabled.includes("avvik"))
+      .map((c) => String(c._id));
+  }
+
+  // Claim the reminder before sending (atomic): two servers running the cron
+  // can never both push the same one.
+  private async claim(
+    id: unknown,
+    field: "dueSoonNotifiedAt" | "overdueNotifiedAt",
+    now: Date,
+  ) {
+    const claimed = await this.deviations
+      .findOneAndUpdate(
+        { _id: id, [field]: null },
+        { $set: { [field]: now } },
+        { new: true },
+      )
+      .exec();
+    return claimed;
+  }
+
   async processReminders(now: Date) {
     const today = startOfDayUtc(now);
     const dayAfterTomorrow = new Date(today.getTime() + 2 * DAY_MS);
     const open = { status: { $ne: DeviationStatus.Closed } };
+    const dueSoonFilter = {
+      ...open,
+      responsibleUserId: { $ne: null },
+      dueDate: { $gte: today, $lt: dayAfterTomorrow },
+      dueSoonNotifiedAt: null,
+    };
+    const overdueFilter = {
+      ...open,
+      dueDate: { $ne: null, $lt: today },
+      overdueNotifiedAt: null,
+    };
+    const allowed = await this.companiesWithAvvik([
+      ...((await this.deviations
+        .distinct("companyId", dueSoonFilter)
+        .exec()) as string[]),
+      ...((await this.deviations
+        .distinct("companyId", overdueFilter)
+        .exec()) as string[]),
+    ]);
+    if (!allowed.length) return { dueSoon: 0, overdue: 0 };
+    const inAllowed = { companyId: { $in: allowed } };
 
     const dueSoon = await this.deviations
-      .find({
-        ...open,
-        responsibleUserId: { $ne: null },
-        dueDate: { $gte: today, $lt: dayAfterTomorrow },
-        dueSoonNotifiedAt: null,
-      })
+      .find({ ...dueSoonFilter, ...inAllowed })
       .limit(500)
       .exec();
     const overdue = await this.deviations
-      .find({
-        ...open,
-        dueDate: { $ne: null, $lt: today },
-        overdueNotifiedAt: null,
-      })
+      .find({ ...overdueFilter, ...inAllowed })
       .limit(500)
       .exec();
 
     const projects = await this.projectsById(
       [...dueSoon, ...overdue].map((d) => String(d.projectId)),
     );
+    let sentSoon = 0;
+    let sentOverdue = 0;
     for (const d of dueSoon) {
+      if (!(await this.claim(d._id, "dueSoonNotifiedAt", now))) continue;
       await this.notify(
         [String(d.responsibleUserId)],
         "due_soon",
         d,
         projects.get(String(d.projectId)),
       );
-      d.dueSoonNotifiedAt = now;
-      await d.save();
+      sentSoon += 1;
     }
     for (const d of overdue) {
+      if (!(await this.claim(d._id, "overdueNotifiedAt", now))) continue;
       const project = projects.get(String(d.projectId));
       const to = d.responsibleUserId
         ? [String(d.responsibleUserId)]
@@ -856,9 +942,8 @@ export class DeviationsService {
           ? await this.managerIds(project, String(d.companyId))
           : [];
       await this.notify(to, "overdue", d, project);
-      d.overdueNotifiedAt = now;
-      await d.save();
+      sentOverdue += 1;
     }
-    return { dueSoon: dueSoon.length, overdue: overdue.length };
+    return { dueSoon: sentSoon, overdue: sentOverdue };
   }
 }

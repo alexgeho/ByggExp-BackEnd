@@ -2,6 +2,11 @@ import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { UserRole } from "../users/schemas/user.schema";
 import { DeviationsService } from "./deviations.service";
 
+const unlinkMock = jest.fn(async () => undefined);
+jest.mock("fs/promises", () => ({
+  ...jest.requireActual("fs/promises"),
+  unlink: (...args: unknown[]) => unlinkMock(...(args as [])),
+}));
 jest.mock("../invoices/puppeteer-launch", () => ({
   launchForInvoicePdf: jest.fn(),
 }));
@@ -78,6 +83,20 @@ function makeDeviationModel() {
       chain(() => docs.filter((d) => matches(d, filter))),
     countDocuments: (filter: Record<string, unknown>) =>
       chain(() => docs.filter((d) => matches(d, filter)).length),
+    findOneAndUpdate: (
+      filter: Record<string, unknown>,
+      update: { $set: Record<string, unknown> },
+    ) =>
+      chain(() => {
+        const doc = docs.find((d) => matches(d, filter));
+        if (!doc) return null;
+        Object.assign(doc, update.$set);
+        return doc;
+      }),
+    distinct: (field: string, filter: Record<string, unknown>) =>
+      chain(() => [
+        ...new Set(docs.filter((d) => matches(d, filter)).map((d) => d[field])),
+      ]),
     findByIdAndDelete: (key: string) =>
       chain(() => {
         const i = docs.findIndex((d) => d._id === key);
@@ -171,6 +190,7 @@ function setup(companyPlan: string | null = "projekt") {
       ),
   });
   const companies = {
+    find: () => chain(() => [{ _id: "c1", plan: companyPlan }]),
     findById: () =>
       chain(() => ({
         _id: "c1",
@@ -268,6 +288,7 @@ describe("DeviationsService", () => {
   });
 
   it("assigning notifies the responsible (deep link + «deviations» setting); report pings managers", async () => {
+    process.env.DEVIATION_NEW_REPORT_PUSH = "true";
     const { service, notifications } = setup();
     await service.create(
       {
@@ -297,6 +318,64 @@ describe("DeviationsService", () => {
     expect(reported).toEqual(expect.arrayContaining(["admin", "boss", "pm"]));
     expect(reported).not.toContain("pa"); // the actor
     expect(reported).not.toContain("w1"); // already got «assigned»
+    delete process.env.DEVIATION_NEW_REPORT_PUSH;
+  });
+
+  it("«new deviation» broadcast is off by default (old apps can't mute it)", async () => {
+    delete process.env.DEVIATION_NEW_REPORT_PUSH;
+    const { service, notifications } = setup();
+    await service.create(
+      { projectId: "p1", title: "A", responsibleUserId: "w1" },
+      PA,
+    );
+    const types = (
+      notifications.sendToUsers.mock.calls as unknown as [string[], any][]
+    ).map(([, p]) => p.data.type);
+    expect(types).toEqual(["deviation_assigned"]);
+  });
+
+  it("invalid due date → 400; source must be on the same project", async () => {
+    const { service } = setup();
+    await expect(
+      service.create(
+        { projectId: "p1", title: "A", dueDate: "2026-02-31" },
+        ADMIN,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    const d = await service.create({ projectId: "p1", title: "A" }, ADMIN);
+    await expect(
+      service.update(String(d._id), { dueDate: "31.12.2026" }, ADMIN),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.create(
+        { projectId: "p2", title: "A", source: { type: "dagbok", id: "db1" } },
+        ADMIN,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    const ok = await service.create(
+      { projectId: "p1", title: "A", source: { type: "dagbok", id: "db1" } },
+      ADMIN,
+    );
+    expect(ok.source).toMatchObject({ type: "dagbok", id: "db1" });
+  });
+
+  it("deleting removes the photo files too (best effort)", async () => {
+    const { service } = setup();
+    const d = await service.create({ projectId: "p1", title: "A" }, W1);
+    await service.addPhotos(
+      String(d._id),
+      [{ filename: "avvik-1.jpg", originalname: "a.jpg" }],
+      W1,
+    );
+    unlinkMock.mockClear();
+    unlinkMock.mockRejectedValueOnce(new Error("gone") as never);
+    await expect(service.remove(String(d._id), ADMIN)).resolves.toEqual({
+      deleted: true,
+    });
+    expect(unlinkMock).toHaveBeenCalledTimes(1);
+    expect(String((unlinkMock.mock.calls[0] as unknown[])[0])).toMatch(
+      /uploads\/deviation-photos\/avvik-1\.jpg$/,
+    );
   });
 
   it("rejects a responsible from another company", async () => {
@@ -486,5 +565,61 @@ describe("DeviationsService", () => {
       dueSoon: 0,
       overdue: 0,
     });
+  });
+
+  it("reminders: a reminder claimed by another server is not sent twice", async () => {
+    const { service, deviations, notifications } = setup();
+    await service.create(
+      {
+        projectId: "p1",
+        title: "Sent",
+        responsibleUserId: "w2",
+        dueDate: "2026-11-01",
+      },
+      ADMIN,
+    );
+    notifications.sendToUsers.mockClear();
+    const realFind = deviations.find;
+    // The other instance claims it between our find and our claim.
+    deviations.find = (filter: Record<string, unknown>) => {
+      const q = realFind(filter);
+      const exec = q.exec as () => Promise<Record<string, any>[]>;
+      q.exec = async () => {
+        const rows = await exec();
+        rows.forEach((r) => (r.overdueNotifiedAt = new Date()));
+        return rows;
+      };
+      return q;
+    };
+    expect(
+      await service.processReminders(new Date("2026-11-10T06:00:00Z")),
+    ).toEqual({
+      dueSoon: 0,
+      overdue: 0,
+    });
+    expect(notifications.sendToUsers).not.toHaveBeenCalled();
+  });
+
+  it("reminders skip companies whose plan has no avvik", async () => {
+    const { service, deviations, notifications } = setup();
+    await service.create(
+      {
+        projectId: "p1",
+        title: "Sent",
+        responsibleUserId: "w2",
+        dueDate: "2026-11-01",
+      },
+      ADMIN,
+    );
+    (service as any).companies.find = () =>
+      chain(() => [{ _id: "c1", plan: "faktura" }]);
+    notifications.sendToUsers.mockClear();
+    expect(
+      await service.processReminders(new Date("2026-11-10T06:00:00Z")),
+    ).toEqual({
+      dueSoon: 0,
+      overdue: 0,
+    });
+    expect(deviations.docs[0].overdueNotifiedAt).toBeNull();
   });
 });
