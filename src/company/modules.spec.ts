@@ -15,6 +15,13 @@ describe("plan modules", () => {
     expect(maxUsersForPlan("egenkontroll")).toBe(1);
   });
 
+  it("avvik is in Kontroll på jobben (projekt) and Full (komplett), not Faktura/solo", () => {
+    expect(resolveModules({ plan: "projekt" }).enabled).toContain("avvik");
+    expect(resolveModules({ plan: "komplett" }).enabled).toContain("avvik");
+    expect(resolveModules({ plan: "faktura" }).enabled).not.toContain("avvik");
+    expect(resolveModules({ plan: "egenkontroll" }).enabled).not.toContain("avvik");
+  });
+
   it("no plan still means every module", () => {
     expect(resolveModules({ plan: null }).enabled).toContain("invoices");
   });

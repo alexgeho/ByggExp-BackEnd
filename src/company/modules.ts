@@ -22,6 +22,7 @@ export const TOGGLEABLE_MODULES = [
   "tasks",
   "dagbok",
   "kma",
+  "avvik",
   "shifts",
   "schedule",
   "bemanning",
@@ -64,13 +65,15 @@ const FAKTURA = [
 ];
 
 // "Projekt": project and crew management — projects, hours, tasks, photos,
-// diary, self-inspections, planning, staffing, tools. No invoicing/economy.
+// diary, self-inspections, deviations (avvik), planning, staffing, tools. No
+// invoicing/economy.
 const PROJEKT = [
   "projects",
   "map",
   "tasks",
   "dagbok",
   "kma",
+  "avvik",
   "shifts",
   "schedule",
   "bemanning",
