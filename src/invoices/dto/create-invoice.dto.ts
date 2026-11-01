@@ -153,6 +153,11 @@ export class CreateInvoiceDto {
   @IsString()
   deliveryDate?: string;
 
+  // Norway: leveringssted (optional; falls back to project / buyer address).
+  @IsOptional()
+  @IsString()
+  deliveryPlace?: string;
+
   @IsOptional()
   @IsString()
   paymentTerms?: string;

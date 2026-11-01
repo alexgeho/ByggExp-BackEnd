@@ -120,7 +120,8 @@ export class Company {
   kontonummer: string;
 
   // KID on invoices: "none" | "mod10" | "mod11" (invoice number + check digit).
-  @Prop({ default: "none" })
+  // Unset = MOD10 (see DEFAULT_KID_MODE); MOD11 can yield "-" (Nets-valid).
+  @Prop({ default: "mod10" })
   kidMode: string;
 
   // Registered in Merverdiavgiftsregisteret → org.nr is printed with «MVA».

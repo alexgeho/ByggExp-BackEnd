@@ -83,6 +83,8 @@ export type InvoicePdfData = {
   country?: string;
   // Norway: KID payment reference (empty when the company uses none).
   kid?: string;
+  // Norway: leveringssted (already resolved: invoice → project → buyer).
+  deliveryPlace?: string;
 };
 
 type VatGroup = {
@@ -370,7 +372,7 @@ const NB_LOCALE: InvoiceLocale = {
   amount: (value) => formatNokNumber(value),
   date: (value) => formatNoDate(value),
   unit: (value) => (!value || value === "st" ? "stk" : value),
-  detailsRows: 5,
+  detailsRows: 6,
   invoice: "Faktura",
   creditNote: "Kreditnota",
   invoiceDate: "Fakturadato",
@@ -463,14 +465,18 @@ function buildHeader(
   // prints KID only when the company uses one, plus the delivery date
   // (bokføringsforskriften § 5-1-1 nr. 4).
   const paymentRefRow = L.no
-    ? data.kid
+    ? data.kid && !data.creditOfNumber
       ? `<dt>KID</dt><dd>${text(data.kid)}</dd>`
       : ""
     : `<dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || "&nbsp;"}</dd>`;
-  const deliveryRow =
-    L.no && data.deliveryDate
-      ? `<dt>Leveringsdato</dt><dd class="nowrap">${text(L.date(data.deliveryDate))}</dd>`
-      : "";
+  const deliveryRow = L.no
+    ? (data.deliveryDate
+        ? `<dt>Leveringsdato</dt><dd class="nowrap">${text(L.date(data.deliveryDate))}</dd>`
+        : "") +
+      (data.deliveryPlace
+        ? `<dt>Leveringssted</dt><dd style="white-space:normal">${text(data.deliveryPlace)}</dd>`
+        : "")
+    : "";
 
   return `
     <header class="invoice-header">
@@ -747,15 +753,17 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
     ? `<b>IBAN</b> ${text(footer.iban)}${footer.bic ? `&nbsp;&nbsp;<b>BIC</b> ${text(footer.bic)}` : ""}`
     : "";
   // Norway: kontonummer + KID are what the payer types into the nettbank.
-  const noPayParts = L.no
-    ? [
-        footer.kontonummer
-          ? `<b>Kontonr.</b> ${text(formatKontonummer(footer.kontonummer))}`
-          : "",
-        data.kid ? `<b>KID</b> ${text(data.kid)}` : "",
-        ibanPart,
-      ].filter(Boolean)
-    : [];
+  // A credit note is not paid by the customer: no payment line at all.
+  const noPayParts =
+    L.no && !data.creditOfNumber
+      ? [
+          footer.kontonummer
+            ? `<b>Kontonr.</b> ${text(formatKontonummer(footer.kontonummer))}`
+            : "",
+          data.kid ? `<b>KID</b> ${text(data.kid)}` : "",
+          ibanPart,
+        ].filter(Boolean)
+      : [];
   const bankLine = L.no
     ? noPayParts.length
       ? `<span class="bank">${noPayParts.join("&nbsp;&nbsp;")}</span>`

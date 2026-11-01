@@ -77,7 +77,8 @@ export class OffersService {
       status: dto.status || OfferStatus.Draft,
       logoUrl: dto.logoUrl ?? company?.logoUrl ?? null,
       country: company?.country || 'SE',
-      currency: company?.currency || (no ? 'NOK' : 'SEK'),
+      // Norway always NOK (MVA must be stated in NOK).
+      currency: no ? 'NOK' : company?.currency || 'SEK',
     });
 
     return offer.save();

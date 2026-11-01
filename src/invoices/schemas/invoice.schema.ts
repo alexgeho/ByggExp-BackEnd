@@ -156,6 +156,11 @@ export class Invoice {
   @Prop({ default: "" })
   deliveryDate: string;
 
+  // Norway: leveringssted (bokføringsforskriften § 5-1-1 nr. 4). Empty = the
+  // project's address, else the buyer's address, at render time.
+  @Prop({ type: String })
+  deliveryPlace?: string;
+
   @Prop({ default: "" })
   paymentTerms: string;
 

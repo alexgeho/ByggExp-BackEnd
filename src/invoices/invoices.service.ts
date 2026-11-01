@@ -17,7 +17,12 @@ import { UserRole } from "../users/schemas/user.schema";
 import { CreateInvoiceDto, InvoiceItemDto } from "./dto/create-invoice.dto";
 import { UpdateInvoiceDto } from "./dto/update-invoice.dto";
 import { generateOCR } from "./generate-ocr";
-import { generateKid, isNorway, vatRatesForCountry } from "./norway";
+import {
+  DEFAULT_KID_MODE,
+  generateKid,
+  isNorway,
+  vatRatesForCountry,
+} from "./norway";
 import {
   calculateInvoiceTotals,
   deriveInvoiceSettlement,
@@ -264,6 +269,29 @@ export class InvoicesService {
     return company?.country || "SE";
   }
 
+  // Norway: leveringssted — typed on the invoice, else the linked project's
+  // address, else the buyer's address (bokføringsforskriften § 5-1-1 nr. 4).
+  private async deliveryPlaceOf(invoice: Invoice): Promise<string> {
+    if (invoice.deliveryPlace?.trim()) return invoice.deliveryPlace.trim();
+    if (invoice.projectId) {
+      try {
+        const project = await this.invoiceModel.db
+          .model("Project")
+          .findById(invoice.projectId)
+          .select("location")
+          .lean<{ location?: string }>()
+          .exec();
+        if (project?.location?.trim()) return project.location.trim();
+      } catch {
+        // Unknown project / model — fall through to the buyer's address.
+      }
+    }
+    return [invoice.address, invoice.postalCode]
+      .map((part) => (part || "").trim())
+      .filter(Boolean)
+      .join(", ");
+  }
+
   // Norway: only Norwegian MVA rates (25/15/12/0) are allowed on a document.
   private assertNoVatRates(items: InvoiceItemDto[] | undefined): void {
     const allowed = vatRatesForCountry("NO");
@@ -291,7 +319,7 @@ export class InvoicesService {
       .select("kidMode")
       .lean()
       .exec();
-    return generateKid(invoiceNumber, company?.kidMode);
+    return generateKid(invoiceNumber, company?.kidMode ?? DEFAULT_KID_MODE);
   }
 
   // Purchase invoices put on this customer invoice ("Fakturera"): stamp them
@@ -378,8 +406,16 @@ export class InvoicesService {
     const companyFooter = await this.resolveCompanyFooter(companyId, dto);
     const marketFields = {
       country: company?.country || "SE",
-      currency: company?.currency || (no ? "NOK" : "SEK"),
-      ...(no ? { kid: generateKid(invoiceNumber, company?.kidMode) } : {}),
+      // Norway always NOK (MVA must be stated in NOK).
+      currency: no ? "NOK" : company?.currency || "SEK",
+      ...(no
+        ? {
+            kid: generateKid(
+              invoiceNumber,
+              company?.kidMode ?? DEFAULT_KID_MODE,
+            ),
+          }
+        : {}),
     };
 
     const invoice = new this.invoiceModel({
@@ -517,7 +553,7 @@ export class InvoicesService {
       ...payload,
       invoiceNumber,
       ocr: generateOCR(invoiceNumber),
-      ...(isNorway(source.country)
+      ...(isNorway(await this.countryOf(source)) && !source.creditOfNumber
         ? { kid: await this.kidFor(source.companyId, invoiceNumber) }
         : {}),
       status: InvoiceStatus.Draft,
@@ -598,9 +634,8 @@ export class InvoicesService {
       ...raw,
       invoiceNumber,
       ocr: generateOCR(invoiceNumber),
-      ...(no
-        ? { kid: await this.kidFor(source.companyId, invoiceNumber) }
-        : {}),
+      // A credit note is never paid with a KID.
+      ...(no ? { kid: "" } : {}),
       status: InvoiceStatus.Draft,
       createdByUserId: user.userId,
       creditOfId: String(source._id),
@@ -654,8 +689,10 @@ export class InvoicesService {
     const no = isNorway(country);
     if (no) {
       data.country = "NO";
-      data.currency = invoice.currency || "NOK";
-      data.kid = invoice.kid || "";
+      data.currency = "NOK";
+      // A credit note is not paid by the customer: no KID, no payment line.
+      data.kid = invoice.creditOfNumber ? "" : invoice.kid || "";
+      data.deliveryPlace = await this.deliveryPlaceOf(invoice);
     }
 
     // Logo, giro AND the footer identity (address/phone/org/VAT/email/website)

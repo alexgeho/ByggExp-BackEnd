@@ -265,3 +265,27 @@ describe("NO offer (tilbud) PDF", () => {
     }
   });
 });
+
+describe("NO invoice — leveringssted and credit notes", () => {
+  it("prints Leveringssted next to Leveringsdato", () => {
+    const html = buildInvoicePdfHtmlPuppeteer({
+      ...noInvoice,
+      deliveryPlace: "Byggeplass, Kirkeveien 5, 0368 Oslo",
+    });
+    const date = html.indexOf("<dt>Leveringsdato</dt>");
+    const place = html.indexOf("<dt>Leveringssted</dt>");
+    expect(date).toBeGreaterThan(-1);
+    expect(place).toBeGreaterThan(date);
+    expect(html).toContain("Byggeplass, Kirkeveien 5, 0368 Oslo");
+  });
+
+  it("credit note has no KID and no payment line", () => {
+    const html = buildInvoicePdfHtmlPuppeteer({
+      ...noInvoice,
+      creditOfNumber: 12,
+    });
+    expect(html).not.toContain("<dt>KID</dt>");
+    expect(html).not.toContain("<b>KID</b>");
+    expect(html).not.toContain("<b>Kontonr.</b>");
+  });
+});

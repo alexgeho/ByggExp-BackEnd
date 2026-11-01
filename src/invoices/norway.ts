@@ -3,6 +3,10 @@
 // Pure functions — unit-tested in norway.spec.ts.
 
 export type KidMode = "none" | "mod10" | "mod11";
+// Default for Norwegian companies that never chose: MOD10 always yields a
+// digit. MOD11 is offered too, but ~1 in 11 numbers gets "-" as check digit
+// (valid per Nets, yet some banks' forms reject it).
+export const DEFAULT_KID_MODE: KidMode = "mod10";
 export const KID_MODES: KidMode[] = ["none", "mod10", "mod11"];
 
 // MVA rates in Norway: 25 % general, 15 % food, 12 % (transport, cinema,

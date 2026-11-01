@@ -37,6 +37,7 @@ import {
 import { isKnownPlan, maxUsersForPlan } from "../billing/plans";
 import { computeStorageUsage, StorageUsageReport } from "./storage-usage";
 import { inboundAddressFor, newInboundCode } from "./inbound-address";
+import { isNorway } from "../invoices/norway";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -69,8 +70,18 @@ export class CompanyService implements OnApplicationBootstrap {
     }
   }
 
+  // A Norwegian company always invoices in NOK (MVA must be stated in NOK,
+  // bokføringsforskriften § 5-1-1 nr. 6), whatever currency was sent.
+  private withMarketCurrency<T extends { country?: string; currency?: string }>(
+    dto: T,
+  ): T {
+    return isNorway(dto.country) ? { ...dto, currency: "NOK" } : dto;
+  }
+
   async create(createCompanyDto: CreateCompanyDto): Promise<CompanyDocument> {
-    const createdCompany = new this.companyModel(createCompanyDto);
+    const createdCompany = new this.companyModel(
+      this.withMarketCurrency(createCompanyDto),
+    );
     return createdCompany.save();
   }
 
@@ -557,6 +568,7 @@ export class CompanyService implements OnApplicationBootstrap {
     updateCompanyDto: Partial<CreateCompanyDto>,
     actorUserId?: string | null,
   ): Promise<Company> {
+    updateCompanyDto = this.withMarketCurrency(updateCompanyDto);
     const updatedCompany = await this.companyModel
       .findByIdAndUpdate(
         id,
