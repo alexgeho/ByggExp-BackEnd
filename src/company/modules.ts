@@ -133,6 +133,9 @@ export const PLAN_MODULES: Record<string, string[]> = {
 const planBaseline = (plan?: string | null): string[] =>
   plan && PLAN_MODULES[plan] ? PLAN_MODULES[plan] : TOGGLEABLE_MODULES;
 
+// What a solo Egenkontroll company keeps (+ avvik, if the plan brings it).
+const SOLO_KEYS = ["projects", "kma", "avvik"];
+
 export interface ModuleResolution {
   plan: string | null;
   planModules: string[];
@@ -148,9 +151,19 @@ export function resolveModules(company: {
 }): ModuleResolution {
   const base = planBaseline(company.plan);
   const overrides = company.moduleOverrides || {};
-  const enabledToggleable = TOGGLEABLE_MODULES.filter((key) =>
+  let enabledToggleable = TOGGLEABLE_MODULES.filter((key) =>
     key in overrides ? Boolean(overrides[key]) : base.includes(key),
   );
+  // A company trimmed down to egenkontroll (only kma/projects left on) stays
+  // that way when a new module (avvik) is added to its plan — otherwise the
+  // app would drop it out of solo Egenkontroll mode. An explicit override wins.
+  if (
+    !("avvik" in overrides) &&
+    enabledToggleable.includes("avvik") &&
+    enabledToggleable.every((k) => SOLO_KEYS.includes(k))
+  ) {
+    enabledToggleable = enabledToggleable.filter((k) => k !== "avvik");
+  }
   return {
     plan: company.plan ?? null,
     planModules: base,
