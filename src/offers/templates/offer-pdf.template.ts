@@ -1,4 +1,11 @@
-import sanitizeHtml from 'sanitize-html';
+import sanitizeHtml from "sanitize-html";
+import {
+  formatNoDate,
+  formatNok,
+  formatNokNumber,
+  formatNoOrgNumber,
+  isNorway,
+} from "../../invoices/norway";
 
 export type OfferPdfCompanyFooter = {
   name?: string;
@@ -10,6 +17,9 @@ export type OfferPdfCompanyFooter = {
   orgNumber?: string;
   vatNumber?: string;
   vatStatus?: string;
+  // Norway only (see invoice template): «MVA» suffix and «Foretaksregisteret».
+  mvaRegistered?: boolean;
+  foretaksregisteret?: boolean;
 };
 
 export type OfferPdfContactPerson = {
@@ -43,6 +53,8 @@ export type OfferPdfData = {
   vat?: number;
   total?: number;
   companyFooter?: OfferPdfCompanyFooter;
+  // Seller's home market ("SE" | "NO"). Missing = Sweden (unchanged output).
+  country?: string;
 };
 
 const OFFER_PDF_CSS = `
@@ -122,15 +134,15 @@ body {
 
 function escapeHtml(value: string): string {
   return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function text(value?: string | number | null): string {
-  if (value === null || value === undefined) return '';
+  if (value === null || value === undefined) return "";
   return escapeHtml(String(value));
 }
 
@@ -141,7 +153,7 @@ function multiline(value?: string): string {
 // Like multiline(), but turns real newlines into <br> so multi-line line-item
 // descriptions render as separate rows instead of collapsing into one line.
 function multilineBr(value?: string): string {
-  return text(value).replaceAll('\n', '<br>');
+  return text(value).replaceAll("\n", "<br>");
 }
 
 // Rich-text fields (description, clarifications) may contain HTML from the
@@ -150,20 +162,53 @@ function multilineBr(value?: string): string {
 // or typed without formatting) have no tags — render them with <br> for
 // newlines so they look the same as before.
 function richHtml(value?: string): string {
-  const raw = (value ?? '').toString();
-  if (!raw.trim()) return '';
+  const raw = (value ?? "").toString();
+  if (!raw.trim()) return "";
   const looksLikeHtml = /<[a-z][\s\S]*>/i.test(raw);
   if (!looksLikeHtml) {
     return multilineBr(raw);
   }
   return sanitizeHtml(raw, {
-    allowedTags: ['b', 'strong', 'i', 'em', 'u', 'p', 'br', 'ul', 'ol', 'li', 'span'],
+    allowedTags: [
+      "b",
+      "strong",
+      "i",
+      "em",
+      "u",
+      "p",
+      "br",
+      "ul",
+      "ol",
+      "li",
+      "span",
+    ],
     allowedAttributes: {},
   });
 }
 
+// Norwegian bokmål quote (tilbud). The Swedish wording stays inline below and
+// is guarded byte-for-byte by se-pdf-snapshot.spec.ts.
+const NB = {
+  title: "Tilbud",
+  offerNo: "Tilbudsnr.",
+  date: "Dato",
+  validUntil: "Gyldig til",
+  description: "Beskrivelse",
+  clarifications: "Forbehold og avklaringer",
+  contacts: "Kontaktpersoner",
+  colArt: "Art.nr.",
+  colDesc: "Beskrivelse",
+  colQty: "Antall",
+  colUnit: "Enhet",
+  colPrice: "Enhetspris",
+  colSum: "Beløp",
+  exVat: "Sum eks. mva",
+  vat: "Mva",
+  total: "Totalt inkl. mva",
+};
+
 function section(title: string, body: string): string {
-  if (!body || !body.trim()) return '';
+  if (!body || !body.trim()) return "";
   return `
     <div class="offer-section">
       <p class="offer-section__title">${title}</p>
@@ -173,10 +218,64 @@ function section(title: string, body: string): string {
 }
 
 function money(value?: number): string {
-  return new Intl.NumberFormat('sv-SE', {
+  return new Intl.NumberFormat("sv-SE", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(value) || 0);
+}
+
+function buildNoItemsHtml(items: OfferPdfItem[], data: OfferPdfData): string {
+  const rows = items
+    .map((it) => {
+      const q = Number(it.quantity || 0);
+      const p = Number(it.price || 0);
+      const d = Number(it.discount || 0);
+      const amount = q * p * (1 - d / 100);
+      const unit = !it.unit || it.unit === "st" ? "stk" : it.unit;
+      return `
+        <tr>
+          <td>${text(it.articleNumber || "")}</td>
+          <td>${multilineBr(it.description || "")}</td>
+          <td class="num">${formatNokNumber(q).replace(",00", "")}</td>
+          <td>${text(unit)}</td>
+          <td class="num">${formatNokNumber(p)}</td>
+          <td class="num">${formatNokNumber(amount)}</td>
+        </tr>`;
+    })
+    .join("");
+
+  return `
+    <table class="offer-items">
+      <thead>
+        <tr>
+          <th>${NB.colArt}</th>
+          <th>${NB.colDesc}</th>
+          <th class="num">${NB.colQty}</th>
+          <th>${NB.colUnit}</th>
+          <th class="num">${NB.colPrice}</th>
+          <th class="num">${NB.colSum}</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="offer-totals">
+      <table>
+        <tr><td>${NB.exVat}</td><td>${formatNok(data.subtotal)}</td></tr>
+        <tr><td>${NB.vat}</td><td>${formatNok(data.vat)}</td></tr>
+        <tr class="grand"><td>${NB.total}</td><td>${formatNok(data.total)}</td></tr>
+      </table>
+    </div>`;
+}
+
+function buildNoFooter(footer: OfferPdfCompanyFooter = {}): string {
+  const org = formatNoOrgNumber(footer.orgNumber, footer.mvaRegistered);
+  return `
+    <div class="offer-footer">
+      <div><b>Adresse</b><br>${text(footer.name)}<br>${text(footer.address)}<br>${text(footer.city)}</div>
+      <div><b>Telefon</b><br>${text(footer.phone)}<br><b>E-post/Nettside</b><br>${text(footer.email)}<br>${text(footer.website)}</div>
+      <div><b>Org.nr.</b><br>${text(org)}${footer.foretaksregisteret ? "<br>Foretaksregisteret" : ""}</div>
+    </div>
+  `;
 }
 
 function buildItemsHtml(items: OfferPdfItem[], data: OfferPdfData): string {
@@ -188,15 +287,15 @@ function buildItemsHtml(items: OfferPdfItem[], data: OfferPdfData): string {
       const amount = q * p * (1 - d / 100);
       return `
         <tr>
-          <td>${text(it.articleNumber || '')}</td>
-          <td>${multilineBr(it.description || '')}</td>
-          <td class="num">${money(q).replace(',00', '')}</td>
-          <td>${text(it.unit || 'st')}</td>
+          <td>${text(it.articleNumber || "")}</td>
+          <td>${multilineBr(it.description || "")}</td>
+          <td class="num">${money(q).replace(",00", "")}</td>
+          <td>${text(it.unit || "st")}</td>
           <td class="num">${money(p)}</td>
           <td class="num">${money(amount)}</td>
         </tr>`;
     })
-    .join('');
+    .join("");
 
   return `
     <table class="offer-items">
@@ -232,9 +331,15 @@ function buildFooter(footer: OfferPdfCompanyFooter = {}): string {
   `;
 }
 
-export function buildOfferPdfHtml(data: OfferPdfData, logoDataUrl = ''): string {
-  const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : '';
-  const contacts = (data.contactPersons || []).filter((c) => c && (c.name || c.role));
+export function buildOfferPdfHtml(
+  data: OfferPdfData,
+  logoDataUrl = "",
+): string {
+  if (isNorway(data.country)) return buildNoOfferPdfHtml(data, logoDataUrl);
+  const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : "";
+  const contacts = (data.contactPersons || []).filter(
+    (c) => c && (c.name || c.role),
+  );
   const contactsHtml = contacts.length
     ? `
       <div class="offer-contacts">
@@ -242,21 +347,25 @@ export function buildOfferPdfHtml(data: OfferPdfData, logoDataUrl = ''): string 
         ${contacts
           .map(
             (c) =>
-              `<div class="offer-contacts__row">${text(c.name)}${c.role ? ` — ${text(c.role)}` : ''}</div>`,
+              `<div class="offer-contacts__row">${text(c.name)}${c.role ? ` — ${text(c.role)}` : ""}</div>`,
           )
-          .join('')}
+          .join("")}
       </div>`
-    : '';
+    : "";
 
   const items = (data.items || []).filter(
-    (it) => it && (String(it.description || '').trim() || Number(it.price) || Number(it.quantity)),
+    (it) =>
+      it &&
+      (String(it.description || "").trim() ||
+        Number(it.price) ||
+        Number(it.quantity)),
   );
 
   const priceHtml = items.length
     ? buildItemsHtml(items, data)
     : data.priceText && data.priceText.trim()
       ? `<div class="offer-price">${multiline(data.priceText)}</div>`
-      : '';
+      : "";
 
   return `<!DOCTYPE html>
 <html lang="sv">
@@ -272,26 +381,97 @@ export function buildOfferPdfHtml(data: OfferPdfData, logoDataUrl = ''): string 
       <div>
         <div class="offer-header__title">Offert</div>
         <div class="offer-header__recipient">
-          ${text(data.companyName) || '&nbsp;'}<br>
-          ${text(data.email) || '&nbsp;'}
+          ${text(data.companyName) || "&nbsp;"}<br>
+          ${text(data.email) || "&nbsp;"}
         </div>
       </div>
       <dl class="offer-header__meta">
-        <dt>Offertnr</dt><dd>${text(data.offerNumber) || '&nbsp;'}</dd>
-        <dt>Datum</dt><dd style="white-space:nowrap">${text(data.date) || '&nbsp;'}</dd>
-        <dt>Giltig till</dt><dd style="white-space:nowrap">${text(data.validUntil) || '&nbsp;'}</dd>
+        <dt>Offertnr</dt><dd>${text(data.offerNumber) || "&nbsp;"}</dd>
+        <dt>Datum</dt><dd style="white-space:nowrap">${text(data.date) || "&nbsp;"}</dd>
+        <dt>Giltig till</dt><dd style="white-space:nowrap">${text(data.validUntil) || "&nbsp;"}</dd>
       </dl>
     </header>
 
     <div class="offer-body">
-      ${data.subtitle ? `<h1 class="offer-subtitle">${text(data.subtitle)}</h1>` : ''}
-      ${section('Beskrivning', data.description || '')}
+      ${data.subtitle ? `<h1 class="offer-subtitle">${text(data.subtitle)}</h1>` : ""}
+      ${section("Beskrivning", data.description || "")}
       ${priceHtml}
-      ${section('Förtydliganden', data.clarifications || '')}
+      ${section("Förtydliganden", data.clarifications || "")}
       ${contactsHtml}
     </div>
 
     ${buildFooter(data.companyFooter)}
+  </main>
+</body>
+</html>`;
+}
+
+function buildNoOfferPdfHtml(data: OfferPdfData, logoDataUrl: string): string {
+  const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : "";
+  const contacts = (data.contactPersons || []).filter(
+    (c) => c && (c.name || c.role),
+  );
+  const contactsHtml = contacts.length
+    ? `
+      <div class="offer-contacts">
+        <p class="offer-section__title">${NB.contacts}</p>
+        ${contacts
+          .map(
+            (c) =>
+              `<div class="offer-contacts__row">${text(c.name)}${c.role ? ` — ${text(c.role)}` : ""}</div>`,
+          )
+          .join("")}
+      </div>`
+    : "";
+
+  const items = (data.items || []).filter(
+    (it) =>
+      it &&
+      (String(it.description || "").trim() ||
+        Number(it.price) ||
+        Number(it.quantity)),
+  );
+
+  const priceHtml = items.length
+    ? buildNoItemsHtml(items, data)
+    : data.priceText && data.priceText.trim()
+      ? `<div class="offer-price">${multiline(data.priceText)}</div>`
+      : "";
+
+  return `<!DOCTYPE html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8" />
+  <title>${NB.title} ${text(data.offerNumber)}</title>
+  <style>${OFFER_PDF_CSS}</style>
+</head>
+<body>
+  <main class="offer-page">
+    <header class="offer-header">
+      <div class="offer-header__logo">${logo}</div>
+      <div>
+        <div class="offer-header__title">${NB.title}</div>
+        <div class="offer-header__recipient">
+          ${text(data.companyName) || "&nbsp;"}<br>
+          ${text(data.email) || "&nbsp;"}
+        </div>
+      </div>
+      <dl class="offer-header__meta">
+        <dt>${NB.offerNo}</dt><dd>${text(data.offerNumber) || "&nbsp;"}</dd>
+        <dt>${NB.date}</dt><dd style="white-space:nowrap">${text(formatNoDate(data.date)) || "&nbsp;"}</dd>
+        <dt>${NB.validUntil}</dt><dd style="white-space:nowrap">${text(formatNoDate(data.validUntil)) || "&nbsp;"}</dd>
+      </dl>
+    </header>
+
+    <div class="offer-body">
+      ${data.subtitle ? `<h1 class="offer-subtitle">${text(data.subtitle)}</h1>` : ""}
+      ${section(NB.description, data.description || "")}
+      ${priceHtml}
+      ${section(NB.clarifications, data.clarifications || "")}
+      ${contactsHtml}
+    </div>
+
+    ${buildNoFooter(data.companyFooter)}
   </main>
 </body>
 </html>`;

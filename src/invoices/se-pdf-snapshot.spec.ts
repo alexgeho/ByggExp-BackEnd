@@ -20,9 +20,31 @@ const footer = {
 };
 
 const items = [
-  { articleNumber: "1", description: "Arbete", quantity: 12.5, unit: "h", price: 495, vatRate: 25 },
-  { articleNumber: "2", description: "Material\nrad två", quantity: 3, unit: "st", price: 1234.5, discount: 10, vatRate: 12 },
-  { articleNumber: "3", description: "Böcker", quantity: 1, unit: "st", price: 99, vatRate: 6 },
+  {
+    articleNumber: "1",
+    description: "Arbete",
+    quantity: 12.5,
+    unit: "h",
+    price: 495,
+    vatRate: 25,
+  },
+  {
+    articleNumber: "2",
+    description: "Material\nrad två",
+    quantity: 3,
+    unit: "st",
+    price: 1234.5,
+    discount: 10,
+    vatRate: 12,
+  },
+  {
+    articleNumber: "3",
+    description: "Böcker",
+    quantity: 1,
+    unit: "st",
+    price: 99,
+    vatRate: 6,
+  },
   { isText: true, description: "Tillkommande arbeten" },
 ];
 
@@ -47,11 +69,18 @@ const invoiceBase = {
 
 describe("SE PDF output is unchanged", () => {
   it("invoice — standard", () => {
-    expect(buildInvoicePdfHtmlPuppeteer({ ...invoiceBase }, "data:image/png;base64,AAA")).toMatchSnapshot();
+    expect(
+      buildInvoicePdfHtmlPuppeteer(
+        { ...invoiceBase },
+        "data:image/png;base64,AAA",
+      ),
+    ).toMatchSnapshot();
   });
 
   it("invoice — reverse VAT", () => {
-    expect(buildInvoicePdfHtmlPuppeteer({ ...invoiceBase, reverseVAT: "true" })).toMatchSnapshot();
+    expect(
+      buildInvoicePdfHtmlPuppeteer({ ...invoiceBase, reverseVAT: "true" }),
+    ).toMatchSnapshot();
   });
 
   it("invoice — ROT, rounding, currency, QR", () => {
@@ -88,7 +117,12 @@ describe("SE PDF output is unchanged", () => {
         ...invoiceBase,
         items: many,
         creditOfNumber: 12,
-        companyFooter: { ...footer, bankgiro: "", plusgiro: "12 34 56-7", iban: "" },
+        companyFooter: {
+          ...footer,
+          bankgiro: "",
+          plusgiro: "12 34 56-7",
+          iban: "",
+        },
       }),
     ).toMatchSnapshot();
   });

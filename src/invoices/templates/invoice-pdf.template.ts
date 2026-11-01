@@ -1,4 +1,11 @@
 import { deductionMeta } from "../invoice-math";
+import {
+  formatKontonummer,
+  formatNoDate,
+  formatNokNumber,
+  formatNoOrgNumber,
+  isNorway,
+} from "../norway";
 export type InvoicePdfCompanyFooter = {
   name?: string;
   address?: string;
@@ -16,6 +23,12 @@ export type InvoicePdfCompanyFooter = {
   iban?: string;
   bic?: string;
   country?: string;
+  // Norway only: 11-digit bank account (kontonummer), whether the seller is in
+  // Merverdiavgiftsregisteret (org.nr gets the «MVA» suffix) and whether it is
+  // registered in Foretaksregisteret (AS/ASA/NUF → the word is printed).
+  kontonummer?: string;
+  mvaRegistered?: boolean;
+  foretaksregisteret?: boolean;
 };
 
 export type InvoicePdfItem = {
@@ -66,6 +79,10 @@ export type InvoicePdfData = {
   // Data URL of the pre-rendered payment QR code (Swedish BGC format). When
   // absent (e.g. no Bankgiro configured) the QR slot is simply omitted.
   qrDataUrl?: string;
+  // Seller's home market ("SE" | "NO"). Missing = Sweden (unchanged output).
+  country?: string;
+  // Norway: KID payment reference (empty when the company uses none).
+  kid?: string;
 };
 
 type VatGroup = {
@@ -252,16 +269,162 @@ function multilineText(value?: string): string {
   return text(value).replaceAll("\n", "<br>");
 }
 
+// Every printed word and number format, per seller country. The Swedish set is
+// the original wording, kept byte-identical (see se-pdf-snapshot.spec.ts).
+type InvoiceLocale = {
+  no: boolean;
+  lang: string;
+  amount: (value: number) => string;
+  date: (value?: string) => string;
+  unit: (value?: string) => string;
+  detailsRows: number;
+  invoice: string;
+  creditNote: string;
+  invoiceDate: string;
+  creditDate: string;
+  invoiceNo: string;
+  creditOf: string;
+  page: string;
+  customerNo: string;
+  yourRef: string;
+  yourOrder: string;
+  yourVat: string;
+  ourRef: string;
+  terms: string;
+  days: string;
+  dueDate: string;
+  lateInterest: string;
+  colArt: string;
+  colDesc: string;
+  colQty: string;
+  colUnit: string;
+  colPrice: string;
+  colSum: string;
+  exVat: string;
+  vat: string;
+  total: string;
+  toPay: string;
+  vatLine: string;
+  address: string;
+  phone: string;
+  email: string;
+  web: string;
+  orgNo: string;
+  vatNo: string;
+  defaultCountry: string;
+};
+
+const SV_LOCALE: InvoiceLocale = {
+  no: false,
+  lang: "sv",
+  amount: (value) => formatInvoiceAmount(value),
+  date: (value) => value ?? "",
+  unit: (value) => value || "st",
+  detailsRows: 4,
+  invoice: "Faktura",
+  creditNote: "Kreditfaktura",
+  invoiceDate: "Fakturadatum",
+  creditDate: "Kreditfakturadatum",
+  invoiceNo: "Fakturanr",
+  creditOf: "Avser faktura",
+  page: "Sida",
+  customerNo: "Kundnr",
+  yourRef: "Er referens",
+  yourOrder: "Ert ordernr",
+  yourVat: "Ert VAT-nummer",
+  ourRef: "Vår referens",
+  terms: "Betalningsvillkor",
+  days: "dagar",
+  dueDate: "Förfallodatum",
+  lateInterest: "Dröjsmålsränta",
+  colArt: "Art.nr",
+  colDesc: "Benämning",
+  colQty: "Lev ant",
+  colUnit: "Enhet",
+  colPrice: "À-pris",
+  colSum: "Summa",
+  exVat: "Exkl. moms",
+  vat: "Moms",
+  total: "Totalt",
+  toPay: "ATT BETALA",
+  vatLine: "Moms",
+  address: "Adress",
+  phone: "Telefon",
+  email: "E-post",
+  web: "Webbadress",
+  orgNo: "Organisationsnr",
+  vatNo: "Momsreg. nr",
+  defaultCountry: "Sverige",
+};
+
+// Norwegian bokmål. Required content per bokføringsforskriften kap. 5-1
+// (https://lovdata.no/forskrift/2004-12-01-1558): § 5-1-1 nr. 1 number + date,
+// nr. 2 the parties (§ 5-1-2: seller name + org.nr, «MVA» suffix when
+// VAT-registered, «Foretaksregisteret» for AS/ASA/NUF; buyer name + address),
+// nr. 3 what was delivered (description/quantity), nr. 4 delivery date
+// (§ 5-1-4), nr. 5 price and due date, nr. 6 VAT in NOK — per rate, summed
+// separately (§ 5-1-5). Reverse charge (nr. 7) is not supported for NO.
+const NB_LOCALE: InvoiceLocale = {
+  no: true,
+  lang: "nb",
+  amount: (value) => formatNokNumber(value),
+  date: (value) => formatNoDate(value),
+  unit: (value) => (!value || value === "st" ? "stk" : value),
+  detailsRows: 5,
+  invoice: "Faktura",
+  creditNote: "Kreditnota",
+  invoiceDate: "Fakturadato",
+  creditDate: "Kreditnotadato",
+  invoiceNo: "Fakturanr.",
+  creditOf: "Gjelder faktura",
+  page: "Side",
+  customerNo: "Kundenr.",
+  yourRef: "Deres ref.",
+  yourOrder: "Deres ordrenr.",
+  yourVat: "Deres org.nr.",
+  ourRef: "Vår ref.",
+  terms: "Betalingsbetingelser",
+  days: "dager",
+  dueDate: "Forfallsdato",
+  lateInterest: "Forsinkelsesrente",
+  colArt: "Art.nr.",
+  colDesc: "Beskrivelse",
+  colQty: "Antall",
+  colUnit: "Enhet",
+  colPrice: "Enhetspris",
+  colSum: "Beløp",
+  exVat: "Sum eks. mva",
+  vat: "Mva",
+  total: "Totalt",
+  toPay: "Å BETALE",
+  vatLine: "Mva",
+  address: "Adresse",
+  phone: "Telefon",
+  email: "E-post",
+  web: "Nettside",
+  orgNo: "Org.nr.",
+  vatNo: "",
+  defaultCountry: "Norge",
+};
+
+function localeFor(data: InvoicePdfData): InvoiceLocale {
+  return isNorway(data.country) ? NB_LOCALE : SV_LOCALE;
+}
+
 // Payment terms as "{n} dagar", derived from invoice date → due date. Returns ''
 // when either date is missing or unparseable (row is then omitted).
-function paymentTermsDays(date?: string, dueDate?: string): string {
+function paymentTermsDays(
+  date?: string,
+  dueDate?: string,
+  daysWord = "dagar",
+): string {
   if (!date || !dueDate) return "";
   const start = Date.parse(date);
   const end = Date.parse(dueDate);
   if (Number.isNaN(start) || Number.isNaN(end)) return "";
   const days = Math.round((end - start) / 86400000);
   if (days <= 0) return "";
-  return `${days} dagar`;
+  return `${days} ${daysWord}`;
 }
 
 function groupVatByRate(items: InvoicePdfItem[]): VatGroup[] {
@@ -292,9 +455,22 @@ function buildHeader(
   pageIndex: number,
   pageCount: number,
 ): string {
+  const L = localeFor(data);
   const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : "";
-  const dateLabel = data.creditOfNumber ? "Kreditfakturadatum" : "Fakturadatum";
-  const terms = paymentTermsDays(data.date, data.dueDate);
+  const dateLabel = data.creditOfNumber ? L.creditDate : L.invoiceDate;
+  const terms = paymentTermsDays(data.date, data.dueDate, L.days);
+  // Sweden always prints an OCR row (falls back to the invoice number). Norway
+  // prints KID only when the company uses one, plus the delivery date
+  // (bokføringsforskriften § 5-1-1 nr. 4).
+  const paymentRefRow = L.no
+    ? data.kid
+      ? `<dt>KID</dt><dd>${text(data.kid)}</dd>`
+      : ""
+    : `<dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || "&nbsp;"}</dd>`;
+  const deliveryRow =
+    L.no && data.deliveryDate
+      ? `<dt>Leveringsdato</dt><dd class="nowrap">${text(L.date(data.deliveryDate))}</dd>`
+      : "";
 
   return `
     <header class="invoice-header">
@@ -302,12 +478,12 @@ function buildHeader(
       <div class="invoice-header__top">
         <div class="invoice-header__logo">${logo}</div>
         <div>
-          <div class="invoice-header__title">${data.creditOfNumber ? "Kreditfaktura" : "Faktura"}</div>
+          <div class="invoice-header__title">${data.creditOfNumber ? L.creditNote : L.invoice}</div>
           <dl class="invoice-header__meta">
-            <dt>${dateLabel}</dt><dd>${text(data.date) || "&nbsp;"}</dd>
-            <dt>Fakturanr</dt><dd>${text(data.invoiceNumber) || "&nbsp;"}</dd>
-            ${data.creditOfNumber ? `<dt>Avser faktura</dt><dd>${text(data.creditOfNumber)}</dd>` : ""}
-            <dt>OCR</dt><dd>${text(data.ocr || data.invoiceNumber) || "&nbsp;"}</dd>
+            <dt>${dateLabel}</dt><dd>${text(L.date(data.date)) || "&nbsp;"}</dd>
+            <dt>${L.invoiceNo}</dt><dd>${text(data.invoiceNumber) || "&nbsp;"}</dd>
+            ${data.creditOfNumber ? `<dt>${L.creditOf}</dt><dd>${text(data.creditOfNumber)}</dd>` : ""}
+            ${paymentRefRow}
           </dl>
           <div class="invoice-header__recipient">
             ${text(data.companyName) || "&nbsp;"}<br>
@@ -315,30 +491,33 @@ function buildHeader(
             ${text(data.postalCode) || "&nbsp;"}
           </div>
         </div>
-        <div class="invoice-header__sida">Sida ${pageIndex + 1}(${pageCount})</div>
+        <div class="invoice-header__sida">${L.page} ${pageIndex + 1}(${pageCount})</div>
       </div>
       <!-- Detail row: customer refs | our refs, top-aligned -->
       <div class="invoice-header__details">
         <dl>
           <!-- As on the invoices Geal sends today: customer no, their order no,
                and the customer's VAT number (Maria, 2026-09-23). -->
-          <dt>Kundnr</dt><dd>${text(data.customerNumber) || "&nbsp;"}</dd>
-          ${data.yourReference ? `<dt>Er referens</dt><dd>${text(data.yourReference)}</dd>` : ""}
-          ${data.orderReference ? `<dt>Ert ordernr</dt><dd>${text(data.orderReference)}</dd>` : ""}
-          ${data.vatNumber ? `<dt>Ert VAT-nummer</dt><dd>${text(data.vatNumber)}</dd>` : ""}
+          <dt>${L.customerNo}</dt><dd>${text(data.customerNumber) || "&nbsp;"}</dd>
+          ${data.yourReference ? `<dt>${L.yourRef}</dt><dd>${text(data.yourReference)}</dd>` : ""}
+          ${data.orderReference ? `<dt>${L.yourOrder}</dt><dd>${text(data.orderReference)}</dd>` : ""}
+          ${data.vatNumber ? `<dt>${L.yourVat}</dt><dd>${text(data.vatNumber)}</dd>` : ""}
         </dl>
         <dl>
-          <dt>Vår referens</dt><dd>${text(data.ourReference) || "&nbsp;"}</dd>
-          ${terms ? `<dt>Betalningsvillkor</dt><dd>${text(terms)}</dd>` : ""}
-          <dt>Förfallodatum</dt><dd class="nowrap">${text(data.dueDate) || "&nbsp;"}</dd>
-          ${data.lateInterest ? `<dt>Dröjsmålsränta</dt><dd>${text(data.lateInterest)}</dd>` : ""}
+          <dt>${L.ourRef}</dt><dd>${text(data.ourReference) || "&nbsp;"}</dd>
+          ${terms ? `<dt>${L.terms}</dt><dd>${text(terms)}</dd>` : ""}
+          <dt>${L.dueDate}</dt><dd class="nowrap">${text(L.date(data.dueDate)) || "&nbsp;"}</dd>${deliveryRow}
+          ${data.lateInterest ? `<dt>${L.lateInterest}</dt><dd>${text(data.lateInterest)}</dd>` : ""}
         </dl>
       </div>
     </header>
   `;
 }
 
-function buildItemRows(items: InvoicePdfItem[]): string {
+function buildItemRows(
+  items: InvoicePdfItem[],
+  L: InvoiceLocale = SV_LOCALE,
+): string {
   if (!items.length) {
     return '<tr><td colspan="6">&nbsp;</td></tr>';
   }
@@ -364,10 +543,10 @@ function buildItemRows(items: InvoicePdfItem[]): string {
         <tr class="invoice-lines__item">
           <td class="nowrap">${text(item.articleNumber)}</td>
           <td class="description">${multilineText(item.description)}</td>
-          <td class="r nowrap quantity">${formatInvoiceAmount(quantity)}</td>
-          <td class="nowrap unit">${text(item.unit || "st")}</td>
-          <td class="r nowrap amount">${formatInvoiceAmount(price)}</td>
-          <td class="r nowrap amount">${formatInvoiceAmount(total)}</td>
+          <td class="r nowrap quantity">${L.amount(quantity)}</td>
+          <td class="nowrap unit">${text(L.unit(item.unit))}</td>
+          <td class="r nowrap amount">${L.amount(price)}</td>
+          <td class="r nowrap amount">${L.amount(total)}</td>
         </tr>
       `;
     })
@@ -392,15 +571,16 @@ const REVERSE_VAT_NOTICE_HEIGHT_PX = Math.ceil(BODY_LINE_HEIGHT_PX + 12);
 const HEADER_PAGE_TOP_PADDING_PX = Math.ceil(14 * MM_TO_PX);
 const HEADER_TOP_BAND_PX = 180; // logo | title, meta, recipient (stacked)
 const HEADER_DETAILS_GAP_PX = 80; // margin above the detail row (as on Faktura 65)
-const HEADER_DETAILS_ROWS = 4;
 const HEADER_BOTTOM_MARGIN_PX = 14;
-const INVOICE_HEADER_HEIGHT_PX = Math.ceil(
-  HEADER_PAGE_TOP_PADDING_PX +
-    HEADER_TOP_BAND_PX +
-    HEADER_DETAILS_GAP_PX +
-    HEADER_DETAILS_ROWS * (BODY_LINE_HEIGHT_PX + 3) +
-    HEADER_BOTTOM_MARGIN_PX,
-);
+// The detail row holds 4 lines in Sweden; Norway adds Leveringsdato (5).
+const invoiceHeaderHeightPx = (detailsRows: number) =>
+  Math.ceil(
+    HEADER_PAGE_TOP_PADDING_PX +
+      HEADER_TOP_BAND_PX +
+      HEADER_DETAILS_GAP_PX +
+      detailsRows * (BODY_LINE_HEIGHT_PX + 3) +
+      HEADER_BOTTOM_MARGIN_PX,
+  );
 
 // Footer: top border/margin + up to 4 text lines (Adress column) + bottom padding.
 const FOOTER_LINE_COUNT = 4;
@@ -414,10 +594,13 @@ const INVOICE_FOOTER_HEIGHT_PX = Math.ceil(
     FOOTER_LINE_COUNT * BODY_LINE_HEIGHT_PX,
 );
 
-const INVOICE_TABLE_HEIGHT_PX = Math.max(
-  TABLE_ROW_HEIGHT_PX,
-  A4_PAGE_HEIGHT_PX - INVOICE_HEADER_HEIGHT_PX - INVOICE_FOOTER_HEIGHT_PX,
-);
+const invoiceTableHeightPx = (data: InvoicePdfData) =>
+  Math.max(
+    TABLE_ROW_HEIGHT_PX,
+    A4_PAGE_HEIGHT_PX -
+      invoiceHeaderHeightPx(localeFor(data).detailsRows) -
+      INVOICE_FOOTER_HEIGHT_PX,
+  );
 
 function calculateSummaryHeightPx(
   data: InvoicePdfData,
@@ -458,7 +641,8 @@ function calculateItemsCapacity(
     isReverseVAT,
   );
   return Math.floor(
-    Math.max(0, INVOICE_TABLE_HEIGHT_PX - reservedHeight) / TABLE_ROW_HEIGHT_PX,
+    Math.max(0, invoiceTableHeightPx(data) - reservedHeight) /
+      TABLE_ROW_HEIGHT_PX,
   );
 }
 
@@ -475,7 +659,9 @@ function calculateFillerHeightPx(
   );
   return Math.max(
     0,
-    INVOICE_TABLE_HEIGHT_PX - reservedHeight - itemCount * TABLE_ROW_HEIGHT_PX,
+    invoiceTableHeightPx(data) -
+      reservedHeight -
+      itemCount * TABLE_ROW_HEIGHT_PX,
   );
 }
 
@@ -527,6 +713,7 @@ function paginateInvoiceItemsByCount(data: InvoicePdfData): Array<{
 }
 
 function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
+  const L = localeFor(data);
   const items = data.items || [];
   const vatGroups = groupVatByRate(items);
   const subtotal =
@@ -536,23 +723,46 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
     : vatGroups.reduce((sum, group) => sum + group.amount, 0);
   const total = data.total ?? subtotal + totalVat;
   const rotDeduction = Number(data.rotDeduction) || 0;
-  const roundedTotal = data.roundedTotal ?? Math.round(total - rotDeduction);
-  const currency = data.currency || "SEK";
+  // Norway pays the exact amount (no öresavrundning fallback).
+  const roundedTotal =
+    data.roundedTotal ??
+    (L.no ? total - rotDeduction : Math.round(total - rotDeduction));
+  const currency = data.currency || (L.no ? "NOK" : "SEK");
   const footer = data.companyFooter || {};
 
-  // Per-rate VAT breakdown line, e.g. "Moms 25% 345,00 (1 380,00)".
+  // Per-rate VAT breakdown line, e.g. "Moms 25% 345,00 (1 380,00)" — in Norway
+  // "Mva 25 % 345,00 (1 380,00)": each rate's VAT and base summed separately
+  // (bokføringsforskriften § 5-1-5).
   const vatBreakdown = isReverseVAT
     ? "Omvänd skattskyldighet"
     : vatGroups
-        .map(
-          (group) =>
-            `Moms ${group.rate}% ${formatInvoiceAmount(group.amount)} (${formatInvoiceAmount(group.base)})`,
+        .map((group) =>
+          L.no
+            ? `${L.vatLine} ${group.rate}&nbsp;% ${L.amount(group.amount)} (${L.amount(group.base)})`
+            : `Moms ${group.rate}% ${formatInvoiceAmount(group.amount)} (${formatInvoiceAmount(group.base)})`,
         )
         .join("&nbsp;&nbsp;");
 
-  const bankLine = footer.iban
-    ? `<span class="bank"><b>IBAN</b> ${text(footer.iban)}${footer.bic ? `&nbsp;&nbsp;<b>BIC</b> ${text(footer.bic)}` : ""}</span>`
-    : "<span></span>";
+  const ibanPart = footer.iban
+    ? `<b>IBAN</b> ${text(footer.iban)}${footer.bic ? `&nbsp;&nbsp;<b>BIC</b> ${text(footer.bic)}` : ""}`
+    : "";
+  // Norway: kontonummer + KID are what the payer types into the nettbank.
+  const noPayParts = L.no
+    ? [
+        footer.kontonummer
+          ? `<b>Kontonr.</b> ${text(formatKontonummer(footer.kontonummer))}`
+          : "",
+        data.kid ? `<b>KID</b> ${text(data.kid)}` : "",
+        ibanPart,
+      ].filter(Boolean)
+    : [];
+  const bankLine = L.no
+    ? noPayParts.length
+      ? `<span class="bank">${noPayParts.join("&nbsp;&nbsp;")}</span>`
+      : "<span></span>"
+    : footer.iban
+      ? `<span class="bank">${ibanPart}</span>`
+      : "<span></span>";
 
   // Optional note lines (reverse VAT / ROT) sit above the totals band.
   const notes: string[] = [];
@@ -570,9 +780,10 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
 
   // Payment QR (Swedish BGC format), pre-rendered upstream. Shown only when a
   // Bankgiro/Plusgiro is configured so there is something to scan-and-pay.
-  const qrHtml = data.qrDataUrl
-    ? `<div class="invoice-summary__qr"><img src="${data.qrDataUrl}" alt="" /><span>Skanna för att betala</span></div>`
-    : "";
+  const qrHtml =
+    data.qrDataUrl && !L.no
+      ? `<div class="invoice-summary__qr"><img src="${data.qrDataUrl}" alt="" /><span>Skanna för att betala</span></div>`
+      : "";
 
   return `
     <tfoot class="invoice-lines__footer">
@@ -585,20 +796,20 @@ function buildSummary(data: InvoicePdfData, isReverseVAT: boolean): string {
               <div class="invoice-summary__main">
                 <div class="invoice-summary__totals">
                   <div>
-                    <div class="lbl">Exkl. moms</div>
-                    <div class="val">${formatInvoiceAmount(subtotal)}</div>
+                    <div class="lbl">${L.exVat}</div>
+                    <div class="val">${L.amount(subtotal)}</div>
                   </div>
                   <div>
-                    <div class="lbl">Moms</div>
-                    <div class="val">${formatInvoiceAmount(totalVat)}</div>
+                    <div class="lbl">${L.vat}</div>
+                    <div class="val">${L.amount(totalVat)}</div>
                   </div>
                   <div>
-                    <div class="lbl">Totalt</div>
-                    <div class="val">${formatInvoiceAmount(total)}</div>
+                    <div class="lbl">${L.total}</div>
+                    <div class="val">${L.amount(total)}</div>
                   </div>
                   <div>
-                    <div class="lbl att-lbl">ATT BETALA</div>
-                    <div class="val att-val">${text(currency)} ${formatInvoiceAmount(roundedTotal)}</div>
+                    <div class="lbl att-lbl">${L.toPay}</div>
+                    <div class="val att-val">${L.no && currency === "NOK" ? "kr" : text(currency)} ${L.amount(roundedTotal)}</div>
                   </div>
                 </div>
                 <div class="invoice-summary__vat">
@@ -631,9 +842,10 @@ function buildLinesTable(
       ? `<tr class="invoice-lines__filler" style="height:${fillerHeightPx}px;"><td colspan="6"></td></tr>`
       : "";
   const summaryFooter = showSummary ? buildSummary(data, isReverseVAT) : "";
+  const L = localeFor(data);
 
   return `
-    <table class="invoice-lines" style="height:${INVOICE_TABLE_HEIGHT_PX}px;">
+    <table class="invoice-lines" style="height:${invoiceTableHeightPx(data)}px;">
       <colgroup>
         <col style="width: 9%;" />
         <col style="width: 39%;" />
@@ -644,16 +856,16 @@ function buildLinesTable(
       </colgroup>
       <thead>
         <tr>
-          <th class="nowrap">Art.nr</th>
-          <th class="description">Benämning</th>
-          <th class="r nowrap quantity">Lev ant</th>
-          <th class="nowrap unit">Enhet</th>
-          <th class="r nowrap amount">À-pris</th>
-          <th class="r nowrap amount">Summa</th>
+          <th class="nowrap">${L.colArt}</th>
+          <th class="description">${L.colDesc}</th>
+          <th class="r nowrap quantity">${L.colQty}</th>
+          <th class="nowrap unit">${L.colUnit}</th>
+          <th class="r nowrap amount">${L.colPrice}</th>
+          <th class="r nowrap amount">${L.colSum}</th>
         </tr>
       </thead>
       <tbody>
-        ${buildItemRows(items)}
+        ${buildItemRows(items, L)}
         ${fillerRow}
       </tbody>
       ${summaryFooter}
@@ -673,7 +885,7 @@ function buildInvoicePdfPage(
     <section class="invoice-page">
       <div class="invoice-page__header">${buildHeader(data, logoDataUrl, opts.pageIndex, opts.pageCount)}</div>
       <div class="invoice-page__body">${buildLinesTable(data, items, opts.showSummary, isReverseVAT)}</div>
-      <div class="invoice-page__footer">${buildFooter(data.companyFooter)}</div>
+      <div class="invoice-page__footer">${localeFor(data).no ? buildNoFooter(data.companyFooter) : buildFooter(data.companyFooter)}</div>
     </section>
   `;
 }
@@ -710,10 +922,48 @@ function buildFooter(footer: InvoicePdfCompanyFooter = {}): string {
   `;
 }
 
+// Norwegian footer: seller identity per bokføringsforskriften § 5-1-2 — name,
+// address, org.nr (+ «MVA» when VAT-registered) and «Foretaksregisteret» only
+// when the company says it is registered there. Never Bankgiro/Plusgiro.
+function buildNoFooter(footer: InvoicePdfCompanyFooter = {}): string {
+  const L = NB_LOCALE;
+  const org = formatNoOrgNumber(footer.orgNumber, footer.mvaRegistered);
+  return `
+    <div class="invoice-footer">
+      <div>
+        <b>${L.address}</b>
+        ${text(footer.name)}<br>${text(footer.address)}<br>${text(footer.city)}<br>${text(footer.country || L.defaultCountry)}
+      </div>
+      <div>
+        <b>${L.phone}</b>${text(footer.phone)}
+        <b class="gap">${L.email}</b>${text(footer.email)}
+        <b class="gap">${L.web}</b>${text(footer.website)}
+      </div>
+      <div>
+        <b>Kontonummer</b>${text(formatKontonummer(footer.kontonummer))}
+      </div>
+      <div>
+        <b>${L.orgNo}</b>${text(org)}
+        ${footer.foretaksregisteret ? `<span class="gap">Foretaksregisteret</span>` : ""}
+      </div>
+    </div>
+  `;
+}
+
 export function buildInvoicePdfHtmlPuppeteer(
   data: InvoicePdfData,
   logoDataUrl = "",
 ): string {
+  // Swedish-only features never reach a Norwegian invoice: no ROT/RUT note and
+  // no «omvänd skattskyldighet» (NO reverse charge is not supported).
+  if (isNorway(data.country)) {
+    data = {
+      ...data,
+      reverseVAT: "false",
+      rotEnabled: false,
+      qrDataUrl: undefined,
+    };
+  }
   // Text-only rows always render under the priced rows, regardless of the order
   // they were entered in (stable partition: priced first, then text).
   const items = data.items || [];
@@ -737,10 +987,10 @@ export function buildInvoicePdfHtmlPuppeteer(
     .join("");
 
   return `<!DOCTYPE html>
-<html lang="sv">
+<html lang="${localeFor(data).lang}">
 <head>
   <meta charset="utf-8" />
-  <title>Faktura ${text(data.invoiceNumber)}</title>
+  <title>${data.creditOfNumber && localeFor(data).no ? "Kreditnota" : "Faktura"} ${text(data.invoiceNumber)}</title>
   <style>${INVOICE_PDF_CSS}</style>
 </head>
 <body>
