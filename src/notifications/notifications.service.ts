@@ -380,6 +380,10 @@ export class NotificationsService {
       return "materialOrders";
     }
 
+    if (type.startsWith("deviation_")) {
+      return "deviations";
+    }
+
     if (type.startsWith("message_") || type === "chat_message") {
       return "messages";
     }

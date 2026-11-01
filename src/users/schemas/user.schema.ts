@@ -62,6 +62,8 @@ export type UserNotificationPreferences = {
   invoices: boolean;
   // Material orders: a worker's new draft (to admins), "sent" (to the worker).
   materialOrders: boolean;
+  // Deviations (avvik): assigned to me, new report on my project, due/overdue.
+  deviations: boolean;
 };
 
 export const DEFAULT_USER_NOTIFICATION_PREFERENCES: UserNotificationPreferences =
@@ -72,6 +74,7 @@ export const DEFAULT_USER_NOTIFICATION_PREFERENCES: UserNotificationPreferences 
     productAndMarketingAlerts: true,
     invoices: true,
     materialOrders: true,
+    deviations: true,
   };
 
 export const normalizeUserNotificationPreferences = (
@@ -101,6 +104,10 @@ export const normalizeUserNotificationPreferences = (
     typeof value?.materialOrders === "boolean"
       ? value.materialOrders
       : DEFAULT_USER_NOTIFICATION_PREFERENCES.materialOrders,
+  deviations:
+    typeof value?.deviations === "boolean"
+      ? value.deviations
+      : DEFAULT_USER_NOTIFICATION_PREFERENCES.deviations,
 });
 
 // Manager "what needs attention" summary reminder: a periodic digest of overdue
