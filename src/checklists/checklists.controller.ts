@@ -59,7 +59,7 @@ function parsePhotoMeta(raw?: string): PhotoMeta[] {
   }
 }
 
-const SOURCE_DOC_EXT = [".pdf", ".txt", ".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"];
+const SOURCE_DOC_EXT = [".pdf", ".txt", ".doc", ".docx", ".odt", ".rtf", ".xls", ".xlsx", ".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"];
 
 function saveSourceDocument(file: { buffer: Buffer; originalname: string }) {
   const dir = "./uploads/checklist-documents";
