@@ -87,7 +87,7 @@ export function buildDeviationReportHtml(data: DeviationReportData): string {
 <meta charset="utf-8" />
 <style>
   * { box-sizing: border-box; }
-  body { font-family: "Helvetica Neue", Arial, sans-serif; color: #0f172a; margin: 40px; font-size: 12px; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; color: #0f172a; background: #fff; margin: 40px; font-size: 12px; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 18px; }
   .head h1 { font-size: 20px; margin: 0 0 2px; }
   .head .sub { color: #64748b; font-size: 12px; }
