@@ -36,6 +36,7 @@ import {
   LEAD_STAGES,
   leadStage,
   waitingLeads,
+  leadList,
 } from "./mailer-funnel-parse";
 import { senderKeysOf } from "./mailer-campaigns.service";
 import { MailerListsService } from "./mailer-lists.service";
@@ -649,7 +650,7 @@ export class MailerFunnelService {
 
   // ---------- leads waiting for an answer ----------
 
-  // Latest mail per sender that we have not answered: replies to the tab's
+  // Lead list (latest mail per sender + whose turn): replies to the tab's
   // campaigns + new inquiries to the tab's mailbox (all mailboxes on "All").
   private async waiting(ids: Types.ObjectId[], brand?: string) {
     const since = new Date(Date.now() - 60 * 864e5);
@@ -673,7 +674,7 @@ export class MailerFunnelService {
         .map((c) => domainOf(c.imapUser || ""))
         .filter((d) => d && isCompanyDomain(d)),
     );
-    return waitingLeads(mails.filter((m) => !own.has(domainOf(m.email)))).map(
+    return leadList(mails.filter((m) => !own.has(domainOf(m.email)))).map(
       (m) => {
         const c = boxes.get(m.inbox || "main");
         return {
@@ -685,6 +686,7 @@ export class MailerFunnelService {
           snippet: m.snippet,
           note: m.note,
           category: m.category,
+          turn: m.turn,
           direct: Boolean(m.direct),
           files: m.files || [],
           receivedAt: m.receivedAt,

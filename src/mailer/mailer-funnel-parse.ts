@@ -147,6 +147,36 @@ export function leadStage(m: LeadMail): LeadStage {
   return m.answered ? "answered" : "replied";
 }
 
+// Lead list: one row per sender — their latest real mail — with whose turn
+// it is: "us" (they wrote last, unanswered) first, oldest first; then "them"
+// (we answered / meeting / offer), newest first. Lost and won leads drop out.
+export function leadList<T extends LeadMail>(
+  mails: T[],
+): (T & { turn: "us" | "them" })[] {
+  const latest = new Map<string, T>();
+  for (const m of mails) {
+    if (m.category === "auto") continue;
+    const cur = latest.get(m.email);
+    if (!cur || new Date(m.receivedAt || 0) > new Date(cur.receivedAt || 0))
+      latest.set(m.email, m);
+  }
+  const t = (m: T) => new Date(m.receivedAt || 0).getTime();
+  const rows = [...latest.values()]
+    .filter((m) => {
+      const st = leadStage(m);
+      if (st === "lost" || st === "won") return false;
+      return Boolean(m.stage) || NEEDS_ANSWER.has(m.category);
+    })
+    .map((m) => ({
+      ...m,
+      turn: (leadStage(m) === "replied" ? "us" : "them") as "us" | "them",
+    }));
+  return [
+    ...rows.filter((r) => r.turn === "us").sort((a, b) => t(a) - t(b)),
+    ...rows.filter((r) => r.turn === "them").sort((a, b) => t(b) - t(a)),
+  ];
+}
+
 // "Att svara": one row per sender — their latest mail, when it is unanswered
 // and still wants an answer. Oldest waiting first. Auto-replies and empty
 // follow-ups ("auto") never hide the real mail before them.

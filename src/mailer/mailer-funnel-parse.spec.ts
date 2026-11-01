@@ -166,3 +166,27 @@ describe("lead stage", () => {
     ]);
   });
 });
+
+describe("leadList", () => {
+  const { leadList } = jest.requireActual("./mailer-funnel-parse");
+  const m = (o: Record<string, unknown>) => ({
+    email: "a@x.se",
+    receivedAt: "2026-10-20T10:00",
+    category: "",
+    ...o,
+  });
+
+  it("whose turn: unanswered = us first, answered = them", () => {
+    const rows = leadList([
+      m({ email: "a@x.se", answered: true, receivedAt: "2026-10-29" }),
+      m({ email: "b@x.se", receivedAt: "2026-10-30" }),
+      m({ email: "c@x.se", receivedAt: "2026-10-19" }),
+      m({ email: "d@x.se", category: "no" }),
+      m({ email: "e@x.se", stage: "won" }),
+      m({ email: "f@x.se", category: "auto" }),
+    ]);
+    expect(
+      rows.map((r: { email: string; turn: string }) => `${r.email}:${r.turn}`),
+    ).toEqual(["c@x.se:us", "b@x.se:us", "a@x.se:them"]);
+  });
+});
