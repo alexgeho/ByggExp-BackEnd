@@ -105,14 +105,46 @@ export async function sheetColumnA(url: string) {
   const vals = (await api(`${p.id}/values/${range}`)) as {
     values?: string[][];
   };
-  return { id: p.id, title, colA: (vals.values || []).map((r) => r[0] || "") };
+  return {
+    id: p.id,
+    title,
+    sheetId: tab.properties.sheetId,
+    colA: (vals.values || []).map((r) => r[0] || ""),
+  };
 }
 
-export async function appendRows(id: string, title: string, rows: string[][]) {
+// New leads go right under the header row (newest on top); the inserted
+// rows take the formatting of the row below them.
+export async function insertRowsOnTop(
+  id: string,
+  sheetId: number,
+  title: string,
+  rows: string[][],
+) {
   if (!rows.length) return;
-  const range = encodeURIComponent(`'${title.replace(/'/g, "''")}'!A:D`);
-  await api(
-    `${id}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-    { method: "POST", body: JSON.stringify({ values: rows }) },
+  await api(`${id}:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      requests: [
+        {
+          insertDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: 1,
+              endIndex: 1 + rows.length,
+            },
+            inheritFromBefore: false,
+          },
+        },
+      ],
+    }),
+  });
+  const range = encodeURIComponent(
+    `'${title.replace(/'/g, "''")}'!A2:D${1 + rows.length}`,
   );
+  await api(`${id}/values/${range}?valueInputOption=USER_ENTERED`, {
+    method: "PUT",
+    body: JSON.stringify({ values: rows }),
+  });
 }

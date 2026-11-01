@@ -40,7 +40,7 @@ import {
   formLead,
   leadKey,
 } from "./mailer-funnel-parse";
-import { appendRows, sheetColumnA, sheetsAccount } from "./mailer-sheets";
+import { insertRowsOnTop, sheetColumnA, sheetsAccount } from "./mailer-sheets";
 import { senderKeysOf } from "./mailer-campaigns.service";
 import { MailerListsService } from "./mailer-lists.service";
 import { mailerVisits } from "./mailer-ga";
@@ -100,7 +100,7 @@ export type InboxInput = {
 
 const MIN_REAL_CAMPAIGN = 10;
 const REPLY_SORT_VERSION = 4; // 4: direct inquiries
-const PARSE_VERSION = 3; // 3: direct inquiries, UID, flags, attachments
+const PARSE_VERSION = 4; // 4: site form mails from no-reply@ on our domain
 
 // "ByggExp (Brevo)" → "ByggExp"; campaigns of deleted senders fall back to
 // the first word of the campaign name ("Nordkod – utan hemsida").
@@ -857,7 +857,7 @@ export class MailerFunnelService {
         receivedAt?: Date;
         openUrl: string;
       }[];
-      const { id, title, colA } = await sheetColumnA(c.sheetUrl);
+      const { id, title, sheetId, colA } = await sheetColumnA(c.sheetUrl);
       const have = new Set(colA.map(leadKey));
       const day = (d?: Date) =>
         new Date(d || Date.now()).toLocaleDateString("en-GB", {
@@ -866,7 +866,12 @@ export class MailerFunnelService {
           timeZone: "Europe/Stockholm",
         });
       const q = (v: string) => v.replace(/"/g, "'");
-      const rows = leads
+      const rows = [...leads]
+        .sort(
+          (a, b) =>
+            new Date(b.receivedAt || 0).getTime() -
+            new Date(a.receivedAt || 0).getTime(),
+        )
         .filter(
           (l) =>
             l.category && l.category !== "no" && !have.has(leadKey(l.email)),
@@ -877,7 +882,7 @@ export class MailerFunnelService {
           day(l.receivedAt),
           l.note || l.subject || "",
         ]);
-      await appendRows(id, title, rows);
+      await insertRowsOnTop(id, sheetId, title, rows);
       c.sheetError = "";
     } catch (err) {
       c.sheetError = (err instanceof Error ? err.message : String(err)).slice(
@@ -1037,15 +1042,17 @@ export class MailerFunnelService {
       .toLowerCase()
       .trim();
     let fromName = from?.name || "";
-    if (!email || isSystemSender(email)) return false;
+    const ownDomain = domainOf(box.own);
+    const fromOwn =
+      email === box.own || Boolean(ownDomain && domainOf(email) === ownDomain);
+    if (!email || (isSystemSender(email) && !fromOwn)) return false;
     const received = mail.date || new Date();
     const messageId =
       mail.messageId || `${email}:${received.toISOString()}:${mail.subject}`;
     const text =
       mail.text || htmlToText(typeof mail.html === "string" ? mail.html : "");
     // Site form (sent from our own domain): the lead is the visitor.
-    const ownDomain = domainOf(box.own);
-    if (email === box.own || (ownDomain && domainOf(email) === ownDomain)) {
+    if (fromOwn) {
       const f = formLead(
         text,
         String(mail.replyTo?.value?.[0]?.address || "").toLowerCase(),
