@@ -48,6 +48,7 @@ import { NotesModule } from "./notes/notes.module";
 import { AccountingModule } from "./accounting/accounting.module";
 import { DagbokModule } from "./dagbok/dagbok.module";
 import { ChecklistsModule } from "./checklists/checklists.module";
+import { DeviationsModule } from "./deviations/deviations.module";
 import { PaymentPlansModule } from "./payment-plans/payment-plans.module";
 import { LeaveModule } from "./leave/leave.module";
 import { AssignmentsModule } from "./assignments/assignments.module";
@@ -98,6 +99,7 @@ import { FortnoxModule } from "./fortnox/fortnox.module";
     AccountingModule,
     DagbokModule,
     ChecklistsModule,
+    DeviationsModule,
     PaymentPlansModule,
     LeaveModule,
     AssignmentsModule,
