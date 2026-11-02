@@ -845,10 +845,12 @@ export class MailerFunnelService {
     if (!c.sheetUrl) return;
     try {
       const { picked } = await this.pick({ brand });
+      const done = new Set(c.sheetDone || []);
       const leads = (await this.waiting(
         picked.map((r) => r.c._id),
         brand,
       )) as {
+        _id: string;
         email: string;
         turn: string;
         category: string;
@@ -859,12 +861,22 @@ export class MailerFunnelService {
       }[];
       const { id, title, sheetId, colA } = await sheetColumnA(c.sheetUrl);
       const have = new Set(colA.map(leadKey));
-      const day = (d?: Date) =>
-        new Date(d || Date.now()).toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          timeZone: "Europe/Stockholm",
-        });
+      const MON = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+      const day = (d?: Date) => {
+        const [y, m, dd] = new Date(d || Date.now())
+          .toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" })
+          .split("-")
+          .map(Number);
+        return `${dd} ${MON[m - 1]} ${y}`;
+      };
+      // First run: everything already in the inbox counts as done.
+      if (!done.size) {
+        c.sheetDone = leads.map((l) => String(l._id));
+        c.sheetError = "";
+        c.sheetAt = new Date();
+        await c.save();
+        return;
+      }
       const q = (v: string) => v.replace(/"/g, "'");
       const rows = [...leads]
         .sort(
@@ -872,6 +884,7 @@ export class MailerFunnelService {
             new Date(b.receivedAt || 0).getTime() -
             new Date(a.receivedAt || 0).getTime(),
         )
+        .filter((l) => !done.has(String(l._id)))
         .filter(
           (l) =>
             l.category && l.category !== "no" && !have.has(leadKey(l.email)),
@@ -883,6 +896,10 @@ export class MailerFunnelService {
           l.note || l.subject || "",
         ]);
       await insertRowsOnTop(id, sheetId, title, rows);
+      // Written now or already in the sheet → done; a later deletion sticks.
+      for (const l of leads)
+        if (l.category && l.category !== "no") done.add(String(l._id));
+      c.sheetDone = [...done].slice(-3000);
       c.sheetError = "";
     } catch (err) {
       c.sheetError = (err instanceof Error ? err.message : String(err)).slice(

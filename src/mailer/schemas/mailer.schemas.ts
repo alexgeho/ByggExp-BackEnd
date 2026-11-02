@@ -507,6 +507,11 @@ export class MailerFunnelConfig {
   @Prop({ type: Date, default: null })
   sheetAt: Date | null;
 
+  // Lead mails already written to the sheet (MailReply ids). A row the owner
+  // deletes is not added again until that lead sends a new mail.
+  @Prop({ type: [String], default: [] })
+  sheetDone: string[];
+
   // Weekly conclusions written by Claude (Russian, 3–5 points).
   @Prop({ type: [String], default: [] })
   insights: string[];
