@@ -40,7 +40,12 @@ import {
   formLead,
   leadKey,
 } from "./mailer-funnel-parse";
-import { insertRowsOnTop, sheetColumnA, sheetsAccount } from "./mailer-sheets";
+import {
+  deleteSheetRows,
+  insertRowsOnTop,
+  sheetColumnA,
+  sheetsAccount,
+} from "./mailer-sheets";
 import { senderKeysOf } from "./mailer-campaigns.service";
 import { MailerListsService } from "./mailer-lists.service";
 import { mailerVisits } from "./mailer-ga";
@@ -838,6 +843,29 @@ export class MailerFunnelService {
       await this.allInsights();
   }
 
+  // Leads whose latest real mail is a clear no (or set lost by hand).
+  private async lostKeys(ids: Types.ObjectId[], brand: string) {
+    const box = await this.boxFor(brand);
+    const mails = await this.replies
+      .find({
+        receivedAt: { $gte: new Date(Date.now() - 120 * 864e5) },
+        $or: [{ campaignId: { $in: ids } }, { direct: true, inbox: box.key }],
+      })
+      .lean();
+    const latest = new Map<string, (typeof mails)[number]>();
+    for (const m of mails) {
+      if (m.category === "auto") continue;
+      const cur = latest.get(m.email);
+      if (!cur || +new Date(m.receivedAt || 0) > +new Date(cur.receivedAt || 0))
+        latest.set(m.email, m);
+    }
+    return new Set(
+      [...latest.values()]
+        .filter((m) => leadStage(m) === "lost")
+        .map((m) => leadKey(m.email)),
+    );
+  }
+
   // Appends this mailbox's new leads to its Google Sheet tab: only sorted
   // leads (interest / later / other service or a stage set by hand) that are
   // not in column A yet. Never rewrites rows — the owner edits them by hand.
@@ -860,6 +888,16 @@ export class MailerFunnelService {
         openUrl: string;
       }[];
       const { id, title, sheetId, colA } = await sheetColumnA(c.sheetUrl);
+      // A clear no ("took someone else") leaves the sheet.
+      const lost = await this.lostKeys(
+        picked.map((r) => r.c._id),
+        brand,
+      );
+      const gone = colA
+        .map((v, i) => (i > 0 && lost.has(leadKey(v)) ? i : -1))
+        .filter((i) => i > 0);
+      await deleteSheetRows(id, sheetId, gone);
+      for (const i of [...gone].reverse()) colA.splice(i, 1);
       const have = new Set(colA.map(leadKey));
       const MON = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
       const day = (d?: Date) => {

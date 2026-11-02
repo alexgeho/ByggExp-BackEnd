@@ -148,3 +148,29 @@ export async function insertRowsOnTop(
     body: JSON.stringify({ values: rows }),
   });
 }
+
+// Removes whole rows (0-based indexes), bottom first so indexes stay valid.
+export async function deleteSheetRows(
+  id: string,
+  sheetId: number,
+  rows: number[],
+) {
+  if (!rows.length) return;
+  await api(`${id}:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      requests: [...rows]
+        .sort((a, b) => b - a)
+        .map((i) => ({
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: i,
+              endIndex: i + 1,
+            },
+          },
+        })),
+    }),
+  });
+}
