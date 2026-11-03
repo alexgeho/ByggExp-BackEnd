@@ -1,5 +1,9 @@
 # ByggExp-BackEnd worklog
 
+## 2026-11-03 — mailer: site inboxes + lead sheet export
+- DONE: hourly IMAP sync for inbox:* brands; own-domain form mails parsed (formLead); Google Sheets export (mailer-sheets.ts, SA GA_SA_KEY_B64): newest on top, sheetDone keeps owner-deleted rows out, lostKeys → refusal rows deleted, dates "d Mon yyyy". Commits ec1f868, 3665502.
+- NEXT: verify offert@armeringproffs.se forwarder end-to-end; watch sheetError in admin.
+
 ## 🟢 SESSION 2026-09-29 — invites honest, weekends off, monitor
 ### DONE
 - `f9fecec` invites: POST /company returns real `invited`, POST /users `inviteEmailSent`, bulk `notEmailed`; new POST /company/:id/resend-invite (fresh token, readable 503).
