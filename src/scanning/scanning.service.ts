@@ -121,6 +121,18 @@ Rules:
     return JSON.parse(cleaned.slice(start, end + 1));
   }
 
+  // Keeps the provider's own reason (bad key, no credits, unknown model) so a
+  // failed scan can be diagnosed from the UI/network tab without server logs.
+  private failure(status: number, body: string): string {
+    let reason = "";
+    try {
+      reason = JSON.parse(body)?.error?.message || "";
+    } catch {
+      reason = "";
+    }
+    return `Scanning service failed (${status}${reason ? `: ${reason}` : ""})`;
+  }
+
   private num(v: unknown): number {
     const n =
       typeof v === "number" ? v : parseFloat(String(v ?? "").replace(",", "."));
@@ -223,7 +235,7 @@ Rules:
     if (!res.ok) {
       const body = await res.text();
       this.logger.error(`Anthropic responded ${res.status}: ${body}`);
-      throw new ServiceUnavailableException("Scanning service failed");
+      throw new ServiceUnavailableException(this.failure(res.status, body));
     }
 
     const data = (await res.json()) as {
@@ -339,7 +351,7 @@ Rules:
     if (!res.ok) {
       const body = await res.text();
       this.logger.error(`Anthropic responded ${res.status}: ${body}`);
-      throw new ServiceUnavailableException("Scanning service failed");
+      throw new ServiceUnavailableException(this.failure(res.status, body));
     }
 
     const data = (await res.json()) as {
