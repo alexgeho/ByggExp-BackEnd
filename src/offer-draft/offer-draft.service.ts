@@ -28,7 +28,7 @@ export class OfferDraftService {
   private readonly logger = new Logger(OfferDraftService.name);
   private readonly apiKey = process.env.ANTHROPIC_API_KEY || "";
   private readonly model =
-    process.env.OFFER_DRAFT_MODEL || "claude-haiku-4-5-20251001";
+    process.env.OFFER_DRAFT_MODEL || "claude-haiku-5-5";
   private readonly apiUrl = "https://api.anthropic.com/v1/messages";
 
   get enabled(): boolean {

@@ -48,7 +48,7 @@ export class ScanningService {
   private readonly logger = new Logger(ScanningService.name);
   private readonly apiKey = process.env.ANTHROPIC_API_KEY || "";
   private readonly model =
-    process.env.SCAN_MODEL || "claude-haiku-4-5-20251001";
+    process.env.SCAN_MODEL || "claude-haiku-5-5";
   private readonly apiUrl = "https://api.anthropic.com/v1/messages";
 
   get enabled(): boolean {
