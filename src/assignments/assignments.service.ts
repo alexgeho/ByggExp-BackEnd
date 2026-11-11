@@ -101,6 +101,7 @@ export class AssignmentsService {
       date: new Date(dto.date),
       hours: dto.hours ?? 8,
       note: dto.note ?? "",
+      startTime: dto.startTime ?? "",
       createdByUserId: actor.userId ?? null,
     }).save();
   }
@@ -132,6 +133,9 @@ export class AssignmentsService {
     }
     if (dto.hours !== undefined) {
       assignment.hours = dto.hours;
+    }
+    if (dto.startTime !== undefined) {
+      assignment.startTime = dto.startTime;
     }
     if (dto.note !== undefined) {
       assignment.note = dto.note;

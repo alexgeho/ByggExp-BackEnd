@@ -1,4 +1,5 @@
 import {
+  Matches,
   IsDateString,
   IsNumber,
   IsOptional,
@@ -29,4 +30,8 @@ export class UpdateAssignmentDto {
   @IsString()
   @IsOptional()
   note?: string;
+
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: "startTime must be HH:mm" })
+  startTime?: string;
 }

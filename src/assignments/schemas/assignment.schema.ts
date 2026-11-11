@@ -27,6 +27,10 @@ export class Assignment {
   @Prop({ default: "" })
   note: string;
 
+  // Start of the booked slot, "HH:mm" (calendar view). Empty = whole day from 07:00.
+  @Prop({ default: "" })
+  startTime: string;
+
   @Prop({ type: String, ref: "User", default: null })
   createdByUserId?: string | null;
 }
