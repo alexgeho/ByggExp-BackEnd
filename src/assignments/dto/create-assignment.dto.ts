@@ -13,9 +13,9 @@ export class CreateAssignmentDto {
   @IsNotEmpty()
   userId: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  projectId: string;
+  projectId?: string;
 
   @IsDateString()
   date: string;

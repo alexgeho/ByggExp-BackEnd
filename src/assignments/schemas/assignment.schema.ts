@@ -14,8 +14,9 @@ export class Assignment {
   @Prop({ type: String, ref: "User", required: true, index: true })
   userId: string;
 
-  @Prop({ type: String, ref: "Project", required: true, index: true })
-  projectId: string;
+  // Optional: a person can be booked for a day before the project is known.
+  @Prop({ type: String, ref: "Project", default: null, index: true })
+  projectId: string | null;
 
   @Prop({ type: Date, required: true, index: true })
   date: Date;

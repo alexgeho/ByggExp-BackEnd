@@ -90,12 +90,14 @@ export class AssignmentsService {
   async create(dto: CreateAssignmentDto, actor: AuthUser): Promise<Assignment> {
     const companyId = this.requireCompany(actor);
     await this.assertUserInCompany(dto.userId, companyId);
-    await this.assertProjectInCompany(dto.projectId, companyId);
+    if (dto.projectId) {
+      await this.assertProjectInCompany(dto.projectId, companyId);
+    }
 
     return new this.assignmentModel({
       companyId,
       userId: dto.userId,
-      projectId: dto.projectId,
+      projectId: dto.projectId || null,
       date: new Date(dto.date),
       hours: dto.hours ?? 8,
       note: dto.note ?? "",
