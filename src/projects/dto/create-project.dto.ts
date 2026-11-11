@@ -11,6 +11,32 @@ import {
 import { Transform, Expose, Type } from "class-transformer";
 import { ShiftScheduleDto } from "./shift-schedule.dto";
 
+export class ProjectOrderRowDto {
+  @IsOptional()
+  @IsString()
+  articleId?: string;
+
+  @IsOptional()
+  @IsString()
+  articleNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  unit?: string;
+
+  @IsOptional()
+  @IsNumber()
+  quantity?: number;
+
+  @IsOptional()
+  @IsNumber()
+  price?: number;
+}
+
 const parseArrayField = (value: unknown) => {
   if (value === undefined || value === null || value === "") {
     return undefined;
@@ -203,4 +229,10 @@ export class CreateProjectDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProjectOrderRowDto)
+  orderRows?: ProjectOrderRowDto[];
 }

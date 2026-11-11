@@ -139,6 +139,31 @@ export class Project {
 
   @Prop()
   description: string;
+
+  // Article rows on a service order (calendar quick-create): what is to be
+  // fitted/used, picked from Artiklar. Feeds the invoice later.
+  @Prop({
+    type: [
+      {
+        _id: false,
+        articleId: { type: String, default: null },
+        articleNumber: { type: String, default: "" },
+        name: { type: String, default: "" },
+        unit: { type: String, default: "st" },
+        quantity: { type: Number, default: 1 },
+        price: { type: Number, default: 0 },
+      },
+    ],
+    default: [],
+  })
+  orderRows: Array<{
+    articleId: string | null;
+    articleNumber: string;
+    name: string;
+    unit: string;
+    quantity: number;
+    price: number;
+  }>;
 }
 
 export const ProjectSchema = SchemaFactory.createForClass(Project);
