@@ -829,18 +829,10 @@ export class MailerFunnelService {
     await this.syncInbox().catch((err) =>
       this.logger.warn(`Inbox sync failed: ${err}`),
     );
-    // Monday 07:00 run can be missed (restart/deploy at that minute) —
-    // catch up when the conclusions are older than a week.
-    const c = await this.cfg();
-    const weekAgo = Date.now() - 7 * 24 * 3600_000;
-    const { brands } = await this.pick({});
-    const stale = (at?: Date | null) => !at || +new Date(at) < weekAgo;
-    if (
-      claudeEnabled() &&
-      (stale(c.insightsAt) ||
-        brands.some((b) => stale(c.brandInsights?.[b]?.at)))
-    )
-      await this.allInsights();
+    // Conclusions are NOT generated here: an hourly "catch up when stale"
+    // check re-ran the AI for every brand each hour whenever one brand's
+    // conclusions could not be saved (~600k tokens a day, Nov 2026). They are
+    // generated only when the owner presses "Update" in the admin funnel.
   }
 
   // Leads whose latest real mail is a clear no (or set lost by hand).
@@ -1384,20 +1376,8 @@ Return only JSON: {"subject":"Re: ...","body":"..."}`;
 
   // ---------- weekly conclusions ----------
 
-  @Cron("0 7 * * 1", { timeZone: "Europe/Stockholm" })
-  async weeklyInsights() {
-    if (cronsDisabled()) return;
-    await this.allInsights();
-  }
-
-  // "All" tab + one per brand tab.
-  private async allInsights() {
-    const { brands } = await this.pick({});
-    for (const brand of ["", ...brands])
-      await this.generateInsights(brand).catch((err) =>
-        this.logger.warn(`Insights ${brand || "all"} failed: ${err}`),
-      );
-  }
+  // On demand only (admin funnel → "Update"): POST /mailer/funnel/insights.
+  // No schedule — see the note in cron().
 
   async generateInsights(brand = "") {
     if (!claudeEnabled()) throw new BadRequestException("AI är inte aktiverat");
