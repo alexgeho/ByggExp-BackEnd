@@ -64,6 +64,30 @@ export class CreateOfferDto {
 
   @IsOptional()
   @IsString()
+  contactPerson?: string;
+
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  postalCode?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  orgNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
   date?: string;
 
   @IsOptional()

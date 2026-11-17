@@ -37,10 +37,36 @@ export type OfferPdfItem = {
   vatRate?: number;
 };
 
+// Recipient block: name, then only the customer details that are filled in.
+export function recipientHtml(data: OfferPdfData, orgLabel: string): string {
+  const place = [data.postalCode, data.city]
+    .map((part) => (part || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  const org = (data.orgNumber || "").trim();
+  const lines = [
+    data.contactPerson,
+    data.address,
+    place,
+    org ? `${orgLabel} ${org}` : "",
+    data.phone,
+    data.email,
+  ]
+    .map((line) => text(line))
+    .filter(Boolean);
+  return [text(data.companyName) || "&nbsp;", ...lines].join("<br>\n          ");
+}
+
 export type OfferPdfData = {
   offerNumber?: string;
   companyName?: string;
   email?: string;
+  contactPerson?: string;
+  address?: string;
+  postalCode?: string;
+  city?: string;
+  orgNumber?: string;
+  phone?: string;
   date?: string;
   validUntil?: string;
   subtitle?: string;
@@ -381,8 +407,7 @@ export function buildOfferPdfHtml(
       <div>
         <div class="offer-header__title">Offert</div>
         <div class="offer-header__recipient">
-          ${text(data.companyName) || "&nbsp;"}<br>
-          ${text(data.email) || "&nbsp;"}
+          ${recipientHtml(data, "Org.nr")}
         </div>
       </div>
       <dl class="offer-header__meta">
@@ -452,8 +477,7 @@ function buildNoOfferPdfHtml(data: OfferPdfData, logoDataUrl: string): string {
       <div>
         <div class="offer-header__title">${NB.title}</div>
         <div class="offer-header__recipient">
-          ${text(data.companyName) || "&nbsp;"}<br>
-          ${text(data.email) || "&nbsp;"}
+          ${recipientHtml(data, "Org.nr")}
         </div>
       </div>
       <dl class="offer-header__meta">

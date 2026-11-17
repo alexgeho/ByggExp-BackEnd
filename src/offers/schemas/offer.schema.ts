@@ -65,6 +65,25 @@ export class Offer {
   @Prop({ default: "" })
   email: string;
 
+  // Optional customer details printed on the offer (all free text).
+  @Prop({ default: "" })
+  contactPerson: string;
+
+  @Prop({ default: "" })
+  address: string;
+
+  @Prop({ default: "" })
+  postalCode: string;
+
+  @Prop({ default: "" })
+  city: string;
+
+  @Prop({ default: "" })
+  orgNumber: string;
+
+  @Prop({ default: "" })
+  phone: string;
+
   @Prop({ default: "" })
   date: string;
 

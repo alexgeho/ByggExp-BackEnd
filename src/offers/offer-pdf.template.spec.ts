@@ -43,3 +43,29 @@ describe('offer PDF rich-text rendering', () => {
     expect(html).toContain('>42<');
   });
 });
+
+describe('offer PDF recipient block', () => {
+  it('prints only the customer details that are filled in', () => {
+    const html = buildOfferPdfHtml({
+      ...base,
+      contactPerson: 'Anna Berg',
+      address: 'Storgatan 1',
+      postalCode: '111 22',
+      city: 'Stockholm',
+      orgNumber: '556000-0000',
+      phone: '070-123 45 67',
+    });
+    expect(html).toContain('Kund AB<br>');
+    expect(html).toContain('Anna Berg');
+    expect(html).toContain('Storgatan 1');
+    expect(html).toContain('111 22 Stockholm');
+    expect(html).toContain('Org.nr 556000-0000');
+    expect(html).toContain('070-123 45 67');
+  });
+
+  it('leaves no empty lines when only the name is known', () => {
+    const html = buildOfferPdfHtml(base);
+    expect(html).not.toContain('Org.nr');
+    expect(html).not.toContain('Kund AB<br>');
+  });
+});
