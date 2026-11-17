@@ -477,6 +477,9 @@ export class AuthService {
     this.assertRegisterAllowed(`reset:${normalizedEmail}`);
     const result =
       await this.usersService.issuePasswordResetForEmail(normalizedEmail);
+    this.logger.log(
+      `Password reset requested: ${normalizedEmail} (${result ? "mail sent" : "no such account"})`,
+    );
     if (result) {
       try {
         await this.mailService.sendPasswordResetEmail(
@@ -528,6 +531,7 @@ export class AuthService {
         "This password reset link is invalid or has expired. Please request a new one.",
       );
     }
+    this.logger.log(`Password reset done: new password set (${role})`);
     return { role, lang: resolveMailLang(language ?? undefined) };
   }
 
@@ -655,10 +659,17 @@ export class AuthService {
       }
     }
 
+    // Who signed in and how it went is written to the server log, so a
+    // "I can't get in" from a customer can be answered from it (owner 17.11).
+    // Never the password.
     if (!user) {
+      this.logger.warn(
+        `Login failed: ${normalizedEmail} (${candidates.length ? "wrong password" : "no such account"})`,
+      );
       this.registerLoginFailure(normalizedEmail);
       throw new UnauthorizedException("Invalid credentials");
     }
+    this.logger.log(`Login ok: ${normalizedEmail} (${user.role})`);
 
     this.clearLoginFailures(normalizedEmail);
 
