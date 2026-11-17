@@ -37,7 +37,8 @@ export type OfferPdfItem = {
   vatRate?: number;
 };
 
-// Recipient block: name, then only the customer details that are filled in.
+// Recipient block: name, the customer details that are filled in, then the
+// email line (kept even when empty, as before, so old offers print unchanged).
 export function recipientHtml(data: OfferPdfData, orgLabel: string): string {
   const place = [data.postalCode, data.city]
     .map((part) => (part || "").trim())
@@ -50,11 +51,14 @@ export function recipientHtml(data: OfferPdfData, orgLabel: string): string {
     place,
     org ? `${orgLabel} ${org}` : "",
     data.phone,
-    data.email,
   ]
     .map((line) => text(line))
     .filter(Boolean);
-  return [text(data.companyName) || "&nbsp;", ...lines].join("<br>\n          ");
+  return [
+    text(data.companyName) || "&nbsp;",
+    ...lines,
+    text(data.email) || "&nbsp;",
+  ].join("<br>\n          ");
 }
 
 export type OfferPdfData = {

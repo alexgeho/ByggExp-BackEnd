@@ -63,9 +63,9 @@ describe('offer PDF recipient block', () => {
     expect(html).toContain('070-123 45 67');
   });
 
-  it('leaves no empty lines when only the name is known', () => {
+  it('adds nothing when only the name is known', () => {
     const html = buildOfferPdfHtml(base);
     expect(html).not.toContain('Org.nr');
-    expect(html).not.toContain('Kund AB<br>');
+    expect(html).toMatch(/Kund AB<br>\s*&nbsp;/);
   });
 });
