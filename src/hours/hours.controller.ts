@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Post,
   Put,
   Query,
   Request,
@@ -15,6 +16,7 @@ import { UserRole } from "../users/schemas/user.schema";
 import { HoursService } from "./hours.service";
 import { HoursQueryDto } from "./dto/hours-query.dto";
 import { SaveAdjustmentDto } from "./dto/save-adjustment.dto";
+import { DemoSeedDto } from "./dto/demo-seed.dto";
 
 @Controller("hours")
 @UseGuards(AuthGuard("jwt"), RolesGuard)
@@ -66,5 +68,13 @@ export class HoursController {
       to,
       workerId,
     });
+  }
+
+  // TEMPORARY — fills one project of the demo company with shifts (GPS +
+  // manual hours) for the feature videos. Remove after recording.
+  @Post("demo-seed")
+  @Roles(UserRole.CompanyAdmin)
+  demoSeed(@Request() req, @Body() dto: DemoSeedDto) {
+    return this.hoursService.demoSeed(req.user, dto);
   }
 }

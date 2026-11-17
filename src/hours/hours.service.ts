@@ -25,6 +25,8 @@ import {
 } from "../leave/schemas/leave-request.schema";
 import { HoursQueryDto } from "./dto/hours-query.dto";
 import { SaveAdjustmentDto } from "./dto/save-adjustment.dto";
+import { DemoSeedDto } from "./dto/demo-seed.dto";
+import { combinePlannedDay, PlannedPart } from "./planned-day.util";
 
 type AuthenticatedUser = {
   userId: string;
@@ -33,6 +35,8 @@ type AuthenticatedUser = {
 };
 
 const MS_PER_HOUR = 1000 * 60 * 60;
+// TEMPORARY — the only company demoSeed may write to (the video demo account).
+const DEMO_COMPANY_ID = "6a6621b011e14c117d0f9275";
 const round = (value: number) => Math.round(value * 100) / 100;
 
 @Injectable()
@@ -432,9 +436,10 @@ export class HoursService {
 
       for (const [date, day] of days) {
         const projectList = [...day.projects];
-        let plannedSum = 0;
-        let origSum = 0;
-        let hasPlan = false;
+        // One person, one day: see combinePlannedDay for how several orders
+        // add up (they do not — the schedule default counts once).
+        const adjustedParts: PlannedPart[] = [];
+        const baselines: number[] = [];
         let edited = false;
 
         for (const pid of projectList) {
@@ -447,15 +452,18 @@ export class HoursService {
           const adj = adjMap.get(`${pid}|${workerId}|${date}`);
           if (adj) {
             edited = true;
-            plannedSum += adj.plannedHours;
-            origSum += adj.originalPlannedHours;
-            hasPlan = true;
+            adjustedParts.push({
+              planned: adj.plannedHours,
+              orig: adj.originalPlannedHours,
+            });
           } else if (basePlanned != null) {
-            plannedSum += basePlanned;
-            origSum += basePlanned;
-            hasPlan = true;
+            baselines.push(basePlanned);
           }
         }
+        const plan = combinePlannedDay(adjustedParts, baselines);
+        const hasPlan = plan != null;
+        const plannedSum = plan?.planned ?? 0;
+        const origSum = plan?.orig ?? 0;
 
         if (day.absent) {
           // Approved Frånvaro — the worker is away: no planned/GPS/manual, so the
@@ -653,5 +661,82 @@ export class HoursService {
 
     const res = await this.adjustmentModel.deleteMany(filter).exec();
     return { deleted: res.deletedCount || 0 };
+  }
+
+  // TEMPORARY — demo data for the feature videos; remove after recording.
+  // Replaces every shift of one project of the demo company inside [from, to]
+  // with the given days: GPS hours as tracked segments around a lunch break,
+  // manual hours as the worker's own entry.
+  async demoSeed(user: AuthenticatedUser, dto: DemoSeedDto) {
+    if (String(user.companyId || "") !== DEMO_COMPANY_ID) {
+      throw new ForbiddenException("Demo data is not available here.");
+    }
+    const project = await this.projectModel
+      .findOne({ _id: dto.projectId, companyId: DEMO_COMPANY_ID })
+      .exec();
+    if (!project) {
+      throw new NotFoundException("Project not found");
+    }
+    if (dto.from > dto.to) {
+      throw new BadRequestException("from must not be after to");
+    }
+
+    const workerIds = [...new Set(dto.entries.map((e) => e.workerId))];
+    const known = await this.userModel
+      .find({ _id: { $in: workerIds }, companyId: DEMO_COMPANY_ID })
+      .select("_id")
+      .lean()
+      .exec();
+    if (known.length !== workerIds.length) {
+      throw new BadRequestException("Unknown worker in entries");
+    }
+    if (dto.entries.some((e) => e.date < dto.from || e.date > dto.to)) {
+      throw new BadRequestException("Entry outside the from–to range");
+    }
+
+    const lunchMs = MS_PER_HOUR;
+    const docs = dto.entries.map((entry) => {
+      const startedAt = new Date(entry.startedAt);
+      const durationMs = Math.round(entry.gpsHours * MS_PER_HOUR);
+      const firstMs = Math.min(durationMs, 4 * MS_PER_HOUR);
+      const restMs = durationMs - firstMs;
+      const firstEnd = new Date(startedAt.getTime() + firstMs);
+      const segments = [{ startedAt, endedAt: firstEnd, durationMs: firstMs }];
+      let endedAt = firstEnd;
+      if (restMs > 0) {
+        const secondStart = new Date(firstEnd.getTime() + lunchMs);
+        endedAt = new Date(secondStart.getTime() + restMs);
+        segments.push({ startedAt: secondStart, endedAt, durationMs: restMs });
+      }
+      const manual = entry.manualHours;
+      return {
+        workerId: entry.workerId,
+        projectId: dto.projectId,
+        projectNameSnapshot: project.name,
+        locationSnapshot: project.location || "",
+        shiftDate: entry.date,
+        startedAt,
+        endedAt,
+        status: ShiftStatus.Completed,
+        segments: durationMs > 0 ? segments : [],
+        durationMs,
+        manualDurationMs:
+          manual == null ? null : Math.round(manual * MS_PER_HOUR),
+        reportedAt: manual == null ? null : endedAt,
+        completionReason: durationMs > 0 ? "shift_completed" : "manual",
+        completionSource: "worker",
+        photos: [],
+      };
+    });
+
+    const removed = await this.shiftModel
+      .deleteMany({
+        projectId: dto.projectId,
+        shiftDate: { $gte: dto.from, $lte: dto.to },
+        status: { $ne: ShiftStatus.Active },
+      })
+      .exec();
+    const created = await this.shiftModel.insertMany(docs);
+    return { removed: removed.deletedCount || 0, created: created.length };
   }
 }
