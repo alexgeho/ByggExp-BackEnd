@@ -63,6 +63,10 @@ export class CreateOfferDto {
   email?: string;
 
   @IsOptional()
+  @IsIn(["company", "private"])
+  clientType?: string;
+
+  @IsOptional()
   @IsString()
   contactPerson?: string;
 

@@ -39,17 +39,22 @@ export type OfferPdfItem = {
 
 // Recipient block: name, the customer details that are filled in, then the
 // email line (kept even when empty, as before, so old offers print unchanged).
-export function recipientHtml(data: OfferPdfData, orgLabel: string): string {
+export function recipientHtml(
+  data: OfferPdfData,
+  orgLabel: string,
+  personLabel: string,
+): string {
+  const isPrivate = data.clientType === "private";
   const place = [data.postalCode, data.city]
     .map((part) => (part || "").trim())
     .filter(Boolean)
     .join(" ");
   const org = (data.orgNumber || "").trim();
   const lines = [
-    data.contactPerson,
+    isPrivate ? "" : data.contactPerson,
     data.address,
     place,
-    org ? `${orgLabel} ${org}` : "",
+    org ? `${isPrivate ? personLabel : orgLabel} ${org}` : "",
     data.phone,
   ]
     .map((line) => text(line))
@@ -65,6 +70,7 @@ export type OfferPdfData = {
   offerNumber?: string;
   companyName?: string;
   email?: string;
+  clientType?: string;
   contactPerson?: string;
   address?: string;
   postalCode?: string;
@@ -411,7 +417,7 @@ export function buildOfferPdfHtml(
       <div>
         <div class="offer-header__title">Offert</div>
         <div class="offer-header__recipient">
-          ${recipientHtml(data, "Org.nr")}
+          ${recipientHtml(data, "Org.nr", "Personnr")}
         </div>
       </div>
       <dl class="offer-header__meta">
@@ -481,7 +487,7 @@ function buildNoOfferPdfHtml(data: OfferPdfData, logoDataUrl: string): string {
       <div>
         <div class="offer-header__title">${NB.title}</div>
         <div class="offer-header__recipient">
-          ${recipientHtml(data, "Org.nr")}
+          ${recipientHtml(data, "Org.nr", "Fødselsnr")}
         </div>
       </div>
       <dl class="offer-header__meta">

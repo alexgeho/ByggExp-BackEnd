@@ -65,6 +65,11 @@ export class Offer {
   @Prop({ default: "" })
   email: string;
 
+  // "company" or "private" — decides which customer fields the offer shows
+  // (org no. + contact person vs. personal number).
+  @Prop({ default: "company" })
+  clientType: string;
+
   // Optional customer details printed on the offer (all free text).
   @Prop({ default: "" })
   contactPerson: string;

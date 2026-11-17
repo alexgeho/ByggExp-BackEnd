@@ -129,6 +129,7 @@ export class OffersService {
       offerNumber: String(offer.offerNumber),
       companyName: offer.companyName,
       email: offer.email,
+      clientType: offer.clientType,
       contactPerson: offer.contactPerson,
       address: offer.address,
       postalCode: offer.postalCode,

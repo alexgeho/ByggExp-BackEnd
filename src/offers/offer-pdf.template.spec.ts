@@ -63,6 +63,18 @@ describe('offer PDF recipient block', () => {
     expect(html).toContain('070-123 45 67');
   });
 
+  it('prints a personal number, not an org number, for a private customer', () => {
+    const html = buildOfferPdfHtml({
+      ...base,
+      clientType: 'private',
+      orgNumber: '850101-1234',
+      contactPerson: 'Should not print',
+    });
+    expect(html).toContain('Personnr 850101-1234');
+    expect(html).not.toContain('Org.nr');
+    expect(html).not.toContain('Should not print');
+  });
+
   it('adds nothing when only the name is known', () => {
     const html = buildOfferPdfHtml(base);
     expect(html).not.toContain('Org.nr');
