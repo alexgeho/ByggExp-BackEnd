@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 import { Observable, throwError } from "rxjs";
 import { catchError, tap } from "rxjs/operators";
-import { AuditService } from "./audit.service";
+import { AuditService, clientOf } from "./audit.service";
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const SECTION_PREFIXES = new Set(["admin", "company", "worker"]);
@@ -56,6 +56,7 @@ export class AuditInterceptor implements NestInterceptor {
       path: (req.originalUrl || req.url || "").split("?")[0],
       entityType,
       entityId,
+      client: clientOf(req.headers),
     };
 
     return next.handle().pipe(
@@ -71,7 +72,20 @@ export class AuditInterceptor implements NestInterceptor {
           typeof err?.getStatus === "function"
             ? err.getStatus()
             : err?.status || 500;
-        this.audit.record({ ...base, statusCode, success: statusCode < 400 });
+        // The error text is what the person saw on screen.
+        const response =
+          typeof err?.getResponse === "function" ? err.getResponse() : null;
+        const raw = response?.message ?? err?.message ?? "";
+        const message = String(Array.isArray(raw) ? raw.join(", ") : raw).slice(
+          0,
+          300,
+        );
+        this.audit.record({
+          ...base,
+          statusCode,
+          success: statusCode < 400,
+          message,
+        });
         return throwError(() => err);
       }),
     );

@@ -7,7 +7,9 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
+  Optional,
 } from "@nestjs/common";
+import { AuditService } from "../audit/audit.service";
 import { JwtService } from "@nestjs/jwt";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
@@ -58,6 +60,7 @@ export class AuthService {
     private campaignModel: Model<CampaignDocument>,
     @InjectModel(CampaignRecipient.name)
     private recipientModel: Model<CampaignRecipientDocument>,
+    @Optional() private readonly audit?: AuditService,
   ) {}
 
   // Simple in-memory rate limit for sign-up requests, keyed by email. Blunts a
@@ -480,6 +483,13 @@ export class AuthService {
     this.logger.log(
       `Password reset requested: ${normalizedEmail} (${result ? "mail sent" : "no such account"})`,
     );
+    this.audit?.event({
+      event: "password_reset_requested",
+      companyId: result?.user?.companyId ? String(result.user.companyId) : null,
+      userEmail: normalizedEmail,
+      success: Boolean(result),
+      message: result ? "" : "No such account",
+    });
     if (result) {
       try {
         await this.mailService.sendPasswordResetEmail(
@@ -666,10 +676,26 @@ export class AuthService {
       this.logger.warn(
         `Login failed: ${normalizedEmail} (${candidates.length ? "wrong password" : "no such account"})`,
       );
+      this.audit?.event({
+        event: "login",
+        companyId: candidates[0]?.companyId
+          ? String(candidates[0].companyId)
+          : null,
+        userEmail: normalizedEmail,
+        success: false,
+        message: candidates.length ? "Wrong password" : "No such account",
+      });
       this.registerLoginFailure(normalizedEmail);
       throw new UnauthorizedException("Invalid credentials");
     }
     this.logger.log(`Login ok: ${normalizedEmail} (${user.role})`);
+    this.audit?.event({
+      event: "login",
+      companyId: user.companyId ? String(user.companyId) : null,
+      userId: user._id.toString(),
+      userEmail: normalizedEmail,
+      userRole: user.role,
+    });
 
     this.clearLoginFailures(normalizedEmail);
 

@@ -8,7 +8,9 @@ import {
   OnApplicationBootstrap,
   NotFoundException,
   ServiceUnavailableException,
+  Optional,
 } from "@nestjs/common";
+import { AuditService } from "../audit/audit.service";
 import { InjectModel, InjectConnection } from "@nestjs/mongoose";
 import { Model, Connection } from "mongoose";
 import { randomBytes } from "crypto";
@@ -56,6 +58,7 @@ export class CompanyService implements OnApplicationBootstrap {
     @InjectConnection() private readonly connection: Connection,
     private usersService: UsersService,
     private mailService: MailService,
+    @Optional() private readonly audit?: AuditService,
   ) {}
 
   async onApplicationBootstrap() {
@@ -158,6 +161,14 @@ export class CompanyService implements OnApplicationBootstrap {
       );
     }
 
+    this.audit?.event({
+      event: "invite_sent",
+      companyId: company._id.toString(),
+      userEmail: email,
+      success: invited,
+      message: invited ? "" : "The invitation e-mail did not go out",
+    });
+
     return { company: company.toObject(), invited };
   }
 
@@ -207,6 +218,13 @@ export class CompanyService implements OnApplicationBootstrap {
       );
     }
 
+    this.audit?.event({
+      event: "invite_sent",
+      companyId: company._id.toString(),
+      userEmail: invite.email,
+      message: "Sent again",
+    });
+
     return { ok: true, email: invite.email };
   }
 
@@ -219,6 +237,13 @@ export class CompanyService implements OnApplicationBootstrap {
       throw new ConflictException("Invitation already accepted");
     }
     if (invite.expiresAt.getTime() < Date.now()) {
+      this.audit?.event({
+        event: "invite_opened",
+        companyId: invite.companyId,
+        userEmail: invite.email,
+        success: false,
+        message: "Invitation has expired",
+      });
       throw new GoneException("Invitation has expired");
     }
     return invite;
@@ -232,6 +257,12 @@ export class CompanyService implements OnApplicationBootstrap {
       .findOne({ token, acceptedAt: { $ne: null } })
       .exec();
     if (used) {
+      this.audit?.event({
+        event: "invite_opened",
+        companyId: used.companyId,
+        userEmail: used.email,
+        message: "The link was already used — sent on to sign in",
+      });
       return {
         accepted: true,
         email: used.email,
@@ -239,6 +270,11 @@ export class CompanyService implements OnApplicationBootstrap {
       };
     }
     const invite = await this.findLiveInvite(token);
+    this.audit?.event({
+      event: "invite_opened",
+      companyId: invite.companyId,
+      userEmail: invite.email,
+    });
     const company = await this.companyModel.findById(invite.companyId).exec();
     return {
       email: invite.email,
@@ -259,6 +295,13 @@ export class CompanyService implements OnApplicationBootstrap {
 
     const existingUser = await this.usersService.findByEmail(invite.email);
     if (existingUser) {
+      this.audit?.event({
+        event: "invite_accepted",
+        companyId: invite.companyId,
+        userEmail: invite.email,
+        success: false,
+        message: "A user with this email already exists",
+      });
       throw new ConflictException("A user with this email already exists");
     }
 
@@ -281,6 +324,13 @@ export class CompanyService implements OnApplicationBootstrap {
 
     invite.acceptedAt = new Date();
     await invite.save();
+    this.audit?.event({
+      event: "invite_accepted",
+      companyId: invite.companyId,
+      userId: user._id.toString(),
+      userEmail: invite.email,
+      userRole: UserRole.CompanyAdmin,
+    });
 
     // The invite link is spent now — mail the permanent way in. A failed send
     // must not undo an account that already exists.

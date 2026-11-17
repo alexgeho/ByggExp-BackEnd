@@ -6,7 +6,10 @@ export type AuditLogDocument = HydratedDocument<AuditLog>;
 // One row per mutating request: who did what, to which resource, and whether it
 // succeeded. Written automatically by AuditInterceptor. Metadata only — no
 // request bodies are stored, so no passwords / personnummer end up here.
-@Schema({ timestamps: { createdAt: true, updatedAt: false }, collection: "audit_logs" })
+@Schema({
+  timestamps: { createdAt: true, updatedAt: false },
+  collection: "audit_logs",
+})
 export class AuditLog {
   @Prop({ type: String, default: null, index: true })
   companyId?: string | null;
@@ -39,7 +42,23 @@ export class AuditLog {
 
   @Prop({ type: Boolean, default: true })
   success: boolean;
+
+  // A named step that is not a plain "changed a record": invite_sent,
+  // invite_opened, invite_accepted, login, password_reset_requested,
+  // password_reset_done. Empty for ordinary mutating requests.
+  @Prop({ type: String, default: "", index: true })
+  event: string;
+
+  // What the person was told when it failed (the error text), or a short note.
+  // Never request data.
+  @Prop({ default: "" })
+  message: string;
+
+  // Where it came from: "admin" (web) | "app" (mobile) | "".
+  @Prop({ default: "" })
+  client: string;
 }
 
 export const AuditLogSchema = SchemaFactory.createForClass(AuditLog);
 AuditLogSchema.index({ companyId: 1, createdAt: -1 });
+AuditLogSchema.index({ userEmail: 1, createdAt: -1 });
