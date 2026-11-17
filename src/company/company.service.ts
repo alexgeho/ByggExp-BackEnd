@@ -422,8 +422,45 @@ export class CompanyService implements OnApplicationBootstrap {
     });
   }
 
+  // Superadmin list. Every company carries its admin invitation: when the mail
+  // last went out and when it was accepted (null = still waiting).
   async findAll(): Promise<Company[]> {
-    return this.companyModel.find().exec();
+    const [companies, invites] = await Promise.all([
+      this.companyModel.find().lean().exec(),
+      this.inviteModel
+        .find()
+        .select("companyId acceptedAt createdAt updatedAt")
+        .sort({ createdAt: 1 })
+        .lean<
+          {
+            companyId: string;
+            acceptedAt?: Date | null;
+            createdAt?: Date;
+            updatedAt?: Date;
+          }[]
+        >()
+        .exec(),
+    ]);
+    // The latest invitation of each company wins (sorted oldest first).
+    const byCompany = new Map(
+      invites.map((invite) => [String(invite.companyId), invite]),
+    );
+    return companies.map((company) => {
+      const invite = byCompany.get(String(company._id));
+      return {
+        ...company,
+        invite: invite
+          ? {
+              // A resend rewrites the token, so `updatedAt` is the last send —
+              // unless the invitation was accepted (that is an update too).
+              sentAt: invite.acceptedAt
+                ? invite.createdAt
+                : invite.updatedAt || invite.createdAt,
+              acceptedAt: invite.acceptedAt || null,
+            }
+          : null,
+      };
+    }) as unknown as Company[];
   }
 
   // Superadmin: how much uploaded-file storage each company occupies on disk.
