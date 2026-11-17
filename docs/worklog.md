@@ -1,5 +1,10 @@
 # ByggExp-BackEnd worklog
 
+## 2026-11-17 — invites, audit events, sign-in log (details: byggexp-admin/docs/dev-worklog.md, HANDOFF 17.11 evening)
+- DONE: company invite accepted → `sendAccountReadyEmail` (11 langs, mail failure never undoes the account); a used invite link answers `{accepted, email, language}` instead of 409; `GET /company` carries `invite {sentAt, acceptedAt}`; audit log got `event` / `message` / `client` + `AuditService.event()` (global module) for invite_sent / invite_opened / invite_accepted / login / password_reset_requested; superadmin may query `?companyId=`, `?scope=all`, `?email=`, `?failed=1`; server log lines `Login ok|failed: <email> (reason)`, `Password reset requested|done`.
+- NOT VERIFIED LIVE: the account-ready mail; the new audit events (first real sign-in / invite will show them).
+- NEXT (owner's call): retention for audit_logs; reject `POST /assignments` without `projectId`; log opened screens.
+
 ## 2026-11-03 — mailer: site inboxes + lead sheet export
 - DONE: hourly IMAP sync for inbox:* brands; own-domain form mails parsed (formLead); Google Sheets export (mailer-sheets.ts, SA GA_SA_KEY_B64): newest on top, sheetDone keeps owner-deleted rows out, lostKeys → refusal rows deleted, dates "d Mon yyyy". Commits ec1f868, 3665502.
 - NEXT: verify offert@armeringproffs.se forwarder end-to-end; watch sheetError in admin.
