@@ -64,9 +64,12 @@ export class CompanyService implements OnApplicationBootstrap {
         { email: EGENKONTROLL_DEMO_EMAIL, plan: { $ne: "egenkontroll" } },
         { $set: { plan: "egenkontroll", maxUsers: 1, moduleOverrides: {} } },
       );
-      if (res.modifiedCount) this.logger.log("Demo company moved to the egenkontroll plan");
+      if (res.modifiedCount)
+        this.logger.log("Demo company moved to the egenkontroll plan");
     } catch (error) {
-      this.logger.warn(`Egenkontroll demo plan update skipped: ${String(error)}`);
+      this.logger.warn(
+        `Egenkontroll demo plan update skipped: ${String(error)}`,
+      );
     }
   }
 
@@ -150,7 +153,9 @@ export class CompanyService implements OnApplicationBootstrap {
         );
       }
     } else {
-      this.logger.warn(`SMTP not configured — company invite to ${email} not sent`);
+      this.logger.warn(
+        `SMTP not configured — company invite to ${email} not sent`,
+      );
     }
 
     return { company: company.toObject(), invited };
@@ -159,7 +164,9 @@ export class CompanyService implements OnApplicationBootstrap {
   // Superadmin: re-send the pending admin invite of a company with a fresh
   // token and expiry (the old link may have expired or never arrived). Throws a
   // readable error when the mail cannot go out, instead of pretending it did.
-  async resendCompanyInvite(companyId: string): Promise<{ ok: true; email: string }> {
+  async resendCompanyInvite(
+    companyId: string,
+  ): Promise<{ ok: true; email: string }> {
     const company = await this.companyModel.findById(companyId).exec();
     if (!company) {
       throw new NotFoundException("Company not found");
@@ -218,7 +225,19 @@ export class CompanyService implements OnApplicationBootstrap {
   }
 
   // Public: details for the acceptance page.
+  // A link that was already used answers with `accepted` (and the login) instead
+  // of an error, so the page can send the person on to sign in.
   async getInvite(token: string) {
+    const used = await this.inviteModel
+      .findOne({ token, acceptedAt: { $ne: null } })
+      .exec();
+    if (used) {
+      return {
+        accepted: true,
+        email: used.email,
+        language: used.language || "sv",
+      };
+    }
     const invite = await this.findLiveInvite(token);
     const company = await this.companyModel.findById(invite.companyId).exec();
     return {
@@ -262,6 +281,23 @@ export class CompanyService implements OnApplicationBootstrap {
 
     invite.acceptedAt = new Date();
     await invite.save();
+
+    // The invite link is spent now — mail the permanent way in. A failed send
+    // must not undo an account that already exists.
+    try {
+      const company = await this.companyModel.findById(invite.companyId).exec();
+      await this.mailService.sendAccountReadyEmail({
+        email: invite.email,
+        name: dto.name?.trim() || invite.name || "",
+        companyName: company?.name || "",
+        lang: invite.language || "sv",
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to send account-ready email to ${invite.email}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
 
     return { email: invite.email };
   }
@@ -327,9 +363,7 @@ export class CompanyService implements OnApplicationBootstrap {
     companyId: string,
     opts: { days: number; maxUsers: number; plan?: string | null },
   ): Promise<void> {
-    const trialEndsAt = new Date(
-      Date.now() + opts.days * 24 * 60 * 60 * 1000,
-    );
+    const trialEndsAt = new Date(Date.now() + opts.days * 24 * 60 * 60 * 1000);
     await this.companyModel.findByIdAndUpdate(companyId, {
       subscriptionStatus: "trialing",
       trialEndsAt,
@@ -393,7 +427,9 @@ export class CompanyService implements OnApplicationBootstrap {
   // Superadmin: manually assign a plan tier (or clear it), returning the
   // resolved modules so the caller can refresh in one round-trip.
   async setLabel(id: string, label: string | null) {
-    const value = ["own", "test", "customer"].includes(label || "") ? label : null;
+    const value = ["own", "test", "customer"].includes(label || "")
+      ? label
+      : null;
     const company = await this.companyModel
       .findByIdAndUpdate(id, { label: value }, { new: true })
       .exec();
@@ -451,7 +487,10 @@ export class CompanyService implements OnApplicationBootstrap {
     if (!company) {
       throw new NotFoundException(`Company with ID "${id}" not found`);
     }
-    return (company.onboarding ?? { focus: null, view: "open" }) as OnboardingState;
+    return (company.onboarding ?? {
+      focus: null,
+      view: "open",
+    }) as OnboardingState;
   }
 
   // Resolve the effective module set (plan preset + overrides) for a company.
@@ -491,7 +530,8 @@ export class CompanyService implements OnApplicationBootstrap {
       const merged: Record<string, boolean> = { ...existing };
       for (const key of TOGGLEABLE_MODULES) {
         if (!planSet.has(key)) continue; // out-of-plan: untouchable, keep as-is
-        if (clean[key] === false) merged[key] = false; // hide
+        if (clean[key] === false)
+          merged[key] = false; // hide
         else delete merged[key]; // show (= plan default, no override)
       }
       clean = sanitizeOverrides(merged);

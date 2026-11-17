@@ -10,6 +10,7 @@ import {
   GREETING_FALLBACK,
   COMPANY_FALLBACK,
   companyInviteCopy,
+  accountReadyCopy,
   inviteCopy,
   resetCopy,
   loginCodeCopy,
@@ -347,6 +348,62 @@ export class MailService {
       subject,
       text,
       html,
+    });
+  }
+
+  // Sent when a company invite is accepted. The invite link works once, so this
+  // is the mail to keep: the permanent sign-in page, the login, the apps.
+  async sendAccountReadyEmail(opts: {
+    email: string;
+    name: string;
+    companyName: string;
+    lang?: string;
+  }): Promise<void> {
+    const l = this.resolveMailLang(opts.lang);
+    const copy = accountReadyCopy[l];
+    const loginUrl = `${this.getWebAppUrl()}/login`;
+    const appStore = "https://apps.apple.com/app/id6748280779";
+    const playStore =
+      "https://play.google.com/store/apps/details?id=se.byggexp.app";
+    const plainCompany = opts.companyName || COMPANY_FALLBACK[l];
+    const greeting = [copy.hello, opts.name].filter(Boolean).join(" ");
+    const text = [
+      `${greeting},`,
+      "",
+      copy.ready(plainCompany),
+      copy.how,
+      "",
+      `${copy.login}: ${opts.email}`,
+      `${copy.button}: ${loginUrl}`,
+      "",
+      `${copy.apps}:`,
+      `iPhone: ${appStore}`,
+      `Android: ${playStore}`,
+      "",
+      copy.keep,
+    ].join("\n");
+    const html = this.brandedHtml(`
+      <p style="margin:0 0 12px;">${this.escapeHtml(greeting)},</p>
+      <p style="margin:0 0 12px;">${copy.ready(`<strong>${this.escapeHtml(plainCompany)}</strong>`)}</p>
+      <p style="margin:0 0 12px;">${copy.how}</p>
+      <p style="margin:0 0 20px;">${copy.login}: <strong>${this.escapeHtml(opts.email)}</strong></p>
+      <p style="margin:0 0 20px;"><a href="${loginUrl}" style="display:inline-block;text-align:center;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">${copy.button}</a></p>
+      <p style="margin:0 0 12px;">${copy.apps}: <a href="${appStore}">iPhone</a> · <a href="${playStore}">Android</a></p>
+      <p class="bx-muted" style="margin:0;color:#6b8199;font-size:13px;">${copy.keep}</p>
+    `);
+
+    if (!this.transporter) {
+      this.logger.log(`Account ready for ${opts.email}: ${loginUrl}`);
+      return;
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to: opts.email,
+      subject: copy.subject,
+      text,
+      html,
+      attachments: this.brandedAttachments(),
     });
   }
 

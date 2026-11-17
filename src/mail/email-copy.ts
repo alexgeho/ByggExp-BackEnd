@@ -1046,3 +1046,140 @@ export const loginCodeCopy: Record<
       "Ističe za 15 minuta. Ako niste vi to zatražili, ignorišite ovaj e-mail.",
   }),
 };
+
+// Sent when a company invite is accepted: the invite link is single-use, so
+// this is the mail the admin keeps — the permanent sign-in address, their
+// login (never the password) and the mobile app.
+export type AccountReadyCopy = {
+  subject: string;
+  hello: string;
+  ready: (company: string) => string;
+  how: string;
+  login: string;
+  button: string;
+  apps: string;
+  keep: string;
+};
+
+export const accountReadyCopy: Record<MailLang, AccountReadyCopy> = {
+  sv: {
+    subject: "Ditt ByggExp-konto är klart",
+    hello: "Hej",
+    ready: (company) =>
+      `Kontot för ${company} är skapat och klart att använda.`,
+    how: "Logga in i webbadmin och i mobilappen med din e-post och lösenordet du valde.",
+    login: "Din inloggning",
+    button: "Logga in i webbadmin",
+    apps: "Mobilappen",
+    keep: "Spara det här mejlet – länken i inbjudan fungerar bara en gång. Har du glömt lösenordet väljer du ett nytt på inloggningssidan.",
+  },
+  en: {
+    subject: "Your ByggExp account is ready",
+    hello: "Hi",
+    ready: (company) =>
+      `The account for ${company} has been created and is ready to use.`,
+    how: "Sign in to the web admin and the mobile app with your email and the password you chose.",
+    login: "Your sign-in",
+    button: "Sign in to the web admin",
+    apps: "Mobile app",
+    keep: "Keep this email – the link in the invitation only works once. Forgot your password? Choose a new one on the sign-in page.",
+  },
+  nb: {
+    subject: "ByggExp-kontoen din er klar",
+    hello: "Hei",
+    ready: (company) => `Kontoen for ${company} er opprettet og klar til bruk.`,
+    how: "Logg inn i webadmin og i mobilappen med e-posten din og passordet du valgte.",
+    login: "Din innlogging",
+    button: "Logg inn i webadmin",
+    apps: "Mobilappen",
+    keep: "Ta vare på denne e-posten – lenken i invitasjonen virker bare én gang. Glemt passordet? Velg et nytt på innloggingssiden.",
+  },
+  pl: {
+    subject: "Twoje konto ByggExp jest gotowe",
+    hello: "Cześć",
+    ready: (company) =>
+      `Konto dla ${company} zostało utworzone i jest gotowe do użycia.`,
+    how: "Zaloguj się do panelu administratora i aplikacji mobilnej, podając swój e-mail i wybrane hasło.",
+    login: "Twój login",
+    button: "Zaloguj się do panelu",
+    apps: "Aplikacja mobilna",
+    keep: "Zachowaj tę wiadomość – link z zaproszenia działa tylko raz. Nie pamiętasz hasła? Ustaw nowe na stronie logowania.",
+  },
+  et: {
+    subject: "Sinu ByggExpi konto on valmis",
+    hello: "Tere",
+    ready: (company) =>
+      `Konto ettevõttele ${company} on loodud ja kasutamiseks valmis.`,
+    how: "Logi veebiadmini ja mobiilirakendusse sisse oma e-posti ja valitud parooliga.",
+    login: "Sinu sisselogimine",
+    button: "Logi veebiadmini sisse",
+    apps: "Mobiilirakendus",
+    keep: "Hoia see kiri alles – kutse link töötab ainult üks kord. Unustasid parooli? Vali uus sisselogimislehel.",
+  },
+  uk: {
+    subject: "Ваш обліковий запис ByggExp готовий",
+    hello: "Вітаємо",
+    ready: (company) =>
+      `Обліковий запис для ${company} створено, ним уже можна користуватися.`,
+    how: "Входьте у вебадмінку та мобільний застосунок зі своєю електронною поштою і паролем, який ви обрали.",
+    login: "Ваш логін",
+    button: "Увійти у вебадмінку",
+    apps: "Мобільний застосунок",
+    keep: "Збережіть цей лист – посилання із запрошення працює лише один раз. Забули пароль? Задайте новий на сторінці входу.",
+  },
+  ru: {
+    subject: "Ваш аккаунт ByggExp готов",
+    hello: "Здравствуйте",
+    ready: (company) =>
+      `Аккаунт для ${company} создан, им уже можно пользоваться.`,
+    how: "Входите в веб-админку и в мобильное приложение со своей почтой и паролем, который вы выбрали.",
+    login: "Ваш логин",
+    button: "Войти в веб-админку",
+    apps: "Мобильное приложение",
+    keep: "Сохраните это письмо – ссылка из приглашения работает только один раз. Забыли пароль? Задайте новый на странице входа.",
+  },
+  fi: {
+    subject: "ByggExp-tilisi on valmis",
+    hello: "Hei",
+    ready: (company) =>
+      `Tili yritykselle ${company} on luotu ja valmis käyttöön.`,
+    how: "Kirjaudu verkkohallintaan ja mobiilisovellukseen sähköpostillasi ja valitsemallasi salasanalla.",
+    login: "Kirjautumistunnuksesi",
+    button: "Kirjaudu verkkohallintaan",
+    apps: "Mobiilisovellus",
+    keep: "Säilytä tämä viesti – kutsun linkki toimii vain kerran. Unohditko salasanan? Valitse uusi kirjautumissivulla.",
+  },
+  lt: {
+    subject: "Jūsų ByggExp paskyra paruošta",
+    hello: "Sveiki",
+    ready: (company) =>
+      `Paskyra įmonei ${company} sukurta ir paruošta naudoti.`,
+    how: "Prisijunkite prie administravimo svetainės ir mobiliosios programėlės savo el. paštu ir pasirinktu slaptažodžiu.",
+    login: "Jūsų prisijungimas",
+    button: "Prisijungti prie administravimo",
+    apps: "Mobilioji programėlė",
+    keep: "Išsaugokite šį laišką – kvietimo nuoroda veikia tik vieną kartą. Pamiršote slaptažodį? Pasirinkite naują prisijungimo puslapyje.",
+  },
+  lv: {
+    subject: "Jūsu ByggExp konts ir gatavs",
+    hello: "Sveiki",
+    ready: (company) =>
+      `Konts uzņēmumam ${company} ir izveidots un gatavs lietošanai.`,
+    how: "Piesakieties tīmekļa administrēšanā un mobilajā lietotnē ar savu e-pastu un izvēlēto paroli.",
+    login: "Jūsu pieteikšanās",
+    button: "Pieteikties administrēšanā",
+    apps: "Mobilā lietotne",
+    keep: "Saglabājiet šo e-pastu – ielūguma saite darbojas tikai vienu reizi. Aizmirsāt paroli? Izvēlieties jaunu pieteikšanās lapā.",
+  },
+  bs: {
+    subject: "Vaš ByggExp nalog je spreman",
+    hello: "Zdravo",
+    ready: (company) =>
+      `Nalog za ${company} je kreiran i spreman za korištenje.`,
+    how: "Prijavite se u web admin i mobilnu aplikaciju svojom e-poštom i lozinkom koju ste odabrali.",
+    login: "Vaša prijava",
+    button: "Prijava u web admin",
+    apps: "Mobilna aplikacija",
+    keep: "Sačuvajte ovu poruku – link iz pozivnice radi samo jednom. Zaboravili ste lozinku? Odaberite novu na stranici za prijavu.",
+  },
+};
