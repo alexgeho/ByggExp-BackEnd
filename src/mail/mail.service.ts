@@ -361,6 +361,8 @@ export class MailService {
   }): Promise<void> {
     const l = this.resolveMailLang(opts.lang);
     const copy = accountReadyCopy[l];
+    // The way in is printed as the full address, not a button, so it can be
+    // copied and kept (owner 18.11).
     const loginUrl = `${this.getWebAppUrl()}/login`;
     const appStore = "https://apps.apple.com/app/id6748280779";
     const playStore =
@@ -387,7 +389,7 @@ export class MailService {
       <p style="margin:0 0 12px;">${copy.ready(`<strong>${this.escapeHtml(plainCompany)}</strong>`)}</p>
       <p style="margin:0 0 12px;">${copy.how}</p>
       <p style="margin:0 0 20px;">${copy.login}: <strong>${this.escapeHtml(opts.email)}</strong></p>
-      <p style="margin:0 0 20px;"><a href="${loginUrl}" style="display:inline-block;text-align:center;background:#3183ff;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:24px;font-weight:600;">${copy.button}</a></p>
+      <p style="margin:0 0 20px;">${copy.button}:<br><a href="${loginUrl}" style="color:#3183ff;font-weight:600;">${loginUrl}</a></p>
       <p style="margin:0 0 12px;">${copy.apps}: <a href="${appStore}">iPhone</a> · <a href="${playStore}">Android</a></p>
       <p class="bx-muted" style="margin:0;color:#6b8199;font-size:13px;">${copy.keep}</p>
     `);
