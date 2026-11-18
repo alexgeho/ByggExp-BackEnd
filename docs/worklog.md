@@ -1,5 +1,12 @@
 # ByggExp-BackEnd worklog
 
+
+## 2026-11-18 — Offer PDF from the invoice document component
+- Owner: "create a component from the invoice and use it for the offer, so fonts, spacing and design stay". The invoice look moved to `src/common/pdf/document-pdf.ts` (CSS, helpers, locales, line rows, line table, totals band, footers); `invoice-pdf.template.ts` keeps only the invoice header and fixed-height pagination. SE invoice output is byte-identical (se-pdf-snapshot: the 4 invoice snapshots untouched).
+- `offer-pdf.template.ts` is rebuilt on the component (SE + NO in one function): invoice header classes, shared line table (flowing, no fixed height), `buildSummaryBand` under the table, invoice footer. Offer wording kept for columns (Beskrivning / Antal / Belopp); amount exact (`roundedTotal = total`), no QR / bank line, no "Sida".
+- `offers.service.ts` footer now carries bankgiro / plusgiro (NO: kontonummer) like the invoice footer.
+- Tests: the 2 offer snapshots re-recorded on purpose; `offer-pdf.template.spec.ts` (Art.nr header markup) and `norway.spec.ts` (Swedish-word check looks at printed text after `</style>`, since the shared stylesheet has Swedish words in comments).
+
 ## 2026-11-17 — invites, audit events, sign-in log (details: byggexp-admin/docs/dev-worklog.md, HANDOFF 17.11 evening)
 - DONE: company invite accepted → `sendAccountReadyEmail` (11 langs, mail failure never undoes the account); a used invite link answers `{accepted, email, language}` instead of 409; `GET /company` carries `invite {sentAt, acceptedAt}`; audit log got `event` / `message` / `client` + `AuditService.event()` (global module) for invite_sent / invite_opened / invite_accepted / login / password_reset_requested; superadmin may query `?companyId=`, `?scope=all`, `?email=`, `?failed=1`; server log lines `Login ok|failed: <email> (reason)`, `Password reset requested|done`.
 - NOT VERIFIED LIVE: the account-ready mail; the new audit events (first real sign-in / invite will show them).
