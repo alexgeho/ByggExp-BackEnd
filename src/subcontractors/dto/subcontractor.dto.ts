@@ -7,10 +7,12 @@ import {
 } from "class-validator";
 
 export class CreateSubcontractorDto {
+  // Optional: only the e-mail is required (owner 18.11) — until the firm's
+  // name is filled in, the contact person or the e-mail stands in for it.
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(160)
-  name: string;
+  name?: string;
 
   @IsOptional()
   @IsString()

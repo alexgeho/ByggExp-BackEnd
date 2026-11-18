@@ -102,7 +102,7 @@ export class SubcontractorsService {
 
     const firm = await new this.subcontractorModel({
       companyId,
-      name: dto.name.trim(),
+      name: dto.name?.trim() || dto.contactPerson?.trim() || email,
       orgNumber: dto.orgNumber?.trim() || "",
       contactPerson: dto.contactPerson?.trim() || "",
       email,
