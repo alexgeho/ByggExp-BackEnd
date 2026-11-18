@@ -39,7 +39,7 @@ describe('offer PDF rich-text rendering', () => {
       ...base,
       items: [{ articleNumber: '42', description: 'Arbete', quantity: 1, unit: 'st', price: 100, vatRate: 25 }],
     });
-    expect(html).toContain('<th>Art.nr</th>');
+    expect(html).toContain('<th class="nowrap">Art.nr</th>');
     expect(html).toContain('>42<');
   });
 });

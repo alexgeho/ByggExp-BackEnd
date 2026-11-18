@@ -1,26 +1,23 @@
+// Offer (offert / tilbud) PDF. Built from the shared document component — the
+// same page, fonts, header classes, line table, totals band and footer as the
+// invoice (owner 2026-11-18). This file adds what only an offer has: the
+// heading, the rich-text sections and the contact persons.
 import sanitizeHtml from "sanitize-html";
 import {
-  formatNoDate,
-  formatNok,
-  formatNokNumber,
-  formatNoOrgNumber,
-  isNorway,
-} from "../../invoices/norway";
+  DOCUMENT_PDF_CSS,
+  InvoiceLocale,
+  InvoicePdfCompanyFooter,
+  buildFooter,
+  buildLinesTableHtml,
+  buildNoFooter,
+  buildSummaryBand,
+  localeFor,
+  multilineText,
+  text,
+} from "../../common/pdf/document-pdf";
 
-export type OfferPdfCompanyFooter = {
-  name?: string;
-  address?: string;
-  city?: string;
-  phone?: string;
-  email?: string;
-  website?: string;
-  orgNumber?: string;
-  vatNumber?: string;
-  vatStatus?: string;
-  // Norway only (see invoice template): «MVA» suffix and «Foretaksregisteret».
-  mvaRegistered?: boolean;
-  foretaksregisteret?: boolean;
-};
+// Same footer data as the invoice (address, contacts, giro, org / VAT no).
+export type OfferPdfCompanyFooter = InvoicePdfCompanyFooter;
 
 export type OfferPdfContactPerson = {
   role?: string;
@@ -93,105 +90,6 @@ export type OfferPdfData = {
   country?: string;
 };
 
-const OFFER_PDF_CSS = `
-@page { size: A4; margin: 0; }
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-body {
-  font-family: Helvetica, Arial, sans-serif;
-  font-size: 15px;
-  line-height: 1.4;
-  color: #1b2a3a;
-  background: white;
-}
-.offer-page {
-  width: 210mm;
-  min-height: 297mm;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  padding: 15mm 15mm 8mm;
-}
-.offer-header {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  align-items: start;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-.offer-header__logo img { max-height: 110px; max-width: 100%; object-fit: contain; display: block; }
-.offer-header__title { font-size: 32px; font-weight: bold; margin-bottom: 8px; }
-.offer-header__recipient { font-size: 13px; }
-.offer-header__meta { display: grid; grid-template-columns: max-content max-content; justify-self: end; column-gap: 10px; row-gap: 2px; font-size: 13px; margin: 0; }
-.offer-header__meta dt { font-weight: normal; }
-.offer-header__meta dd { margin: 0; }
-.offer-body { flex: 1; }
-.offer-subtitle { font-size: 19px; font-weight: bold; margin: 54px 0 24px; }
-.offer-section { margin: 0 0 30px; }
-.offer-section__title { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; margin: 0 0 10px; }
-.offer-section__text { word-break: break-word; }
-.offer-section__text p { margin: 0 0 6px; }
-.offer-section__text ul, .offer-section__text ol { margin: 4px 0 6px; padding-left: 20px; }
-.offer-section__text li { margin: 2px 0; }
-.offer-price {
-  border: 1px solid #1b2a3a;
-  background: antiquewhite;
-  padding: 12px 14px;
-  font-size: 18px;
-  font-weight: bold;
-  margin: 0 0 18px;
-  white-space: pre-wrap;
-}
-.offer-items { width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 13px; border: 1px solid #d5dae1; }
-.offer-items th {
-  text-align: left; border-bottom: 1px solid #d5dae1; padding: 9px 8px 11px;
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b;
-}
-.offer-items td { padding: 12px 8px 0; vertical-align: top; }
-.offer-items tbody tr:last-child td { padding-bottom: 13px; }
-.offer-items .num { text-align: right; white-space: nowrap; }
-.offer-totals { width: 100%; margin: 0 0 18px; }
-.offer-totals table { margin-left: auto; border-collapse: collapse; font-size: 14px; }
-.offer-totals td { padding: 5px 0 5px 24px; text-align: right; }
-.offer-totals .grand td { border-top: 1px solid #d5dae1; font-size: 17px; font-weight: bold; padding-top: 9px; }
-.offer-contacts { margin: 0 0 18px; }
-.offer-contacts__row { font-size: 14px; }
-.offer-footer {
-  margin-top: auto;
-  padding-top: 8px;
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  font-size: 13px;
-}
-.offer-footer > div { vertical-align: top; line-height: 1.5; }
-`;
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function text(value?: string | number | null): string {
-  if (value === null || value === undefined) return "";
-  return escapeHtml(String(value));
-}
-
-function multiline(value?: string): string {
-  return text(value);
-}
-
-// Like multiline(), but turns real newlines into <br> so multi-line line-item
-// descriptions render as separate rows instead of collapsing into one line.
-function multilineBr(value?: string): string {
-  return text(value).replaceAll("\n", "<br>");
-}
-
 // Rich-text fields (description, clarifications) may contain HTML from the
 // admin editor (bold, bullet/numbered lists). Sanitize to a safe whitelist so
 // nothing malicious reaches the PDF renderer. Plain-text values (older offers,
@@ -202,7 +100,7 @@ function richHtml(value?: string): string {
   if (!raw.trim()) return "";
   const looksLikeHtml = /<[a-z][\s\S]*>/i.test(raw);
   if (!looksLikeHtml) {
-    return multilineBr(raw);
+    return multilineText(raw);
   }
   return sanitizeHtml(raw, {
     allowedTags: [
@@ -222,9 +120,61 @@ function richHtml(value?: string): string {
   });
 }
 
-// Norwegian bokmål quote (tilbud). The Swedish wording stays inline below and
-// is guarded byte-for-byte by se-pdf-snapshot.spec.ts.
-const NB = {
+// Offer-only parts on top of the shared document look: a flowing sheet (the
+// text can be any length, so no fixed-height pages) and the text sections,
+// in the document's own type sizes.
+const OFFER_PDF_CSS = `
+.offer-sheet { width: 210mm; min-height: 297mm; display: flex; flex-direction: column; }
+.offer-sheet .invoice-header__recipient { margin-bottom: 48px; }
+.offer-subtitle { font-size: 16px; font-weight: bold; margin: 0 0 16px; }
+.offer-section { margin: 0 0 22px; }
+.offer-section__title { font-size: 13px; font-weight: bold; margin: 0 0 4px; }
+.offer-section__text { word-break: break-word; }
+.offer-section__text p { margin: 0 0 6px; }
+.offer-section__text ul, .offer-section__text ol { margin: 4px 0 6px; padding-left: 20px; }
+.offer-section__text li { margin: 2px 0; }
+.offer-lines { margin: 0 0 22px; }
+.offer-lines .invoice-summary { margin-top: 14px; break-inside: avoid; }
+.offer-price {
+  border: 1px solid #d5dae1;
+  padding: 10px;
+  font-size: 15px;
+  font-weight: bold;
+  margin: 0 0 22px;
+  white-space: pre-wrap;
+}
+.offer-contacts { margin: 0 0 22px; break-inside: avoid; }
+`;
+
+// Offer wording per seller country. Table columns, totals and footer labels
+// come from the shared document locale.
+type OfferWords = {
+  title: string;
+  offerNo: string;
+  date: string;
+  validUntil: string;
+  description: string;
+  clarifications: string;
+  contacts: string;
+  personNo: string;
+  // An offer delivers nothing yet: "Antal", not the invoice's "Lev ant".
+  columns: Partial<InvoiceLocale>;
+};
+
+const SV_WORDS: OfferWords = {
+  title: "Offert",
+  offerNo: "Offertnr",
+  date: "Datum",
+  validUntil: "Giltig till",
+  description: "Beskrivning",
+  clarifications: "Förtydliganden",
+  contacts: "Kontaktpersoner",
+  personNo: "Personnr",
+  columns: { colDesc: "Beskrivning", colQty: "Antal", colSum: "Belopp" },
+};
+
+// Norwegian bokmål quote (tilbud).
+const NB_WORDS: OfferWords = {
   title: "Tilbud",
   offerNo: "Tilbudsnr.",
   date: "Dato",
@@ -232,15 +182,8 @@ const NB = {
   description: "Beskrivelse",
   clarifications: "Forbehold og avklaringer",
   contacts: "Kontaktpersoner",
-  colArt: "Art.nr.",
-  colDesc: "Beskrivelse",
-  colQty: "Antall",
-  colUnit: "Enhet",
-  colPrice: "Enhetspris",
-  colSum: "Beløp",
-  exVat: "Sum eks. mva",
-  vat: "Mva",
-  total: "Totalt inkl. mva",
+  personNo: "Fødselsnr",
+  columns: {},
 };
 
 function section(title: string, body: string): string {
@@ -253,133 +196,22 @@ function section(title: string, body: string): string {
   `;
 }
 
-function money(value?: number): string {
-  return new Intl.NumberFormat("sv-SE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(value) || 0);
-}
-
-function buildNoItemsHtml(items: OfferPdfItem[], data: OfferPdfData): string {
-  const rows = items
-    .map((it) => {
-      const q = Number(it.quantity || 0);
-      const p = Number(it.price || 0);
-      const d = Number(it.discount || 0);
-      const amount = q * p * (1 - d / 100);
-      const unit = !it.unit || it.unit === "st" ? "stk" : it.unit;
-      return `
-        <tr>
-          <td>${text(it.articleNumber || "")}</td>
-          <td>${multilineBr(it.description || "")}</td>
-          <td class="num">${formatNokNumber(q).replace(",00", "")}</td>
-          <td>${text(unit)}</td>
-          <td class="num">${formatNokNumber(p)}</td>
-          <td class="num">${formatNokNumber(amount)}</td>
-        </tr>`;
-    })
-    .join("");
-
-  return `
-    <table class="offer-items">
-      <thead>
-        <tr>
-          <th>${NB.colArt}</th>
-          <th>${NB.colDesc}</th>
-          <th class="num">${NB.colQty}</th>
-          <th>${NB.colUnit}</th>
-          <th class="num">${NB.colPrice}</th>
-          <th class="num">${NB.colSum}</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="offer-totals">
-      <table>
-        <tr><td>${NB.exVat}</td><td>${formatNok(data.subtotal)}</td></tr>
-        <tr><td>${NB.vat}</td><td>${formatNok(data.vat)}</td></tr>
-        <tr class="grand"><td>${NB.total}</td><td>${formatNok(data.total)}</td></tr>
-      </table>
-    </div>`;
-}
-
-function buildNoFooter(footer: OfferPdfCompanyFooter = {}): string {
-  const org = formatNoOrgNumber(footer.orgNumber, footer.mvaRegistered);
-  return `
-    <div class="offer-footer">
-      <div><b>Adresse</b><br>${text(footer.name)}<br>${text(footer.address)}<br>${text(footer.city)}</div>
-      <div><b>Telefon</b><br>${text(footer.phone)}<br><b>E-post/Nettside</b><br>${text(footer.email)}<br>${text(footer.website)}</div>
-      <div><b>Org.nr.</b><br>${text(org)}${footer.foretaksregisteret ? "<br>Foretaksregisteret" : ""}</div>
-    </div>
-  `;
-}
-
-function buildItemsHtml(items: OfferPdfItem[], data: OfferPdfData): string {
-  const rows = items
-    .map((it) => {
-      const q = Number(it.quantity || 0);
-      const p = Number(it.price || 0);
-      const d = Number(it.discount || 0);
-      const amount = q * p * (1 - d / 100);
-      return `
-        <tr>
-          <td>${text(it.articleNumber || "")}</td>
-          <td>${multilineBr(it.description || "")}</td>
-          <td class="num">${money(q).replace(",00", "")}</td>
-          <td>${text(it.unit || "st")}</td>
-          <td class="num">${money(p)}</td>
-          <td class="num">${money(amount)}</td>
-        </tr>`;
-    })
-    .join("");
-
-  return `
-    <table class="offer-items">
-      <thead>
-        <tr>
-          <th>Art.nr</th>
-          <th>Beskrivning</th>
-          <th class="num">Antal</th>
-          <th>Enhet</th>
-          <th class="num">Á-pris</th>
-          <th class="num">Belopp</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="offer-totals">
-      <table>
-        <tr><td>Summa exkl. moms</td><td>${money(data.subtotal)} kr</td></tr>
-        <tr><td>Moms</td><td>${money(data.vat)} kr</td></tr>
-        <tr class="grand"><td>Att betala</td><td>${money(data.total)} kr</td></tr>
-      </table>
-    </div>`;
-}
-
-function buildFooter(footer: OfferPdfCompanyFooter = {}): string {
-  return `
-    <div class="offer-footer">
-      <div><b>Adress</b><br>${text(footer.name)}<br>${text(footer.address)}<br>${text(footer.city)}</div>
-      <div><b>Telefon</b><br>${text(footer.phone)}<br><b>E-post/Webbplats</b><br>${text(footer.email)}<br>${text(footer.website)}</div>
-      <div><b>Organisationsnr</b><br>${text(footer.orgNumber)}<br>${text(footer.vatStatus)}</div>
-      <div><b>Momsreg.nr</b><br>${text(footer.vatNumber)}</div>
-    </div>
-  `;
-}
-
 export function buildOfferPdfHtml(
   data: OfferPdfData,
   logoDataUrl = "",
 ): string {
-  if (isNorway(data.country)) return buildNoOfferPdfHtml(data, logoDataUrl);
+  const L: InvoiceLocale = { ...localeFor(data) };
+  const W = L.no ? NB_WORDS : SV_WORDS;
+  Object.assign(L, W.columns);
   const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : "";
+
   const contacts = (data.contactPersons || []).filter(
     (c) => c && (c.name || c.role),
   );
   const contactsHtml = contacts.length
     ? `
       <div class="offer-contacts">
-        <p class="offer-section__title">Kontaktpersoner</p>
+        <p class="offer-section__title">${W.contacts}</p>
         ${contacts
           .map(
             (c) =>
@@ -397,115 +229,66 @@ export function buildOfferPdfHtml(
         Number(it.quantity)),
   );
 
+  // Line table + totals band of the shared document. The offer is not paid, so
+  // the amount is exact (no öresavrundning) and there is no bank line or QR.
   const priceHtml = items.length
-    ? buildItemsHtml(items, data)
-    : data.priceText && data.priceText.trim()
-      ? `<div class="offer-price">${multiline(data.priceText)}</div>`
-      : "";
-
-  return `<!DOCTYPE html>
-<html lang="sv">
-<head>
-  <meta charset="utf-8" />
-  <title>Offert ${text(data.offerNumber)}</title>
-  <style>${OFFER_PDF_CSS}</style>
-</head>
-<body>
-  <main class="offer-page">
-    <header class="offer-header">
-      <div class="offer-header__logo">${logo}</div>
-      <div>
-        <div class="offer-header__title">Offert</div>
-        <div class="offer-header__recipient">
-          ${recipientHtml(data, "Org.nr", "Personnr")}
-        </div>
-      </div>
-      <dl class="offer-header__meta">
-        <dt>Offertnr</dt><dd>${text(data.offerNumber) || "&nbsp;"}</dd>
-        <dt>Datum</dt><dd style="white-space:nowrap">${text(data.date) || "&nbsp;"}</dd>
-        <dt>Giltig till</dt><dd style="white-space:nowrap">${text(data.validUntil) || "&nbsp;"}</dd>
-      </dl>
-    </header>
-
-    <div class="offer-body">
-      ${data.subtitle ? `<h1 class="offer-subtitle">${text(data.subtitle)}</h1>` : ""}
-      ${section("Beskrivning", data.description || "")}
-      ${priceHtml}
-      ${section("Förtydliganden", data.clarifications || "")}
-      ${contactsHtml}
-    </div>
-
-    ${buildFooter(data.companyFooter)}
-  </main>
-</body>
-</html>`;
-}
-
-function buildNoOfferPdfHtml(data: OfferPdfData, logoDataUrl: string): string {
-  const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : "";
-  const contacts = (data.contactPersons || []).filter(
-    (c) => c && (c.name || c.role),
-  );
-  const contactsHtml = contacts.length
     ? `
-      <div class="offer-contacts">
-        <p class="offer-section__title">${NB.contacts}</p>
-        ${contacts
-          .map(
-            (c) =>
-              `<div class="offer-contacts__row">${text(c.name)}${c.role ? ` — ${text(c.role)}` : ""}</div>`,
-          )
-          .join("")}
+      <div class="offer-lines">
+        ${buildLinesTableHtml(L, items)}
+        ${buildSummaryBand(
+          {
+            items,
+            subtotal: data.subtotal,
+            total: data.total,
+            roundedTotal: data.total,
+            country: data.country,
+          },
+          false,
+        )}
       </div>`
-    : "";
-
-  const items = (data.items || []).filter(
-    (it) =>
-      it &&
-      (String(it.description || "").trim() ||
-        Number(it.price) ||
-        Number(it.quantity)),
-  );
-
-  const priceHtml = items.length
-    ? buildNoItemsHtml(items, data)
     : data.priceText && data.priceText.trim()
-      ? `<div class="offer-price">${multiline(data.priceText)}</div>`
+      ? `<div class="offer-price">${text(data.priceText)}</div>`
       : "";
 
   return `<!DOCTYPE html>
-<html lang="nb">
+<html lang="${L.lang}">
 <head>
   <meta charset="utf-8" />
-  <title>${NB.title} ${text(data.offerNumber)}</title>
-  <style>${OFFER_PDF_CSS}</style>
+  <title>${W.title} ${text(data.offerNumber)}</title>
+  <style>${DOCUMENT_PDF_CSS}${OFFER_PDF_CSS}</style>
 </head>
 <body>
-  <main class="offer-page">
-    <header class="offer-header">
-      <div class="offer-header__logo">${logo}</div>
-      <div>
-        <div class="offer-header__title">${NB.title}</div>
-        <div class="offer-header__recipient">
-          ${recipientHtml(data, "Org.nr", "Fødselsnr")}
+  <main class="invoice-document">
+    <section class="offer-sheet">
+      <div class="invoice-page__header">
+        <header class="invoice-header">
+          <div class="invoice-header__top">
+            <div class="invoice-header__logo">${logo}</div>
+            <div>
+              <div class="invoice-header__title">${W.title}</div>
+              <dl class="invoice-header__meta">
+                <dt>${W.offerNo}</dt><dd>${text(data.offerNumber) || "&nbsp;"}</dd>
+                <dt>${W.date}</dt><dd>${text(L.date(data.date)) || "&nbsp;"}</dd>
+                <dt>${W.validUntil}</dt><dd>${text(L.date(data.validUntil)) || "&nbsp;"}</dd>
+              </dl>
+              <div class="invoice-header__recipient">
+                ${recipientHtml(data, "Org.nr", W.personNo)}
+              </div>
+            </div>
+          </div>
+        </header>
+      </div>
+      <div class="invoice-page__body">
+        <div>
+          ${data.subtitle ? `<h1 class="offer-subtitle">${text(data.subtitle)}</h1>` : ""}
+          ${section(W.description, data.description || "")}
+          ${priceHtml}
+          ${section(W.clarifications, data.clarifications || "")}
+          ${contactsHtml}
         </div>
       </div>
-      <dl class="offer-header__meta">
-        <dt>${NB.offerNo}</dt><dd>${text(data.offerNumber) || "&nbsp;"}</dd>
-        <dt>${NB.date}</dt><dd style="white-space:nowrap">${text(formatNoDate(data.date)) || "&nbsp;"}</dd>
-        <dt>${NB.validUntil}</dt><dd style="white-space:nowrap">${text(formatNoDate(data.validUntil)) || "&nbsp;"}</dd>
-      </dl>
-    </header>
-
-    <div class="offer-body">
-      ${data.subtitle ? `<h1 class="offer-subtitle">${text(data.subtitle)}</h1>` : ""}
-      ${section(NB.description, data.description || "")}
-      ${priceHtml}
-      ${section(NB.clarifications, data.clarifications || "")}
-      ${contactsHtml}
-    </div>
-
-    ${buildNoFooter(data.companyFooter)}
+      <div class="invoice-page__footer">${L.no ? buildNoFooter(data.companyFooter) : buildFooter(data.companyFooter)}</div>
+    </section>
   </main>
 </body>
 </html>`;

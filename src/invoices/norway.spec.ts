@@ -253,6 +253,8 @@ describe("NO offer (tilbud) PDF", () => {
     expect(html).toContain("31.08.2026");
     expect(html).toContain(`kr 2${NBSP}500,00`);
     expect(html).toContain("923 456 789 MVA");
+    // Printed text only: the shared stylesheet has Swedish words in comments.
+    const printed = html.slice(html.indexOf("</style>"));
     for (const sv of [
       "Offert",
       "moms",
@@ -260,8 +262,10 @@ describe("NO offer (tilbud) PDF", () => {
       "F-skatt",
       "Giltig",
       "Att betala",
+      "ATT BETALA",
+      "Bankgiro",
     ]) {
-      expect(html).not.toContain(sv);
+      expect(printed).not.toContain(sv);
     }
   });
 });

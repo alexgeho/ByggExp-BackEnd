@@ -3,23 +3,26 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { existsSync } from 'fs';
-import { readFile } from 'fs/promises';
-import path from 'path';
-import { UserRole } from '../users/schemas/user.schema';
-import { Company, CompanyDocument } from '../company/schemas/company.schema';
-import { launchForInvoicePdf } from '../invoices/puppeteer-launch';
-import { buildOfferPdfHtml, OfferPdfData } from './templates/offer-pdf.template';
-import { computeOfferTotals as computeOfferTotalsMath } from './offer-math';
-import { CreateOfferDto } from './dto/create-offer.dto';
-import { UpdateOfferDto } from './dto/update-offer.dto';
-import { Offer, OfferDocument, OfferStatus } from './schemas/offer.schema';
-import { MailService } from '../mail/mail.service';
-import { reserveOutgoingEmail } from '../mail/outgoing-mail-quota';
-import { isNorway, vatRatesForCountry } from '../invoices/norway';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { existsSync } from "fs";
+import { readFile } from "fs/promises";
+import path from "path";
+import { UserRole } from "../users/schemas/user.schema";
+import { Company, CompanyDocument } from "../company/schemas/company.schema";
+import { launchForInvoicePdf } from "../invoices/puppeteer-launch";
+import {
+  buildOfferPdfHtml,
+  OfferPdfData,
+} from "./templates/offer-pdf.template";
+import { computeOfferTotals as computeOfferTotalsMath } from "./offer-math";
+import { CreateOfferDto } from "./dto/create-offer.dto";
+import { UpdateOfferDto } from "./dto/update-offer.dto";
+import { Offer, OfferDocument, OfferStatus } from "./schemas/offer.schema";
+import { MailService } from "../mail/mail.service";
+import { reserveOutgoingEmail } from "../mail/outgoing-mail-quota";
+import { isNorway, vatRatesForCountry } from "../invoices/norway";
 
 type AuthUser = {
   role: UserRole;
@@ -56,7 +59,7 @@ export class OffersService {
     // Snapshot the company logo so the offer PDF shows it.
     const company = await this.companyModel
       .findById(companyId)
-      .select('logoUrl country currency')
+      .select("logoUrl country currency")
       .lean()
       .exec();
     const no = isNorway(company?.country);
@@ -76,9 +79,9 @@ export class OffersService {
       total: totals.total,
       status: dto.status || OfferStatus.Draft,
       logoUrl: dto.logoUrl ?? company?.logoUrl ?? null,
-      country: company?.country || 'SE',
+      country: company?.country || "SE",
       // Norway always NOK (MVA must be stated in NOK).
-      currency: no ? 'NOK' : company?.currency || 'SEK',
+      currency: no ? "NOK" : company?.currency || "SEK",
     });
 
     return offer.save();
@@ -86,26 +89,32 @@ export class OffersService {
 
   // Norway: only Norwegian MVA rates (25/15/12/0) are allowed.
   private assertNoVatRates(items?: Array<{ vatRate?: number }>): void {
-    const allowed = vatRatesForCountry('NO');
+    const allowed = vatRatesForCountry("NO");
     const bad = (items || []).find(
-      (it) => it?.vatRate !== undefined && it?.vatRate !== null && !allowed.includes(Number(it.vatRate)),
+      (it) =>
+        it?.vatRate !== undefined &&
+        it?.vatRate !== null &&
+        !allowed.includes(Number(it.vatRate)),
     );
     if (bad) {
       throw new BadRequestException(
-        `VAT rate ${bad.vatRate}% is not valid in Norway (use ${allowed.join(', ')})`,
+        `VAT rate ${bad.vatRate}% is not valid in Norway (use ${allowed.join(", ")})`,
       );
     }
   }
 
   // Seller country: the snapshot on the offer, else the company's current one.
-  private async countryOf(offer: { country?: string; companyId: string }): Promise<string> {
+  private async countryOf(offer: {
+    country?: string;
+    companyId: string;
+  }): Promise<string> {
     if (offer.country) return offer.country;
     const company = await this.companyModel
       .findById(offer.companyId)
-      .select('country')
+      .select("country")
       .lean()
       .exec();
-    return company?.country || 'SE';
+    return company?.country || "SE";
   }
 
   async buildOfferHtml(id: string, user: AuthUser): Promise<string> {
@@ -118,7 +127,7 @@ export class OffersService {
     if (!logoUrl) {
       const company = await this.companyModel
         .findById(offer.companyId)
-        .select('logoUrl')
+        .select("logoUrl")
         .lean()
         .exec();
       logoUrl = company?.logoUrl ?? null;
@@ -157,7 +166,7 @@ export class OffersService {
       total: offer.total,
       companyFooter,
     };
-    if (isNorway(await this.countryOf(offer))) data.country = 'NO';
+    if (isNorway(await this.countryOf(offer))) data.country = "NO";
 
     return buildOfferPdfHtml(data, logoDataUrl);
   }
@@ -168,11 +177,11 @@ export class OffersService {
 
     try {
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'load' });
+      await page.setContent(html, { waitUntil: "load" });
       const pdfBuffer = await page.pdf({
-        format: 'A4',
+        format: "A4",
         printBackground: true,
-        margin: { top: '0', bottom: '0', left: '0', right: '0' },
+        margin: { top: "0", bottom: "0", left: "0", right: "0" },
         preferCSSPageSize: true,
       });
 
@@ -189,10 +198,10 @@ export class OffersService {
     message?: string,
   ): Promise<{ sent: boolean; to: string }> {
     const offer = await this.findOne(id, user);
-    const to = (email || offer.email || '').trim();
+    const to = (email || offer.email || "").trim();
     if (!to) {
       throw new BadRequestException(
-        'No recipient email — set the customer email or provide one',
+        "No recipient email — set the customer email or provide one",
       );
     }
     const footer = await this.resolveCompanyFooter(offer.companyId);
@@ -205,7 +214,7 @@ export class OffersService {
       validUntil: offer.validUntil,
       message,
       pdf,
-      ...(no ? { lang: 'nb' as const } : {}),
+      ...(no ? { lang: "nb" as const } : {}),
     });
 
     // Emailing a draft moves it to "sent".
@@ -221,25 +230,32 @@ export class OffersService {
     const company = await this.companyModel.findById(companyId).lean().exec();
     const fskatt = company?.vatStatus;
     const vatStatus =
-      fskatt === 'true'
-        ? 'Godkänd för F-skatt'
-        : !fskatt || fskatt === 'false'
-          ? ''
+      fskatt === "true"
+        ? "Godkänd för F-skatt"
+        : !fskatt || fskatt === "false"
+          ? ""
           : fskatt;
 
     return {
-      name: company?.name || '',
-      address: company?.address || '',
-      city: company?.city || '',
-      phone: company?.phone || '',
-      email: company?.email || '',
-      website: company?.website || '',
-      orgNumber: company?.orgNumber || '',
-      vatNumber: company?.vatNumber || '',
+      name: company?.name || "",
+      address: company?.address || "",
+      city: company?.city || "",
+      phone: company?.phone || "",
+      email: company?.email || "",
+      website: company?.website || "",
+      orgNumber: company?.orgNumber || "",
+      vatNumber: company?.vatNumber || "",
       vatStatus,
+      // Same footer as the invoice: the giro column.
+      bankgiro: company?.bankgiro || "",
+      plusgiro: company?.plusgiro || "",
       // Norway only — the Swedish footer never prints these.
       ...(isNorway(company?.country)
         ? {
+            kontonummer: company?.kontonummer || "",
+            vatStatus: "",
+            bankgiro: "",
+            plusgiro: "",
             mvaRegistered: Boolean(company?.mvaRegistered),
             foretaksregisteret: Boolean(company?.foretaksregisteret),
           }
@@ -248,14 +264,18 @@ export class OffersService {
   }
 
   private async getLogoDataUrl(logoUrl?: string | null): Promise<string> {
-    if (!logoUrl || logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
-      return '';
+    if (
+      !logoUrl ||
+      logoUrl.startsWith("http://") ||
+      logoUrl.startsWith("https://")
+    ) {
+      return "";
     }
 
-    const relativePath = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
+    const relativePath = logoUrl.startsWith("/") ? logoUrl.slice(1) : logoUrl;
     const candidates = [
       path.join(process.cwd(), relativePath),
-      path.join(process.cwd(), 'public', relativePath),
+      path.join(process.cwd(), "public", relativePath),
     ];
 
     for (const filePath of candidates) {
@@ -263,11 +283,11 @@ export class OffersService {
         continue;
       }
       const buffer = await readFile(filePath);
-      const ext = path.extname(filePath).slice(1) || 'png';
-      return `data:image/${ext};base64,${buffer.toString('base64')}`;
+      const ext = path.extname(filePath).slice(1) || "png";
+      return `data:image/${ext};base64,${buffer.toString("base64")}`;
     }
 
-    return '';
+    return "";
   }
 
   async findAccessible(user: AuthUser): Promise<Offer[]> {
@@ -294,7 +314,11 @@ export class OffersService {
     return offer;
   }
 
-  async update(id: string, dto: UpdateOfferDto, user: AuthUser): Promise<OfferDocument> {
+  async update(
+    id: string,
+    dto: UpdateOfferDto,
+    user: AuthUser,
+  ): Promise<OfferDocument> {
     const offer = await this.findOne(id, user);
     if (isNorway(await this.countryOf(offer))) this.assertNoVatRates(dto.items);
 
@@ -325,7 +349,7 @@ export class OffersService {
 
   async copy(id: string, user: AuthUser): Promise<Offer> {
     const source = await this.findOne(id, user);
-    const raw = (source as OfferDocument).toObject();
+    const raw = source.toObject();
     const offerNumber = await this.getNextOfferNumber(source.companyId);
     const payload = { ...raw } as Record<string, unknown>;
 
@@ -349,25 +373,31 @@ export class OffersService {
     const latest = await this.offerModel
       .findOne({ companyId })
       .sort({ offerNumber: -1 })
-      .select('offerNumber')
+      .select("offerNumber")
       .lean()
       .exec();
 
     const last = latest?.offerNumber;
-    return typeof last === 'number' && !Number.isNaN(last) ? last + 1 : 1;
+    return typeof last === "number" && !Number.isNaN(last) ? last + 1 : 1;
   }
 
-  async getNextOfferNumberForUser(user: AuthUser, companyId?: string): Promise<{ offerNumber: number }> {
+  async getNextOfferNumberForUser(
+    user: AuthUser,
+    companyId?: string,
+  ): Promise<{ offerNumber: number }> {
     const resolvedCompanyId = this.resolveCompanyId(companyId, user);
     const offerNumber = await this.getNextOfferNumber(resolvedCompanyId);
 
     return { offerNumber };
   }
 
-  private resolveCompanyId(_companyId: string | undefined, user: AuthUser): string {
+  private resolveCompanyId(
+    _companyId: string | undefined,
+    user: AuthUser,
+  ): string {
     // Every actor (superadmin included) creates only within its own company.
     if (!user.companyId) {
-      throw new ForbiddenException('Your account is not attached to a company');
+      throw new ForbiddenException("Your account is not attached to a company");
     }
 
     return user.companyId;
@@ -375,7 +405,7 @@ export class OffersService {
 
   private assertCanAccess(offer: Offer, user: AuthUser): void {
     if (!user.companyId || String(offer.companyId) !== String(user.companyId)) {
-      throw new ForbiddenException('You do not have access to this offer');
+      throw new ForbiddenException("You do not have access to this offer");
     }
   }
 }
