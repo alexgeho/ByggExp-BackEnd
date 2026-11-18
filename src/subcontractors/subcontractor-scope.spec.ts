@@ -122,7 +122,7 @@ describe("SubcontractorsService", () => {
   it("creates a firm without an invitation when no e-mail is given", async () => {
     const { service, invites } = build();
     const out = await service.create(
-      { name: "El & Rör AB" },
+      { name: "El & Rör AB", email: "" },
       { role: UserRole.CompanyAdmin, companyId: "c1" },
     );
     expect(invites).toEqual([]);

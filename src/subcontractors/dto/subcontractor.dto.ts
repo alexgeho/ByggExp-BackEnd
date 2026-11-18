@@ -4,7 +4,6 @@ import {
   IsOptional,
   IsString,
   MaxLength,
-  ValidateIf,
 } from "class-validator";
 
 export class CreateSubcontractorDto {
@@ -23,11 +22,9 @@ export class CreateSubcontractorDto {
   @MaxLength(160)
   contactPerson?: string;
 
-  // The contact person is invited to the admin at this address (optional).
-  @IsOptional()
-  @ValidateIf((dto: CreateSubcontractorDto) => Boolean(dto.email))
+  // Required (owner 18.11): the contact person is invited to the admin at it.
   @IsEmail()
-  email?: string;
+  email: string;
 
   @IsOptional()
   @IsString()
