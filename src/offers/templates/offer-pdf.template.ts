@@ -34,33 +34,21 @@ export type OfferPdfItem = {
   vatRate?: number;
 };
 
-// Recipient block: name, the customer details that are filled in, then the
-// email line (kept even when empty, as before, so old offers print unchanged).
-export function recipientHtml(
-  data: OfferPdfData,
-  orgLabel: string,
-  personLabel: string,
-): string {
-  const isPrivate = data.clientType === "private";
+// Recipient block, as on the invoice: name, street, postal code + city.
+export function recipientHtml(data: OfferPdfData): string {
   const place = [data.postalCode, data.city]
     .map((part) => (part || "").trim())
     .filter(Boolean)
     .join(" ");
-  const org = (data.orgNumber || "").trim();
-  const lines = [
-    isPrivate ? "" : data.contactPerson,
-    data.address,
-    place,
-    org ? `${isPrivate ? personLabel : orgLabel} ${org}` : "",
-    data.phone,
-  ]
-    .map((line) => text(line))
-    .filter(Boolean);
-  return [
-    text(data.companyName) || "&nbsp;",
-    ...lines,
-    text(data.email) || "&nbsp;",
-  ].join("<br>\n          ");
+  return [data.companyName, data.address, place]
+    .map((line) => text(line) || "&nbsp;")
+    .join("<br>\n                ");
+}
+
+// One "label  value" pair of the detail row; nothing when the value is empty.
+function pair(label: string, value?: string): string {
+  const v = (value || "").trim();
+  return v ? `<dt>${label}</dt><dd>${text(v)}</dd>` : "";
 }
 
 export type OfferPdfData = {
@@ -120,30 +108,35 @@ function richHtml(value?: string): string {
   });
 }
 
-// Offer-only parts on top of the shared document look: a flowing sheet (the
-// text can be any length, so no fixed-height pages) and the text sections,
-// in the document's own type sizes.
+// Offer-only parts on top of the shared document look. Top and bottom of the
+// sheet are the invoice's (header, detail row, totals band pinned above the
+// footer); the offer's text sits in between, in the document's type sizes.
+// The text can be any length, so the sheet flows over pages: the page margins
+// live on @page, so every page keeps them.
 const OFFER_PDF_CSS = `
-.offer-sheet { width: 210mm; min-height: 297mm; display: flex; flex-direction: column; }
-.offer-sheet .invoice-header__recipient { margin-bottom: 48px; }
-.offer-subtitle { font-size: 16px; font-weight: bold; margin: 0 0 16px; }
-.offer-section { margin: 0 0 22px; }
-.offer-section__title { font-size: 13px; font-weight: bold; margin: 0 0 4px; }
+@page { size: A4; margin: 14mm 0 8mm; }
+.offer-sheet { width: 210mm; min-height: 274mm; display: flex; flex-direction: column; }
+.offer-sheet .invoice-page__header { padding-top: 0; }
+.offer-sheet .invoice-page__footer { padding-bottom: 0; }
+.offer-sheet .invoice-header__details dd { white-space: normal; }
+.offer-subtitle { font-size: 15px; font-weight: bold; margin: 12px 0 10px; padding: 0 10px; }
+.offer-section { margin: 0 0 18px; padding: 0 10px; }
+.offer-section__title { font-size: 13px; font-weight: bold; margin: 0 0 2px; }
 .offer-section__text { word-break: break-word; }
 .offer-section__text p { margin: 0 0 6px; }
 .offer-section__text ul, .offer-section__text ol { margin: 4px 0 6px; padding-left: 20px; }
 .offer-section__text li { margin: 2px 0; }
 .offer-lines { margin: 0 0 22px; }
-.offer-lines .invoice-summary { margin-top: 14px; break-inside: avoid; }
+.offer-totals { margin-top: auto; padding-top: 22px; break-inside: avoid; }
 .offer-price {
-  border: 1px solid #d5dae1;
+  border-top: 1px solid #d5dae1;
+  border-bottom: 1px solid #d5dae1;
   padding: 10px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: bold;
   margin: 0 0 22px;
   white-space: pre-wrap;
 }
-.offer-contacts { margin: 0 0 22px; break-inside: avoid; }
 `;
 
 // Offer wording per seller country. Table columns, totals and footer labels
@@ -155,8 +148,9 @@ type OfferWords = {
   validUntil: string;
   description: string;
   clarifications: string;
-  contacts: string;
   personNo: string;
+  phone: string;
+  email: string;
   // An offer delivers nothing yet: "Antal", not the invoice's "Lev ant".
   columns: Partial<InvoiceLocale>;
 };
@@ -168,9 +162,10 @@ const SV_WORDS: OfferWords = {
   validUntil: "Giltig till",
   description: "Beskrivning",
   clarifications: "Förtydliganden",
-  contacts: "Kontaktpersoner",
   personNo: "Personnr",
-  columns: { colDesc: "Beskrivning", colQty: "Antal", colSum: "Belopp" },
+  phone: "Telefon",
+  email: "E-post",
+  columns: { colQty: "Antal" },
 };
 
 // Norwegian bokmål quote (tilbud).
@@ -181,8 +176,9 @@ const NB_WORDS: OfferWords = {
   validUntil: "Gyldig til",
   description: "Beskrivelse",
   clarifications: "Forbehold og avklaringer",
-  contacts: "Kontaktpersoner",
   personNo: "Fødselsnr",
+  phone: "Telefon",
+  email: "E-post",
   columns: {},
 };
 
@@ -205,21 +201,21 @@ export function buildOfferPdfHtml(
   Object.assign(L, W.columns);
   const logo = logoDataUrl ? `<img src="${logoDataUrl}" alt="" />` : "";
 
-  const contacts = (data.contactPersons || []).filter(
-    (c) => c && (c.name || c.role),
-  );
-  const contactsHtml = contacts.length
-    ? `
-      <div class="offer-contacts">
-        <p class="offer-section__title">${W.contacts}</p>
-        ${contacts
-          .map(
-            (c) =>
-              `<div class="offer-contacts__row">${text(c.name)}${c.role ? ` — ${text(c.role)}` : ""}</div>`,
-          )
-          .join("")}
-      </div>`
-    : "";
+  // Detail row, as on the invoice: the customer's references on the left, ours
+  // on the right. Each contact person prints as "role  name".
+  const isPrivate = data.clientType === "private";
+  const customerPairs = [
+    isPrivate ? "" : pair(L.yourRef, data.contactPerson),
+    pair(isPrivate ? W.personNo : "Org.nr", data.orgNumber),
+    pair(W.phone, data.phone),
+    pair(W.email, data.email),
+  ].join("");
+  const ourPairs = [
+    ...(data.contactPersons || [])
+      .filter((c) => c && (c.name || "").trim())
+      .map((c) => pair(text((c.role || "").trim()) || L.ourRef, c.name)),
+    pair(W.validUntil, L.date(data.validUntil)),
+  ].join("");
 
   const items = (data.items || []).filter(
     (it) =>
@@ -229,26 +225,26 @@ export function buildOfferPdfHtml(
         Number(it.quantity)),
   );
 
-  // Line table + totals band of the shared document. The offer is not paid, so
-  // the amount is exact (no öresavrundning) and there is no bank line or QR.
-  const priceHtml = items.length
-    ? `
-      <div class="offer-lines">
-        ${buildLinesTableHtml(L, items)}
-        ${buildSummaryBand(
-          {
-            items,
-            subtotal: data.subtotal,
-            total: data.total,
-            roundedTotal: data.total,
-            country: data.country,
-          },
-          false,
-        )}
-      </div>`
+  // Line table of the shared document; the totals band is pinned above the
+  // footer like on the invoice. The offer is not paid, so the amount is exact
+  // (no öresavrundning) and there is no bank line or QR.
+  const linesHtml = items.length
+    ? `<div class="offer-lines">${buildLinesTableHtml(L, items)}</div>`
     : data.priceText && data.priceText.trim()
       ? `<div class="offer-price">${text(data.priceText)}</div>`
       : "";
+  const totalsHtml = items.length
+    ? `<div class="offer-totals">${buildSummaryBand(
+        {
+          items,
+          subtotal: data.subtotal,
+          total: data.total,
+          roundedTotal: data.total,
+          country: data.country,
+        },
+        false,
+      )}</div>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="${L.lang}">
@@ -267,14 +263,17 @@ export function buildOfferPdfHtml(
             <div>
               <div class="invoice-header__title">${W.title}</div>
               <dl class="invoice-header__meta">
-                <dt>${W.offerNo}</dt><dd>${text(data.offerNumber) || "&nbsp;"}</dd>
                 <dt>${W.date}</dt><dd>${text(L.date(data.date)) || "&nbsp;"}</dd>
-                <dt>${W.validUntil}</dt><dd>${text(L.date(data.validUntil)) || "&nbsp;"}</dd>
+                <dt>${W.offerNo}</dt><dd>${text(data.offerNumber) || "&nbsp;"}</dd>
               </dl>
               <div class="invoice-header__recipient">
-                ${recipientHtml(data, "Org.nr", W.personNo)}
+                ${recipientHtml(data)}
               </div>
             </div>
+          </div>
+          <div class="invoice-header__details">
+            <dl>${customerPairs}</dl>
+            <dl>${ourPairs}</dl>
           </div>
         </header>
       </div>
@@ -282,10 +281,10 @@ export function buildOfferPdfHtml(
         <div>
           ${data.subtitle ? `<h1 class="offer-subtitle">${text(data.subtitle)}</h1>` : ""}
           ${section(W.description, data.description || "")}
-          ${priceHtml}
+          ${linesHtml}
           ${section(W.clarifications, data.clarifications || "")}
-          ${contactsHtml}
         </div>
+        ${totalsHtml}
       </div>
       <div class="invoice-page__footer">${L.no ? buildNoFooter(data.companyFooter) : buildFooter(data.companyFooter)}</div>
     </section>

@@ -1848,26 +1848,29 @@ body {
 .invoice-footer b { display: block; }
 .invoice-footer .gap { display: block; margin-top: 6px; }
 
-.offer-sheet { width: 210mm; min-height: 297mm; display: flex; flex-direction: column; }
-.offer-sheet .invoice-header__recipient { margin-bottom: 48px; }
-.offer-subtitle { font-size: 16px; font-weight: bold; margin: 0 0 16px; }
-.offer-section { margin: 0 0 22px; }
-.offer-section__title { font-size: 13px; font-weight: bold; margin: 0 0 4px; }
+@page { size: A4; margin: 14mm 0 8mm; }
+.offer-sheet { width: 210mm; min-height: 274mm; display: flex; flex-direction: column; }
+.offer-sheet .invoice-page__header { padding-top: 0; }
+.offer-sheet .invoice-page__footer { padding-bottom: 0; }
+.offer-sheet .invoice-header__details dd { white-space: normal; }
+.offer-subtitle { font-size: 15px; font-weight: bold; margin: 12px 0 10px; padding: 0 10px; }
+.offer-section { margin: 0 0 18px; padding: 0 10px; }
+.offer-section__title { font-size: 13px; font-weight: bold; margin: 0 0 2px; }
 .offer-section__text { word-break: break-word; }
 .offer-section__text p { margin: 0 0 6px; }
 .offer-section__text ul, .offer-section__text ol { margin: 4px 0 6px; padding-left: 20px; }
 .offer-section__text li { margin: 2px 0; }
 .offer-lines { margin: 0 0 22px; }
-.offer-lines .invoice-summary { margin-top: 14px; break-inside: avoid; }
+.offer-totals { margin-top: auto; padding-top: 22px; break-inside: avoid; }
 .offer-price {
-  border: 1px solid #d5dae1;
+  border-top: 1px solid #d5dae1;
+  border-bottom: 1px solid #d5dae1;
   padding: 10px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: bold;
   margin: 0 0 22px;
   white-space: pre-wrap;
 }
-.offer-contacts { margin: 0 0 22px; break-inside: avoid; }
 </style>
 </head>
 <body>
@@ -1880,15 +1883,19 @@ body {
             <div>
               <div class="invoice-header__title">Offert</div>
               <dl class="invoice-header__meta">
-                <dt>Offertnr</dt><dd>7</dd>
                 <dt>Datum</dt><dd>2026-08-01</dd>
-                <dt>Giltig till</dt><dd>2026-08-31</dd>
+                <dt>Offertnr</dt><dd>7</dd>
               </dl>
               <div class="invoice-header__recipient">
                 Kund AB<br>
-          kund@example.se
+                &nbsp;<br>
+                &nbsp;
               </div>
             </div>
+          </div>
+          <div class="invoice-header__details">
+            <dl><dt>E-post</dt><dd>kund@example.se</dd></dl>
+            <dl><dt>Projektledare</dt><dd>Maria</dd><dt>Giltig till</dt><dd>2026-08-31</dd></dl>
           </div>
         </header>
       </div>
@@ -1901,9 +1908,7 @@ body {
       <div class="offer-section__text"><ul><li>A</li></ul></div>
     </div>
   
-          
-      <div class="offer-lines">
-        
+          <div class="offer-lines">
     <table class="invoice-lines">
       <colgroup>
         <col style="width: 9%;" />
@@ -1916,11 +1921,11 @@ body {
       <thead>
         <tr>
           <th class="nowrap">Art.nr</th>
-          <th class="description">Beskrivning</th>
+          <th class="description">Benämning</th>
           <th class="r nowrap quantity">Antal</th>
           <th class="nowrap unit">Enhet</th>
           <th class="r nowrap amount">À-pris</th>
-          <th class="r nowrap amount">Belopp</th>
+          <th class="r nowrap amount">Summa</th>
         </tr>
       </thead>
       <tbody>
@@ -1956,8 +1961,15 @@ body {
       </tbody>
       
     </table>
+  </div>
+          
+    <div class="offer-section">
+      <p class="offer-section__title">Förtydliganden</p>
+      <div class="offer-section__text">Rad 1<br>Rad 2</div>
+    </div>
   
-        <div class="invoice-summary">
+        </div>
+        <div class="offer-totals"><div class="invoice-summary">
             
             <div class="invoice-summary__body">
               
@@ -1986,20 +1998,7 @@ body {
                 </div>
               </div>
             </div>
-          </div>
-      </div>
-          
-    <div class="offer-section">
-      <p class="offer-section__title">Förtydliganden</p>
-      <div class="offer-section__text">Rad 1<br>Rad 2</div>
-    </div>
-  
-          
-      <div class="offer-contacts">
-        <p class="offer-section__title">Kontaktpersoner</p>
-        <div class="offer-contacts__row">Maria — Projektledare</div>
-      </div>
-        </div>
+          </div></div>
       </div>
       <div class="invoice-page__footer">
     <div class="invoice-footer">
@@ -2180,26 +2179,29 @@ body {
 .invoice-footer b { display: block; }
 .invoice-footer .gap { display: block; margin-top: 6px; }
 
-.offer-sheet { width: 210mm; min-height: 297mm; display: flex; flex-direction: column; }
-.offer-sheet .invoice-header__recipient { margin-bottom: 48px; }
-.offer-subtitle { font-size: 16px; font-weight: bold; margin: 0 0 16px; }
-.offer-section { margin: 0 0 22px; }
-.offer-section__title { font-size: 13px; font-weight: bold; margin: 0 0 4px; }
+@page { size: A4; margin: 14mm 0 8mm; }
+.offer-sheet { width: 210mm; min-height: 274mm; display: flex; flex-direction: column; }
+.offer-sheet .invoice-page__header { padding-top: 0; }
+.offer-sheet .invoice-page__footer { padding-bottom: 0; }
+.offer-sheet .invoice-header__details dd { white-space: normal; }
+.offer-subtitle { font-size: 15px; font-weight: bold; margin: 12px 0 10px; padding: 0 10px; }
+.offer-section { margin: 0 0 18px; padding: 0 10px; }
+.offer-section__title { font-size: 13px; font-weight: bold; margin: 0 0 2px; }
 .offer-section__text { word-break: break-word; }
 .offer-section__text p { margin: 0 0 6px; }
 .offer-section__text ul, .offer-section__text ol { margin: 4px 0 6px; padding-left: 20px; }
 .offer-section__text li { margin: 2px 0; }
 .offer-lines { margin: 0 0 22px; }
-.offer-lines .invoice-summary { margin-top: 14px; break-inside: avoid; }
+.offer-totals { margin-top: auto; padding-top: 22px; break-inside: avoid; }
 .offer-price {
-  border: 1px solid #d5dae1;
+  border-top: 1px solid #d5dae1;
+  border-bottom: 1px solid #d5dae1;
   padding: 10px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: bold;
   margin: 0 0 22px;
   white-space: pre-wrap;
 }
-.offer-contacts { margin: 0 0 22px; break-inside: avoid; }
 </style>
 </head>
 <body>
@@ -2212,15 +2214,19 @@ body {
             <div>
               <div class="invoice-header__title">Offert</div>
               <dl class="invoice-header__meta">
-                <dt>Offertnr</dt><dd>8</dd>
                 <dt>Datum</dt><dd>&nbsp;</dd>
-                <dt>Giltig till</dt><dd>&nbsp;</dd>
+                <dt>Offertnr</dt><dd>8</dd>
               </dl>
               <div class="invoice-header__recipient">
                 Kund AB<br>
-          &nbsp;
+                &nbsp;<br>
+                &nbsp;
               </div>
             </div>
+          </div>
+          <div class="invoice-header__details">
+            <dl></dl>
+            <dl></dl>
           </div>
         </header>
       </div>
@@ -2230,8 +2236,8 @@ body {
           
           <div class="offer-price">Fast pris 100 000 kr exkl. moms</div>
           
-          
         </div>
+        
       </div>
       <div class="invoice-page__footer">
     <div class="invoice-footer">

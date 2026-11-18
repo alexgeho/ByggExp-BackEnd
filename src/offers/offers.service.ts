@@ -32,6 +32,14 @@ type AuthUser = {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+// Number of pages in a PDF produced by Chrome (page objects are not compressed).
+function countPdfPages(pdf: Uint8Array): number {
+  const matches = Buffer.from(pdf)
+    .toString("latin1")
+    .match(/\/Type\s*\/Page\b(?!s)/g);
+  return matches ? matches.length : 1;
+}
+
 @Injectable()
 export class OffersService {
   constructor(
@@ -178,12 +186,31 @@ export class OffersService {
     try {
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: "load" });
-      const pdfBuffer = await page.pdf({
+      const options = {
         format: "A4",
         printBackground: true,
         margin: { top: "0", bottom: "0", left: "0", right: "0" },
         preferCSSPageSize: true,
-      });
+      } as const;
+      const pdfBuffer = await page.pdf(options);
+
+      // A long offer flows over several pages. Stretch the sheet to whole
+      // pages and print again, so the totals band and the footer end at the
+      // bottom of the last page (as on the invoice), not in the middle of it.
+      // Table headers repeated on each page take room too, so the stretch is
+      // tried with a growing allowance; a try counts only when the page count
+      // stays the same.
+      const pages = countPdfPages(pdfBuffer);
+      if (pages > 1) {
+        for (const allowanceMm of [2, 14, 26, 40, 60]) {
+          await page.evaluate(`(() => {
+            const sheet = document.querySelector('.offer-sheet');
+            if (sheet) sheet.style.minHeight = 'calc(${pages} * 275mm - ${allowanceMm}mm)';
+          })()`);
+          const stretched = await page.pdf(options);
+          if (countPdfPages(stretched) === pages) return Buffer.from(stretched);
+        }
+      }
 
       return Buffer.from(pdfBuffer);
     } finally {

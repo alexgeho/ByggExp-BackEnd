@@ -59,7 +59,8 @@ describe('offer PDF recipient block', () => {
     expect(html).toContain('Anna Berg');
     expect(html).toContain('Storgatan 1');
     expect(html).toContain('111 22 Stockholm');
-    expect(html).toContain('Org.nr 556000-0000');
+    expect(html).toContain('<dt>Org.nr</dt><dd>556000-0000</dd>');
+    expect(html).toContain('<dt>Er referens</dt><dd>Anna Berg</dd>');
     expect(html).toContain('070-123 45 67');
   });
 
@@ -70,14 +71,14 @@ describe('offer PDF recipient block', () => {
       orgNumber: '850101-1234',
       contactPerson: 'Should not print',
     });
-    expect(html).toContain('Personnr 850101-1234');
-    expect(html).not.toContain('Org.nr');
+    expect(html).toContain('<dt>Personnr</dt><dd>850101-1234</dd>');
+    expect(html).not.toContain('<dt>Org.nr</dt>');
     expect(html).not.toContain('Should not print');
   });
 
   it('adds nothing when only the name is known', () => {
     const html = buildOfferPdfHtml(base);
-    expect(html).not.toContain('Org.nr');
+    expect(html).not.toContain('<dt>Org.nr</dt>');
     expect(html).toMatch(/Kund AB<br>\s*&nbsp;/);
   });
 });
