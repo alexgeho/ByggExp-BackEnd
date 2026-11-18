@@ -128,4 +128,9 @@ export class CreateUserDto {
   @IsString({ each: true })
   @IsOptional()
   additionalDocuments?: string[];
+
+  // Subcontractor firm the person comes from; null / empty = own staff.
+  @IsOptional()
+  @IsString()
+  subcontractorId?: string | null;
 }

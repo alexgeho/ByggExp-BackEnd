@@ -53,6 +53,7 @@ import { PaymentPlansModule } from "./payment-plans/payment-plans.module";
 import { LeaveModule } from "./leave/leave.module";
 import { AssignmentsModule } from "./assignments/assignments.module";
 import { TeamsModule } from "./teams/teams.module";
+import { SubcontractorsModule } from "./subcontractors/subcontractors.module";
 import { GdprModule } from "./gdpr/gdpr.module";
 import { ModerationModule } from "./moderation/moderation.module";
 import { CertificateRemindersModule } from "./certificate-reminders/certificate-reminders.module";
@@ -104,6 +105,7 @@ import { FortnoxModule } from "./fortnox/fortnox.module";
     LeaveModule,
     AssignmentsModule,
     TeamsModule,
+    SubcontractorsModule,
     GdprModule,
     CertificateRemindersModule,
     PaymentRemindersModule,

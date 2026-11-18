@@ -32,6 +32,7 @@ type AuthenticatedUser = {
   userId: string;
   role: UserRole;
   companyId?: string | null;
+  subcontractorId?: string | null;
 };
 
 const MS_PER_HOUR = 1000 * 60 * 60;
@@ -162,6 +163,18 @@ export class HoursService {
         { projectAdmins: user.userId },
       ];
       if (projectId) filter._id = projectId;
+    } else if (includeOwnAsWorker && user.role === UserRole.Subcontractor) {
+      // A subcontractor's contact reads the sites its own people are on; the
+      // grid is then cut down to those people in getGrid.
+      if (!user.companyId || !user.subcontractorId) return [];
+      const ownIds = await this.subcontractorUserIds(
+        user.companyId,
+        user.subcontractorId,
+      );
+      if (!ownIds.length) return [];
+      filter.companyId = user.companyId;
+      filter.workers = { $in: ownIds };
+      if (projectId) filter._id = projectId;
     } else if (includeOwnAsWorker && user.role === UserRole.Worker) {
       // A worker reads only the sites they are on — their own row is cut out
       // of the grid in getGrid, so they never see a colleague's hours.
@@ -174,6 +187,18 @@ export class HoursService {
     }
 
     return this.projectModel.find(filter).exec();
+  }
+
+  private async subcontractorUserIds(
+    companyId: string,
+    subcontractorId: string,
+  ): Promise<string[]> {
+    const users = await this.userModel
+      .find({ companyId, subcontractorId: String(subcontractorId) })
+      .select("_id")
+      .lean()
+      .exec();
+    return users.map((u) => this.getEntityId(u));
   }
 
   async getGrid(user: AuthenticatedUser, query: HoursQueryDto) {
@@ -412,15 +437,32 @@ export class HoursService {
       }
     }
 
-    const workerIds = [...byWorker.keys()].filter(
+    const candidateIds = [...byWorker.keys()].filter(
       (id) => !selfOnly || id === String(user.userId),
     );
     const users = await this.userModel
-      .find({ _id: { $in: workerIds } })
-      .select("name role profession avatarUrl")
+      .find({ _id: { $in: candidateIds } })
+      .select("name role profession avatarUrl subcontractorId")
       .lean()
       .exec();
     const userById = new Map(users.map((u) => [this.getEntityId(u), u]));
+
+    // Which firm's people to show. A subcontractor's contact always gets its
+    // own firm only; the company's admins may narrow the grid with the filter
+    // ("own" = own staff, an id = that subcontractor).
+    const firmFilter =
+      user.role === UserRole.Subcontractor
+        ? String(user.subcontractorId || "none")
+        : selfOnly
+          ? null
+          : query.subcontractorId || null;
+    const workerIds = candidateIds.filter((id) => {
+      if (!firmFilter) return true;
+      const firm = userById.get(id)?.subcontractorId
+        ? String(userById.get(id)?.subcontractorId)
+        : null;
+      return firmFilter === "own" ? !firm : firm === firmFilter;
+    });
 
     // Company admins work and log hours too, so their shifts count on the Hours
     // grid. Only the platform superadmin is excluded.
@@ -497,6 +539,7 @@ export class HoursService {
         name: u?.name || "Unknown",
         role: u?.role || null,
         profession: u?.profession || null,
+        subcontractorId: u?.subcontractorId ? String(u.subcontractorId) : null,
         avatarUrl: u?.avatarUrl || null,
         cells,
       };

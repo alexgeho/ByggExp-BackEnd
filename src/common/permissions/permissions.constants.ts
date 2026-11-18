@@ -53,6 +53,13 @@ export const PERMISSION_DEFAULTS_BY_ROLE: Record<string, PermissionKey[]> = {
     PERMISSIONS.TOOLS_MANAGE,
   ],
   [UserRole.Worker]: [],
+  // Menu-level capabilities only; the data is narrowed to the subcontractor's
+  // own people in the queries (users, hours, shifts).
+  [UserRole.Subcontractor]: [
+    PERMISSIONS.SHIFTS_VIEW_ALL,
+    PERMISSIONS.SHIFTS_EXPORT,
+    PERMISSIONS.EMPLOYEES_MANAGE,
+  ],
 };
 
 type PermissionOverrides = { granted?: string[]; revoked?: string[] } | null;

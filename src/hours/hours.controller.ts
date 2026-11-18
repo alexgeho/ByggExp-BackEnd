@@ -30,6 +30,7 @@ export class HoursController {
     UserRole.SuperAdmin,
     UserRole.CompanyAdmin,
     UserRole.ProjectAdmin,
+    UserRole.Subcontractor,
     UserRole.Worker,
   )
   getGrid(@Request() req, @Query() query: HoursQueryDto) {

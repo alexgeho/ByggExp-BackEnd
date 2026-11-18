@@ -793,6 +793,7 @@ export class AuthController {
       const canUseAdmin = [
         "companyAdmin",
         "projectAdmin",
+        "subcontractor",
         "superadmin",
       ].includes(user?.role);
       res

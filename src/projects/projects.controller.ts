@@ -146,8 +146,17 @@ export class ProjectsController {
   }
 
   @Get("my")
-  @Roles(UserRole.CompanyAdmin, UserRole.ProjectAdmin, UserRole.Worker)
+  @Roles(
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Subcontractor,
+    UserRole.Worker,
+  )
   async findAllByUser(@Request() req): Promise<Project[]> {
+    if (req.user.role === UserRole.Subcontractor) {
+      // Orders the firm's people are on — names only (no client, no money).
+      return this.projectsService.findForSubcontractor(req.user);
+    }
     await this.projectsService.ensureInternalProject(req.user);
     if (req.user.role === UserRole.CompanyAdmin) {
       // CompanyAdmin sees all projects in its company

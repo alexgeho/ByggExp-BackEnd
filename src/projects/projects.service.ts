@@ -1010,6 +1010,26 @@ export class ProjectsService {
       .exec();
   }
 
+  // Orders that a subcontractor firm's people are assigned to, cut down to
+  // what its contact person may see: no client, budget, rates or documents.
+  async findForSubcontractor(user: {
+    companyId?: string | null;
+    subcontractorId?: string | null;
+  }): Promise<Project[]> {
+    if (!user?.companyId || !user?.subcontractorId) return [];
+    const ownIds = await this.usersService.findSubcontractorUserIds(
+      String(user.companyId),
+      String(user.subcontractorId),
+    );
+    if (!ownIds.length) return [];
+    return this.projectModel
+      .find({ companyId: user.companyId, workers: { $in: ownIds } })
+      .select("name status location beginningDate endDate workType companyId")
+      .sort({ name: 1 })
+      .lean()
+      .exec() as unknown as Promise<Project[]>;
+  }
+
   async findMyPopulated(user: ProjectAuthUser) {
     let filter: Record<string, unknown>;
     if (user?.role === UserRole.SuperAdmin) {

@@ -16,4 +16,11 @@ export class HoursQueryDto {
     message: "to must be in YYYY-MM-DD format",
   })
   to?: string;
+
+  // "own" = the company's own staff; an id = that subcontractor's people.
+  @IsOptional()
+  @Matches(/^(own|[a-f\d]{24})$/i, {
+    message: "subcontractorId must be 'own' or a valid ObjectId",
+  })
+  subcontractorId?: string;
 }

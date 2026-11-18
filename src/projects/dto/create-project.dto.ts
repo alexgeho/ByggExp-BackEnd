@@ -6,6 +6,7 @@ import {
   IsArray,
   IsDateString,
   IsNumber,
+  MaxLength,
   ValidateNested,
 } from "class-validator";
 import { Transform, Expose, Type } from "class-transformer";
@@ -170,6 +171,11 @@ export class CreateProjectDto {
   @IsOptional()
   @IsEnum(["project", "service", "installation", "jour", "garanti"])
   orderType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  workType?: string;
 
   @IsDateString()
   @IsOptional()

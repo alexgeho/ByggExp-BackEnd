@@ -66,6 +66,7 @@ type AuthenticatedUser = {
   userId: string;
   role: UserRole;
   companyId?: string | null;
+  subcontractorId?: string | null;
 };
 
 // How long an active shift's device can go without checking in (polling
@@ -1610,6 +1611,25 @@ export class ShiftsService {
         filter.workerId = query.workerId;
       }
 
+      return filter;
+    }
+
+    if (user.role === UserRole.Subcontractor) {
+      const own =
+        user.companyId && user.subcontractorId
+          ? await this.userModel
+              .find({
+                companyId: user.companyId,
+                subcontractorId: String(user.subcontractorId),
+              })
+              .select("_id")
+              .lean()
+              .exec()
+          : [];
+      filter.workerId = { $in: own.map((u) => String(u._id)) };
+      if (query.projectId) {
+        filter.projectId = query.projectId;
+      }
       return filter;
     }
 

@@ -100,6 +100,11 @@ export class Project {
   })
   orderType: string;
 
+  // Kind of work the order needs (e.g. "Målare"). Free text matched against a
+  // person's profession when staff is assigned.
+  @Prop({ type: String, default: "", trim: true })
+  workType?: string;
+
   @Prop({ type: Date })
   beginningDate: Date;
 

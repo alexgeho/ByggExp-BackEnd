@@ -16,6 +16,7 @@ import {
   UploadedFiles,
   UseInterceptors,
   Logger,
+  ForbiddenException,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import {
@@ -113,11 +114,50 @@ export class UsersController {
   ) {}
 
   @Post()
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Subcontractor,
+  )
   async create(
     @Body() createUserDto: CreateUserDto,
     @Request() req,
   ): Promise<User | (Record<string, unknown> & { inviteEmailSent: boolean })> {
+    // A subcontractor's contact person adds workers of its own firm only: the
+    // role, the firm and the (empty) project list are fixed here, pay fields
+    // are dropped — whatever the request says.
+    if (req.user.role === UserRole.Subcontractor) {
+      if (!req.user.subcontractorId) {
+        throw new ForbiddenException("No subcontractor context");
+      }
+      createUserDto.role = UserRole.Worker;
+      createUserDto.subcontractorId = String(req.user.subcontractorId);
+      createUserDto.projectIds = [];
+      for (const key of [
+        "hourlyRate",
+        "taxTable",
+        "taxColumn",
+        "wageCategory",
+        "payrollEmployeeId",
+      ] as const) {
+        delete createUserDto[key];
+      }
+    } else if (
+      req.user.role !== UserRole.SuperAdmin &&
+      req.user.role !== UserRole.CompanyAdmin
+    ) {
+      // Only the company's admins place a person in a subcontractor firm.
+      delete createUserDto.subcontractorId;
+    } else if (createUserDto.subcontractorId) {
+      await this.usersService.assertSubcontractorInCompany(
+        createUserDto.subcontractorId,
+        req.user.companyId,
+      );
+    } else {
+      createUserDto.subcontractorId = null;
+    }
+
     // ProjectAdmin may create workers and (scoped) project admins — never a
     // company admin / superadmin. Escalation attempts fall back to worker. The
     // finance capability is never grantable by a project admin (permission edits
@@ -289,7 +329,12 @@ export class UsersController {
   }
 
   @Get("my-company")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Subcontractor,
+  )
   findAllByMyCompany(@Request() req): Promise<User[]> {
     // Company-scoped for every role; additionally narrowed for a project admin
     // to the users it created + members of the projects it manages.
@@ -535,6 +580,7 @@ export class UsersController {
     UserRole.SuperAdmin,
     UserRole.CompanyAdmin,
     UserRole.ProjectAdmin,
+    UserRole.Subcontractor,
     UserRole.Worker,
   )
   update(
@@ -595,7 +641,12 @@ export class UsersController {
   }
 
   @Post(":id/resend-invite")
-  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin, UserRole.ProjectAdmin)
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Subcontractor,
+  )
   resendInvite(@Param("id") id: string, @Request() req) {
     return this.usersService
       .assertCanEditUser(req.user, id)

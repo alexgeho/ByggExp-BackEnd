@@ -1,4 +1,8 @@
 import {
+  Subcontractor,
+  SubcontractorDocument,
+} from "../subcontractors/schemas/subcontractor.schema";
+import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -60,6 +64,7 @@ type AuthUser = {
   userId?: string;
   role?: UserRole;
   companyId?: string | null;
+  subcontractorId?: string | null;
   permissions?: { granted?: string[]; revoked?: string[] } | null;
 };
 
@@ -204,7 +209,25 @@ export class UsersService {
     @InjectModel(WageRate.name)
     private wageRateModel: Model<WageRateDocument>,
     private readonly mailService: MailService,
+    @InjectModel(Subcontractor.name)
+    private subcontractorModel: Model<SubcontractorDocument>,
   ) {}
+
+  // A person can be placed only in a subcontractor firm of the same company.
+  async assertSubcontractorInCompany(
+    subcontractorId: string,
+    companyId?: string | null,
+  ): Promise<void> {
+    const found =
+      companyId && /^[a-f\d]{24}$/i.test(String(subcontractorId))
+        ? await this.subcontractorModel
+            .exists({ _id: subcontractorId, companyId: String(companyId) })
+            .exec()
+        : null;
+    if (!found) {
+      throw new BadRequestException("Unknown subcontractor");
+    }
+  }
 
   async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, 10);
@@ -255,24 +278,27 @@ export class UsersService {
   // language) and in the admin-facing "already registered" message (Swedish).
   // Falls back to Swedish for any language without a translation.
   private getRoleLabel(role: UserRole, lang = "sv"): string {
-    const byLang: Record<string, Record<UserRole, string>> = {
+    const byLang: Record<string, Partial<Record<UserRole, string>>> = {
       sv: {
         [UserRole.SuperAdmin]: "Superadministratör",
         [UserRole.CompanyAdmin]: "Företagsadministratör",
         [UserRole.ProjectAdmin]: "Projektadministratör",
         [UserRole.Worker]: "Medarbetare",
+        [UserRole.Subcontractor]: "Underentreprenör",
       },
       nb: {
         [UserRole.SuperAdmin]: "Superadministrator",
         [UserRole.CompanyAdmin]: "Bedriftsadministrator",
         [UserRole.ProjectAdmin]: "Prosjektadministrator",
         [UserRole.Worker]: "Medarbeider",
+        [UserRole.Subcontractor]: "Underentreprenør",
       },
       en: {
         [UserRole.SuperAdmin]: "Super administrator",
         [UserRole.CompanyAdmin]: "Company administrator",
         [UserRole.ProjectAdmin]: "Project administrator",
         [UserRole.Worker]: "Employee",
+        [UserRole.Subcontractor]: "Subcontractor",
       },
       pl: {
         [UserRole.SuperAdmin]: "Superadministrator",
@@ -421,7 +447,30 @@ export class UsersService {
       }
     }
 
+    if (actor.role === UserRole.Subcontractor) {
+      return this.isOwnSubcontractorWorker(actor, targetUserId);
+    }
+
     return false;
+  }
+
+  // A subcontractor's contact person reaches only workers of its own firm, in
+  // the same company — never the main company's staff or another firm's.
+  private async isOwnSubcontractorWorker(
+    actor: AuthUser,
+    targetUserId: string,
+  ): Promise<boolean> {
+    if (!actor.companyId || !actor.subcontractorId) return false;
+    const found = await this.userModel
+      .exists({
+        _id: targetUserId,
+        companyId: actor.companyId,
+        subcontractorId: String(actor.subcontractorId),
+        role: UserRole.Worker,
+        erasedAt: null,
+      })
+      .exec();
+    return Boolean(found);
   }
 
   private async canEditUser(
@@ -473,6 +522,10 @@ export class UsersService {
         return false;
       }
       return this.canProjectAdminManageWorker(actorUserId, targetUserId);
+    }
+
+    if (actor.role === UserRole.Subcontractor) {
+      return this.isOwnSubcontractorWorker(actor, targetUserId);
     }
 
     return false;
@@ -1180,7 +1233,31 @@ export class UsersService {
         .find({ companyId: actor.companyId, erasedAt: null, $or: or })
         .exec();
     }
+    // A subcontractor's contact person: its own firm's people only.
+    if (actor.role === UserRole.Subcontractor) {
+      if (!actor.subcontractorId) return [];
+      return this.userModel
+        .find({
+          companyId: actor.companyId,
+          subcontractorId: String(actor.subcontractorId),
+          erasedAt: null,
+        })
+        .exec();
+    }
     return [];
+  }
+
+  // Ids of a subcontractor firm's people in a company (hours / shifts scoping).
+  async findSubcontractorUserIds(
+    companyId: string,
+    subcontractorId: string,
+  ): Promise<string[]> {
+    const users = await this.userModel
+      .find({ companyId, subcontractorId: String(subcontractorId) })
+      .select("_id")
+      .lean()
+      .exec();
+    return users.map((u) => String(u._id));
   }
 
   async findAllByProject(
@@ -1721,6 +1798,17 @@ export class UsersService {
           requested === UserRole.ProjectAdmin);
       if (!isSuper && !companyAdminMayAssign) {
         delete cleaned.role;
+      }
+    }
+
+    // Which firm a person comes from is set by the company's admins only; a
+    // subcontractor's contact (or the person) can never move someone between
+    // firms or into the company's own staff.
+    if ("subcontractorId" in cleaned) {
+      if (!isSuper && !isCompanyAdmin) {
+        delete cleaned.subcontractorId;
+      } else {
+        cleaned.subcontractorId = cleaned.subcontractorId || null;
       }
     }
 

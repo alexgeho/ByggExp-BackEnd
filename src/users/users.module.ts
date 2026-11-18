@@ -21,6 +21,10 @@ import { WorkerNote, WorkerNoteSchema } from "./schemas/worker-note.schema";
 import { MailModule } from "../mail/mail.module";
 import { Tool, ToolSchema } from "../tools/schemas/tool.schema";
 import { ScanningModule } from "../scanning/scanning.module";
+import {
+  Subcontractor,
+  SubcontractorSchema,
+} from "../subcontractors/schemas/subcontractor.schema";
 
 @Module({
   imports: [
@@ -35,6 +39,7 @@ import { ScanningModule } from "../scanning/scanning.module";
       { name: WorkerNote.name, schema: WorkerNoteSchema },
       { name: Tool.name, schema: ToolSchema },
       { name: WageRate.name, schema: WageRateSchema },
+      { name: Subcontractor.name, schema: SubcontractorSchema },
     ]),
   ],
   controllers: [UsersController],

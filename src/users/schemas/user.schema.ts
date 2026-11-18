@@ -40,6 +40,9 @@ export enum UserRole {
   CompanyAdmin = "companyAdmin",
   ProjectAdmin = "projectAdmin",
   Worker = "worker",
+  // Contact person of a subcontractor firm (underentreprenör): signs in to the
+  // admin and sees only the firm's own workers and their hours.
+  Subcontractor = "subcontractor",
 }
 
 export enum UserWorkStatus {
@@ -302,6 +305,10 @@ export class User {
 
   @Prop({ type: String, ref: "Company", default: null })
   companyId: string | null;
+
+  // Subcontractor firm this person comes from (null = the company's own staff).
+  @Prop({ type: String, ref: "Subcontractor", default: null, index: true })
+  subcontractorId?: string | null;
 
   @Prop({ type: [String], ref: "Project", default: [] })
   projectIds: string[];
