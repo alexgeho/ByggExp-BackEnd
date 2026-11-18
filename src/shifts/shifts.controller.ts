@@ -331,6 +331,7 @@ export class ShiftsController {
     UserRole.SuperAdmin,
     UserRole.CompanyAdmin,
     UserRole.ProjectAdmin,
+    UserRole.Subcontractor,
     UserRole.Worker,
   )
   list(@Request() req, @Query() query: ListShiftsDto) {

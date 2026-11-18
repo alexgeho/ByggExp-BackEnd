@@ -54,10 +54,10 @@ export const PERMISSION_DEFAULTS_BY_ROLE: Record<string, PermissionKey[]> = {
   ],
   [UserRole.Worker]: [],
   // Menu-level capabilities only; the data is narrowed to the subcontractor's
-  // own people in the queries (users, hours, shifts).
+  // own people in the queries (users, hours, shifts). No export: the hours
+  // PDF prints the order's hourly price, which a subcontractor must not see.
   [UserRole.Subcontractor]: [
     PERMISSIONS.SHIFTS_VIEW_ALL,
-    PERMISSIONS.SHIFTS_EXPORT,
     PERMISSIONS.EMPLOYEES_MANAGE,
   ],
 };
