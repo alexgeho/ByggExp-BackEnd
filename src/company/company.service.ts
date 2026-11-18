@@ -183,7 +183,12 @@ export class CompanyService implements OnApplicationBootstrap {
       throw new NotFoundException("Company not found");
     }
     const invite = await this.inviteModel
-      .findOne({ companyId: company._id.toString(), acceptedAt: null })
+      // the company admin's own invite — never a subcontractor contact's
+      .findOne({
+        companyId: company._id.toString(),
+        acceptedAt: null,
+        subcontractorId: null,
+      })
       .sort({ createdAt: -1 })
       .exec();
     if (!invite) {
@@ -276,14 +281,100 @@ export class CompanyService implements OnApplicationBootstrap {
       userEmail: invite.email,
     });
     const company = await this.companyModel.findById(invite.companyId).exec();
+    // A subcontractor's contact sets up its own firm, not the client company.
+    const firmName = await this.subcontractorName(invite.subcontractorId);
     return {
       email: invite.email,
       name: invite.name,
       role: invite.role,
       companyId: invite.companyId,
-      companyName: company?.name || "",
+      companyName: firmName || company?.name || "",
       language: invite.language || "sv",
     };
+  }
+
+  private async subcontractorName(id?: string | null): Promise<string> {
+    if (!id) return "";
+    try {
+      const firm = await this.connection
+        .model("Subcontractor")
+        .findById(id)
+        .select("name")
+        .lean<{ name?: string }>()
+        .exec();
+      return firm?.name || "";
+    } catch {
+      return "";
+    }
+  }
+
+  // A company invites the contact person of a subcontractor firm. Same flow as
+  // a client's own admin (owner 18.11): a pending invite, the /invite page where
+  // the person picks name + password, the account-ready mail afterwards, and a
+  // used link that answers "already created" instead of an error. No user
+  // exists until the invite is accepted.
+  async inviteSubcontractorContact(opts: {
+    companyId: string;
+    subcontractorId: string;
+    subcontractorName: string;
+    email: string;
+    name?: string;
+    language?: string;
+    invitedByUserId?: string | null;
+  }): Promise<{ invited: boolean }> {
+    const email = opts.email.trim().toLowerCase();
+    const lang = opts.language?.trim() || "sv";
+    const token = randomBytes(32).toString("hex");
+    await this.inviteModel.create({
+      companyId: opts.companyId,
+      email,
+      name: opts.name?.trim() || "",
+      role: UserRole.Subcontractor,
+      subcontractorId: opts.subcontractorId,
+      language: lang,
+      token,
+      expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+      invitedByUserId: opts.invitedByUserId ?? null,
+    });
+
+    let invited = false;
+    if (this.mailService.isConfigured()) {
+      try {
+        await this.mailService.sendCompanyInviteEmail(
+          email,
+          opts.subcontractorName,
+          token,
+          lang,
+        );
+        invited = true;
+      } catch (error) {
+        this.logger.error(
+          `Failed to send subcontractor invite to ${email}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+    } else {
+      this.logger.warn(
+        `SMTP not configured — subcontractor invite to ${email} not sent`,
+      );
+    }
+
+    this.audit?.event({
+      event: "invite_sent",
+      companyId: opts.companyId,
+      userEmail: email,
+      success: invited,
+      message: invited
+        ? "Subcontractor contact"
+        : "The invitation e-mail did not go out",
+    });
+
+    return { invited };
+  }
+
+  // Pending subcontractor invites of a firm are dropped with the firm.
+  async removeSubcontractorInvites(subcontractorId: string): Promise<void> {
+    await this.inviteModel.deleteMany({ subcontractorId }).exec();
   }
 
   // Public: create the company's admin account from a valid invite.
@@ -305,22 +396,46 @@ export class CompanyService implements OnApplicationBootstrap {
       throw new ConflictException("A user with this email already exists");
     }
 
+    // The invite is for the company's own admin — or, with a subcontractor
+    // firm on it, for that firm's contact person.
+    const forSubcontractor =
+      invite.role === UserRole.Subcontractor && Boolean(invite.subcontractorId);
+    const role = forSubcontractor
+      ? UserRole.Subcontractor
+      : UserRole.CompanyAdmin;
+
     const hashedPassword = await this.usersService.hashPassword(dto.password);
     const user = await this.usersService.create({
       email: invite.email,
       name: dto.name?.trim() || invite.name || invite.email,
       password: hashedPassword,
-      role: UserRole.CompanyAdmin,
+      role,
       companyId: invite.companyId,
+      ...(forSubcontractor
+        ? { subcontractorId: String(invite.subcontractorId) }
+        : {}),
       projectIds: [],
       accountStatus: UserAccountStatus.Active,
       // Legacy { code: name } shape — only the key is read (languageCode()).
       language: { [invite.language || "sv"]: invite.language || "sv" },
     } as never);
 
-    await this.companyModel.findByIdAndUpdate(invite.companyId, {
-      $push: { companyAdmins: user._id.toString() },
-    });
+    if (forSubcontractor) {
+      try {
+        await this.connection
+          .model("Subcontractor")
+          .findByIdAndUpdate(invite.subcontractorId, {
+            contactUserId: user._id.toString(),
+          })
+          .exec();
+      } catch {
+        // the link to the firm lives on the user; this is only a back-reference
+      }
+    } else {
+      await this.companyModel.findByIdAndUpdate(invite.companyId, {
+        $push: { companyAdmins: user._id.toString() },
+      });
+    }
 
     invite.acceptedAt = new Date();
     await invite.save();
@@ -329,17 +444,18 @@ export class CompanyService implements OnApplicationBootstrap {
       companyId: invite.companyId,
       userId: user._id.toString(),
       userEmail: invite.email,
-      userRole: UserRole.CompanyAdmin,
+      userRole: role,
     });
 
     // The invite link is spent now — mail the permanent way in. A failed send
     // must not undo an account that already exists.
     try {
       const company = await this.companyModel.findById(invite.companyId).exec();
+      const firmName = await this.subcontractorName(invite.subcontractorId);
       await this.mailService.sendAccountReadyEmail({
         email: invite.email,
         name: dto.name?.trim() || invite.name || "",
-        companyName: company?.name || "",
+        companyName: firmName || company?.name || "",
         lang: invite.language || "sv",
       });
     } catch (error) {
@@ -428,7 +544,8 @@ export class CompanyService implements OnApplicationBootstrap {
     const [companies, invites] = await Promise.all([
       this.companyModel.find().lean().exec(),
       this.inviteModel
-        .find()
+        // company admin invites only (subcontractor contacts have their own)
+        .find({ subcontractorId: null })
         .select("companyId acceptedAt createdAt updatedAt")
         .sort({ createdAt: 1 })
         .lean<

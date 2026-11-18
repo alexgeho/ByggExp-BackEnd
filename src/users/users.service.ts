@@ -501,7 +501,8 @@ export class UsersService {
       // so admins can't quietly mint peer admins and resell access.
       if (
         targetUser.role !== UserRole.Worker &&
-        targetUser.role !== UserRole.ProjectAdmin
+        targetUser.role !== UserRole.ProjectAdmin &&
+        targetUser.role !== UserRole.Subcontractor
       ) {
         return false;
       }
@@ -554,7 +555,8 @@ export class UsersService {
       // so admins can't quietly mint peer admins and resell access.
       if (
         targetUser.role !== UserRole.Worker &&
-        targetUser.role !== UserRole.ProjectAdmin
+        targetUser.role !== UserRole.ProjectAdmin &&
+        targetUser.role !== UserRole.Subcontractor
       ) {
         return false;
       }

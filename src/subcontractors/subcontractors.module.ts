@@ -9,6 +9,7 @@ import { SubcontractorsService } from "./subcontractors.service";
 import { User, UserSchema } from "../users/schemas/user.schema";
 import { Company, CompanySchema } from "../company/schemas/company.schema";
 import { UsersModule } from "../users/users.module";
+import { CompanyModule } from "../company/company.module";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { UsersModule } from "../users/users.module";
       { name: Company.name, schema: CompanySchema },
     ]),
     UsersModule,
+    CompanyModule,
   ],
   controllers: [SubcontractorsController],
   providers: [SubcontractorsService],

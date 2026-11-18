@@ -25,6 +25,11 @@ export class CompanyInvite {
   @Prop({ type: String, enum: UserRole, default: UserRole.CompanyAdmin })
   role: UserRole;
 
+  // Set when the invite is for a subcontractor firm's contact person (role
+  // "subcontractor"): the account is tied to that firm on acceptance.
+  @Prop({ type: String, ref: "Subcontractor", default: null })
+  subcontractorId?: string | null;
+
   @Prop({ required: true, unique: true, index: true })
   token: string;
 

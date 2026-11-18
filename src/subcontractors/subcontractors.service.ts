@@ -13,6 +13,8 @@ import {
 import { User, UserDocument, UserRole } from "../users/schemas/user.schema";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import { UsersService } from "../users/users.service";
+import { CompanyService } from "../company/company.service";
+import { languageCode } from "../common/language";
 import {
   CreateSubcontractorDto,
   UpdateSubcontractorDto,
@@ -33,6 +35,7 @@ export class SubcontractorsService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
     private readonly usersService: UsersService,
+    private readonly companyService: CompanyService,
   ) {}
 
   private requireCompany(actor?: AuthUser): string {
@@ -77,23 +80,24 @@ export class SubcontractorsService {
       .exec();
   }
 
-  // Creates the firm and, when an e-mail is given, invites its contact person
-  // to the admin (role "subcontractor"). The invite uses the ordinary user
-  // invitation, so the seat limit and the per-company e-mail check apply.
+  // Creates the firm and invites its contact person. The invitation is the same
+  // one a client's own admin gets (owner 18.11): a link to the /invite page,
+  // name + password there, then the account-ready mail; no user exists until
+  // the person accepts. The seat limit is checked now, so the invite cannot
+  // lead to an account the plan has no room for.
   async create(dto: CreateSubcontractorDto, actor: AuthUser) {
     const companyId = this.requireCompany(actor);
     const email = (dto.email || "").trim().toLowerCase();
 
     if (email) {
-      const existing = await this.usersService.findByEmailInCompany(
-        email,
-        companyId,
-      );
+      // Acceptance refuses an address that already has an account anywhere.
+      const existing = await this.usersService.findByEmail(email);
       if (existing) {
         throw new ConflictException(
           "En användare med den e-postadressen finns redan",
         );
       }
+      await this.usersService.assertCompanySeatAvailable(companyId);
     }
 
     const firm = await new this.subcontractorModel({
@@ -118,23 +122,18 @@ export class SubcontractorsService {
             .lean()
             .exec()
         : null;
-      const { user, inviteEmailSent } =
-        await this.usersService.createUserPendingApproval({
-          email,
-          ...(inviter?.language ? { language: inviter.language } : {}),
-          name: dto.contactPerson?.trim() || dto.name.trim(),
-          profession: dto.workType?.trim() || "",
-          role: UserRole.Subcontractor,
-          companyId,
-          subcontractorId: String(firm._id),
-          createdBy: actor.userId ?? null,
-        });
-      firm.contactUserId = String(user._id);
-      await firm.save();
-      return { ...firm.toObject(), inviteEmailSent };
+      const { invited } = await this.companyService.inviteSubcontractorContact({
+        companyId,
+        subcontractorId: String(firm._id),
+        subcontractorName: firm.name,
+        email,
+        name: dto.contactPerson?.trim() || "",
+        language: languageCode(inviter?.language),
+        invitedByUserId: actor.userId ?? null,
+      });
+      return { ...firm.toObject(), inviteEmailSent: invited };
     } catch (error) {
-      // No firm without its contact when the invitation could not be created
-      // (seat limit, duplicate e-mail): the admin simply tries again.
+      // No firm without its invitation: the admin simply tries again.
       await firm.deleteOne();
       throw error;
     }
@@ -167,6 +166,7 @@ export class SubcontractorsService {
         "Underentreprenören har personal — flytta eller ta bort personerna först",
       );
     }
+    await this.companyService.removeSubcontractorInvites(String(firm._id));
     await firm.deleteOne();
     return { ok: true };
   }

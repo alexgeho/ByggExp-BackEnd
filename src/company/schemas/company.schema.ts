@@ -200,7 +200,11 @@ export class Company {
   hiddenReportFields: string[];
 
   // ---- Superadmin label: our own / test / real customer (null = unset) ----
-  @Prop({ type: String, enum: ["own", "test", "customer", null], default: null })
+  @Prop({
+    type: String,
+    enum: ["own", "test", "customer", null],
+    default: null,
+  })
   label?: "own" | "test" | "customer" | null;
 
   // ---- Where the self-serve sign-up came from (see auth/signup-source.ts) ----

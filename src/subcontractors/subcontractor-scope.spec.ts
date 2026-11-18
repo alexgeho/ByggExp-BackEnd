@@ -48,14 +48,20 @@ describe("SubcontractorsService", () => {
     };
     const invites: any[] = [];
     const usersService: any = {
-      findByEmailInCompany: () => Promise.resolve(null),
-      createUserPendingApproval: (dto: any) => {
-        invites.push(dto);
-        return opts.inviteFails
-          ? Promise.reject(new Error("Seat limit"))
-          : Promise.resolve({ user: { _id: "u1" }, inviteEmailSent: true });
-      },
+      findByEmail: () => Promise.resolve(null),
+      assertCompanySeatAvailable: () => Promise.resolve(),
     };
+    const companyService: any = {
+      inviteSubcontractorContact: (opts: any) => {
+        invites.push(opts);
+        return inviteResult();
+      },
+      removeSubcontractorInvites: () => Promise.resolve(),
+    };
+    const inviteResult = () =>
+      opts.inviteFails
+        ? Promise.reject(new Error("Seat limit"))
+        : Promise.resolve({ invited: true });
     const userModel: any = {
       findById: () => chainOf({ language: { ru: "Русский" } }),
     };
@@ -64,6 +70,7 @@ describe("SubcontractorsService", () => {
       userModel,
       companyModel,
       usersService,
+      companyService,
     );
     return { service, queries, saved, deleted, invites };
   };
@@ -94,22 +101,29 @@ describe("SubcontractorsService", () => {
     expect(queries).toEqual([["find", { companyId: "c1" }]]);
   });
 
-  it("invites the contact with the subcontractor role, tied to the firm", async () => {
+  it("invites the contact through the client invite flow, tied to the firm", async () => {
     const { service, invites } = build();
     const out = await service.create(
-      { name: "Måleri AB", email: "Mikael@Maleri.se", workType: "Målare" },
+      {
+        name: "Måleri AB",
+        email: "Mikael@Maleri.se",
+        contactPerson: "Mikael",
+        workType: "Målare",
+      },
       { role: UserRole.CompanyAdmin, companyId: "c1", userId: "admin" },
     );
-    expect(invites).toHaveLength(1);
-    expect(invites[0]).toMatchObject({
-      email: "mikael@maleri.se",
-      role: UserRole.Subcontractor,
-      companyId: "c1",
-      subcontractorId: "f".repeat(24),
-      profession: "Målare",
-      // the invitation is written in the inviting admin's language
-      language: { ru: "Русский" },
-    });
+    expect(invites).toEqual([
+      {
+        companyId: "c1",
+        subcontractorId: "f".repeat(24),
+        subcontractorName: "Måleri AB",
+        email: "mikael@maleri.se",
+        name: "Mikael",
+        // written in the inviting admin's language
+        language: "ru",
+        invitedByUserId: "admin",
+      },
+    ]);
     expect(out.inviteEmailSent).toBe(true);
   });
 
