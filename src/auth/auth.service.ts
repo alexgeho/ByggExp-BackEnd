@@ -42,6 +42,14 @@ import { MailService } from "../mail/mail.service";
 import { resolveMailLang, type MailLang } from "../mail/email-copy";
 import { languageCode } from "../common/language";
 
+// Roles that sign in to the web admin (the others only use the mobile app).
+export const WEB_ADMIN_ROLES: string[] = [
+  "companyAdmin",
+  "projectAdmin",
+  "subcontractor",
+  "superadmin",
+];
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -596,6 +604,32 @@ export class AuthService {
       this.logger.warn(
         `Failed to store invite-activation activity for user ${user._id.toString()}`,
       );
+    }
+
+    // The invite link is spent now. Anyone who can use the web admin gets the
+    // permanent way in by mail: the admin login plus the app links (owner
+    // 18.11). A failed send must not undo an account that already exists.
+    if (WEB_ADMIN_ROLES.includes(user.role)) {
+      try {
+        const company = user.companyId
+          ? await this.companyModel
+              .findById(user.companyId)
+              .select("name")
+              .lean()
+              .exec()
+          : null;
+        await this.mailService.sendAccountReadyEmail({
+          email: user.email,
+          name: user.name || "",
+          companyName: company?.name || "",
+          lang: languageCode(user.language) || "sv",
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to send account-ready email to ${user.email}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
     }
 
     return {

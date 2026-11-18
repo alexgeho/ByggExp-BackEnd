@@ -56,9 +56,12 @@ describe("SubcontractorsService", () => {
           : Promise.resolve({ user: { _id: "u1" }, inviteEmailSent: true });
       },
     };
+    const userModel: any = {
+      findById: () => chainOf({ language: { ru: "Русский" } }),
+    };
     const service = new SubcontractorsService(
       Model as any,
-      {} as any,
+      userModel,
       companyModel,
       usersService,
     );
@@ -104,6 +107,8 @@ describe("SubcontractorsService", () => {
       companyId: "c1",
       subcontractorId: "f".repeat(24),
       profession: "Målare",
+      // the invitation is written in the inviting admin's language
+      language: { ru: "Русский" },
     });
     expect(out.inviteEmailSent).toBe(true);
   });

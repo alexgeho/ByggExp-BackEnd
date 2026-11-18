@@ -9,7 +9,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
-import { AuthService } from "./auth.service";
+import { AuthService, WEB_ADMIN_ROLES } from "./auth.service";
 import { CreateUserDto } from "../users/dto/create-user.dto";
 import { RegisterCompanyPublicDto } from "./dto/register-company-public.dto";
 import { Public } from "../common/decorators/public.decorator";
@@ -131,6 +131,9 @@ function chooseDestinationHtml(magicLoginCode: string, lang: MailLang): string {
         web.className = 'button';
         app.className = 'button secondary';
         app.parentNode.insertBefore(web, app);
+        // On a computer there is nothing to choose: straight into the web
+        // admin (owner 18.11). The buttons stay as a fallback.
+        window.location.replace(web.href);
       })();
     </script>
   </body>
@@ -790,12 +793,7 @@ export class AuthController {
         await this.authService.activateInviteWithPassword(token, password);
       // Admins (company/project) can also use the web admin, so let them pick
       // where to continue. Workers only have the app → straight to it.
-      const canUseAdmin = [
-        "companyAdmin",
-        "projectAdmin",
-        "subcontractor",
-        "superadmin",
-      ].includes(user?.role);
+      const canUseAdmin = WEB_ADMIN_ROLES.includes(user?.role);
       res
         .status(200)
         .type("html")

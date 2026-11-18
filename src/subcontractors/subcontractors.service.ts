@@ -110,9 +110,18 @@ export class SubcontractorsService {
     if (!email) return { ...firm.toObject(), inviteEmailSent: false };
 
     try {
+      // The invitation goes out in the inviting admin's language.
+      const inviter = actor.userId
+        ? await this.userModel
+            .findById(actor.userId)
+            .select("language")
+            .lean()
+            .exec()
+        : null;
       const { user, inviteEmailSent } =
         await this.usersService.createUserPendingApproval({
           email,
+          ...(inviter?.language ? { language: inviter.language } : {}),
           name: dto.contactPerson?.trim() || dto.name.trim(),
           profession: dto.workType?.trim() || "",
           role: UserRole.Subcontractor,
