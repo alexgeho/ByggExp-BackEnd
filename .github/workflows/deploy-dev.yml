@@ -69,7 +69,8 @@ jobs:
             cd "$DIR"
             export PUPPETEER_SKIP_DOWNLOAD=true
             npm ci --omit=dev --no-audit --no-fund
-            PREV="$(readlink -f "$BASE/current" 2>/dev/null || true)"
+            PREV=""
+            [ -L "$BASE/current" ] && [ -e "$BASE/current" ] && PREV="$(readlink -f "$BASE/current")"
             ln -sfn "$DIR" "$BASE/current"
             PM2="$(command -v pm2 || true)"
             [ -x "$PM2" ] || PM2=/usr/local/bin/pm2
@@ -85,7 +86,7 @@ jobs:
             if [ "$HEALTHY" != "1" ]; then
               echo "DEV health check failed" >&2
               "$PM2" logs byggexp-api-dev --lines 50 --nostream || true
-              if [ -n "${PREV:-}" ] && [ -d "$PREV" ]; then
+              if [ -n "${PREV:-}" ] && [ -d "$PREV" ] && [ "$PREV" != "$DIR" ]; then
                 ln -sfn "$PREV" "$BASE/current"
                 cd "$BASE/current" && "$PM2" startOrReload ecosystem.dev.config.js --update-env || true
               fi
