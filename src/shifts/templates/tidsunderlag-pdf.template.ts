@@ -7,6 +7,7 @@ export type TidsunderlagDay = { date: string; wk: number; we: boolean };
 
 export type TidsunderlagGroup = {
   label: string;
+  name?: string;
   rows: Array<{ name: string; cells: Array<number | null>; total: number }>;
   totalHours: number;
 };
@@ -98,7 +99,7 @@ export function buildTidsunderlagHtml(data: TidsunderlagData): string {
   td, th { border: 0.3mm solid #c8c8c8; padding: 1.4mm 0.6mm; font-size: 8.5pt; text-align: center; font-weight: normal; overflow: hidden; white-space: nowrap; }
   col.name { width: 46mm; }
   th.date { white-space: normal; line-height: 1.25; }
-  .title { font-weight: bold; font-size: 10pt; }
+  .title { font-weight: bold; font-size: 10pt; white-space: normal; }
   .wk { font-size: 11pt; }
   .left { text-align: left; padding-left: 1.6mm; }
   .right { text-align: right; padding-right: 1.6mm; }

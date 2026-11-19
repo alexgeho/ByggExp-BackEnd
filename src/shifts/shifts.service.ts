@@ -1342,7 +1342,11 @@ export class ShiftsService {
     const round2 = (n: number) => Math.round(n * 100) / 100;
     const byProject = new Map<
       string,
-      { label: string; workers: Map<string, { name: string; ms: number[] }> }
+      {
+        label: string;
+        name: string;
+        workers: Map<string, { name: string; ms: number[] }>;
+      }
     >();
     for (const shift of shifts) {
       const i = dayIndex.get(shift.shiftDate);
@@ -1350,8 +1354,13 @@ export class ShiftsService {
       if (i === undefined || project?.internal) continue;
       const key = String(shift.projectId);
       if (!byProject.has(key)) {
+        // The band shows number and name ("P-1042 · Brf Solgläntan"), the top
+        // cell the name — not the number twice (owner 19.11).
+        const name = project?.name || shift.projectName || "";
+        const littera = (project?.littera || "").trim();
         byProject.set(key, {
-          label: project?.littera || project?.name || shift.projectName || "",
+          label: littera && littera !== name ? `${littera} · ${name}` : name,
+          name,
           workers: new Map(),
         });
       }
@@ -1384,6 +1393,7 @@ export class ShiftsService {
           .sort((a, b) => a.name.localeCompare(b.name, "sv"));
         return {
           label: project.label,
+          name: project.name,
           rows,
           totalHours: round2(rows.reduce((sum, row) => sum + row.total, 0)),
         };
@@ -1393,7 +1403,7 @@ export class ShiftsService {
 
     const tidsDays = toTidsunderlagDays(dates);
     const title =
-      groups.length === 1 ? groups[0].label || "Tidsunderlag" : "Tidsunderlag";
+      groups.length === 1 ? groups[0].name || "Tidsunderlag" : "Tidsunderlag";
     const html = buildTidsunderlagHtml({
       title,
       days: tidsDays,
