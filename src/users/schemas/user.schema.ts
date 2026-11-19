@@ -230,6 +230,11 @@ export class User {
   @Prop({ default: "" })
   personalNumber?: string;
 
+  // Anställningsavtal (19.11): the contract fields as last edited by the
+  // admin (text values of the contract form), reused for download / e-mail.
+  @Prop({ type: Object, default: null })
+  employmentContract?: Record<string, unknown> | null;
+
   @Prop({ default: "" })
   avatarUrl: string;
 

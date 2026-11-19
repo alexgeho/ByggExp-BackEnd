@@ -640,6 +640,21 @@ export class UsersController {
     );
   }
 
+  // Anställningsavtal (19.11): save the edited contract fields on the worker.
+  @Put(":id/contract")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  saveEmploymentContract(
+    @Param("id") id: string,
+    @Body() body: { contract?: Record<string, unknown> },
+    @Request() req,
+  ) {
+    return this.usersService
+      .assertCanEditUser(req.user, id)
+      .then(() =>
+        this.usersService.saveEmploymentContract(id, body?.contract || {}),
+      );
+  }
+
   // Anställningsavtal (19.11): mail the contract PDF to the worker.
   @Post(":id/contract-mail")
   @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)

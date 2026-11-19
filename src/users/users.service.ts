@@ -827,6 +827,27 @@ export class UsersService {
 
   // Re-send the invitation email with a fresh temporary password and
   // verification token (the previous ones may be used or expired).
+  // Anställningsavtal (19.11): keep the edited contract fields on the worker.
+  async saveEmploymentContract(
+    userId: string,
+    contract: Record<string, unknown>,
+  ): Promise<{ ok: true; employmentContract: Record<string, unknown> }> {
+    const clean: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(contract || {}).slice(0, 80)) {
+      if (!/^[A-Za-z]{1,40}$/.test(key)) continue;
+      if (typeof value === "boolean") clean[key] = value;
+      else if (value === null || value === undefined) clean[key] = "";
+      else clean[key] = String(value).slice(0, 2000);
+    }
+    const user = await this.userModel
+      .findByIdAndUpdate(userId, { employmentContract: clean }, { new: true })
+      .exec();
+    if (!user) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+    return { ok: true, employmentContract: clean };
+  }
+
   // Anställningsavtal (19.11): the PDF is drawn in the admin and mailed to the
   // worker as an attachment from here.
   async sendContractMail(
