@@ -1354,12 +1354,12 @@ export class ShiftsService {
       if (i === undefined || project?.internal) continue;
       const key = String(shift.projectId);
       if (!byProject.has(key)) {
-        // The band shows number and name ("P-1042 · Brf Solgläntan"), the top
-        // cell the name — not the number twice (owner 19.11).
+        // Top cell: the name; green band: the project number only — the name
+        // is never repeated (owner 19.11).
         const name = project?.name || shift.projectName || "";
         const littera = (project?.littera || "").trim();
         byProject.set(key, {
-          label: littera && littera !== name ? `${littera} · ${name}` : name,
+          label: littera,
           name,
           workers: new Map(),
         });
@@ -1400,6 +1400,12 @@ export class ShiftsService {
       })
       .filter((group) => group.rows.length)
       .sort((a, b) => a.label.localeCompare(b.label, "sv"));
+
+    // Several projects: a band without a number names its project, otherwise
+    // the rows could not be told apart. One project: its name is on top.
+    if (groups.length > 1) {
+      for (const group of groups) group.label = group.label || group.name || "";
+    }
 
     const tidsDays = toTidsunderlagDays(dates);
     const title =

@@ -77,7 +77,9 @@ export function buildTidsunderlagHtml(data: TidsunderlagData): string {
   const groups = data.groups
     .map(
       (group) =>
-        `<tr><td colspan="${cols}" class="green left bold">${esc(group.label)}</td></tr>` +
+        (group.label
+          ? `<tr><td colspan="${cols}" class="green left bold">${esc(group.label)}</td></tr>`
+          : "") +
         group.rows
           .map(
             (row) =>
