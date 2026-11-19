@@ -44,6 +44,20 @@ const companyLogoStorage = diskStorage({
   },
 });
 
+const companySignatureStorage = diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = "./uploads/company-signatures";
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = /^\.(png|jpe?g)$/i.test(extname(file.originalname || ""))
+      ? extname(file.originalname).toLowerCase()
+      : ".png";
+    cb(null, `signature-${Date.now()}${ext}`);
+  },
+});
+
 @Controller("company")
 @UseGuards(AuthGuard("jwt"), RolesGuard)
 export class CompanyController {
@@ -200,6 +214,54 @@ export class CompanyController {
     return this.companyService.update(id, {
       logoUrl: `/uploads/company-logos/${file.filename}`,
     });
+  }
+
+  // Signature image (19.11): PNG/JPG scan of the company signatory.
+  @Post(":id/signature")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  @UseInterceptors(
+    FileInterceptor("signature", {
+      storage: companySignatureStorage,
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        cb(null, /^image\/(png|jpe?g)$/.test(file.mimetype));
+      },
+    }),
+  )
+  async uploadSignature(
+    @Param("id") id: string,
+    @UploadedFile() file: { filename: string } | undefined,
+    @Request() req,
+  ): Promise<Company> {
+    if (req.user.role === UserRole.CompanyAdmin && req.user.companyId !== id) {
+      throw new ForbiddenException("Access denied");
+    }
+    if (!file) {
+      throw new BadRequestException("Upload a PNG or JPG image");
+    }
+    const patch = { signatureUrl: `/uploads/company-signatures/${file.filename}` };
+    return this.companyService.update(id, patch as Partial<CreateCompanyDto>);
+  }
+
+  // The signature as a data URL, so the admin can draw it into a PDF.
+  @Get(":id/signature")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  async getSignature(@Param("id") id: string, @Request() req) {
+    if (req.user.role === UserRole.CompanyAdmin && req.user.companyId !== id) {
+      throw new ForbiddenException("Access denied");
+    }
+    const company = (await this.companyService.findOne(id)) as unknown as {
+      signatureUrl?: string;
+    };
+    const url = String(company?.signatureUrl || "");
+    const match = url.match(/^\/uploads\/company-signatures\/([\w.-]+)$/);
+    if (!match) return { dataUrl: null };
+    const path = `./uploads/company-signatures/${match[1]}`;
+    if (!fs.existsSync(path)) return { dataUrl: null };
+    const type = /\.jpe?g$/i.test(match[1]) ? "image/jpeg" : "image/png";
+    return {
+      dataUrl: `data:${type};base64,${fs.readFileSync(path).toString("base64")}`,
+    };
   }
 
   // Effective module set (plan preset + overrides). Company staff may read

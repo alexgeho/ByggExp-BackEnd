@@ -137,6 +137,11 @@ export class Company {
   @Prop({ default: "" })
   logoUrl: string;
 
+  // Scanned signature of the person who signs for the company (19.11), under
+  // /uploads/company-signatures; printed on the employment contract.
+  @Prop({ default: "" })
+  signatureUrl: string;
+
   @Prop({ type: [String], ref: "User", default: [] })
   companyAdmins: string[];
 
