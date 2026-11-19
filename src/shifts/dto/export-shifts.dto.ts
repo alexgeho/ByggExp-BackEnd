@@ -6,8 +6,10 @@ export const HOURS_SOURCES: HoursSource[] = ["planned", "gps", "manual"];
 
 export class ExportShiftsDto extends ListShiftsDto {
   @IsOptional()
-  @IsIn(["pdf", "excel"], { message: "format must be either pdf or excel" })
-  format?: "pdf" | "excel";
+  @IsIn(["pdf", "excel", "tidsunderlag"], {
+    message: "format must be pdf, excel or tidsunderlag",
+  })
+  format?: "pdf" | "excel" | "tidsunderlag";
 
   // Which hours source the report should bill on. Defaults to GPS (measured).
   @IsOptional()

@@ -17,6 +17,12 @@ import { Ata, AtaDocument } from "../ata/schemas/ata.schema";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
 import { launchForInvoicePdf } from "../invoices/puppeteer-launch";
 import {
+  buildTidsunderlagHtml,
+  TidsunderlagGroup,
+  tidsunderlagPageFormat,
+  toTidsunderlagDays,
+} from "./templates/tidsunderlag-pdf.template";
+import {
   buildPersonalliggareHtml,
   PersonalliggareRow,
 } from "./templates/personalliggare-pdf.template";
@@ -1275,6 +1281,14 @@ export class ShiftsService {
     );
     const fileBaseName = this.buildExportFileBaseName(query, days);
 
+    if (format === "tidsunderlag") {
+      return {
+        buffer: await this.buildTidsunderlagPdf(serializedShifts, days, query),
+        fileName: `${fileBaseName.replace("shift-report", "tidsunderlag")}.pdf`,
+        mimeType: "application/pdf",
+      };
+    }
+
     if (format === "excel") {
       return {
         buffer: await this.buildExcelReport(
@@ -1301,6 +1315,137 @@ export class ShiftsService {
       fileName: `${fileBaseName}.pdf`,
       mimeType: "application/pdf",
     };
+  }
+
+  // Tidsunderlag (same table as the web admin's): a column for every day of
+  // the asked period, a row per worker, one green band per project. «Intern
+  // tid» is never billed, so it is left out.
+  private async buildTidsunderlagPdf(
+    shifts: SerializedShiftRecord[],
+    days: ShiftDayRecord[],
+    query: ExportShiftsDto,
+  ): Promise<Buffer> {
+    const dates = this.tidsunderlagDates(query, days);
+    const dayIndex = new Map(dates.map((date, i) => [date, i]));
+    const projectIds = Array.from(
+      new Set(shifts.map((shift) => String(shift.projectId))),
+    );
+    const projects = await this.projectModel
+      .find({ _id: { $in: projectIds } })
+      .select("_id name littera internal")
+      .lean()
+      .exec();
+    const projectById = new Map(
+      projects.map((project) => [String(project._id), project]),
+    );
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const byProject = new Map<
+      string,
+      { label: string; workers: Map<string, { name: string; ms: number[] }> }
+    >();
+    for (const shift of shifts) {
+      const i = dayIndex.get(shift.shiftDate);
+      const project = projectById.get(String(shift.projectId));
+      if (i === undefined || project?.internal) continue;
+      const key = String(shift.projectId);
+      if (!byProject.has(key)) {
+        byProject.set(key, {
+          label: project?.littera || project?.name || shift.projectName || "",
+          workers: new Map(),
+        });
+      }
+      const workers = byProject.get(key)!.workers;
+      const workerKey = String(shift.workerId);
+      if (!workers.has(workerKey)) {
+        workers.set(workerKey, {
+          name: shift.workerName || workerKey,
+          ms: dates.map(() => 0),
+        });
+      }
+      workers.get(workerKey)!.ms[i] += shift.durationMs || 0;
+    }
+
+    const groups: TidsunderlagGroup[] = [...byProject.values()]
+      .map((project) => {
+        const rows = [...project.workers.values()]
+          .map((worker) => {
+            const cells = worker.ms.map((ms) => {
+              const hours = round2(ms / 3600000);
+              return hours > 0 ? hours : null;
+            });
+            return {
+              name: worker.name,
+              cells,
+              total: round2(cells.reduce<number>((sum, h) => sum + (h || 0), 0)),
+            };
+          })
+          .filter((row) => row.total > 0)
+          .sort((a, b) => a.name.localeCompare(b.name, "sv"));
+        return {
+          label: project.label,
+          rows,
+          totalHours: round2(rows.reduce((sum, row) => sum + row.total, 0)),
+        };
+      })
+      .filter((group) => group.rows.length)
+      .sort((a, b) => a.label.localeCompare(b.label, "sv"));
+
+    const tidsDays = toTidsunderlagDays(dates);
+    const title =
+      groups.length === 1 ? groups[0].label || "Tidsunderlag" : "Tidsunderlag";
+    const html = buildTidsunderlagHtml({
+      title,
+      days: tidsDays,
+      groups,
+      totalHours: round2(groups.reduce((sum, g) => sum + g.totalHours, 0)),
+    });
+    const browser = await launchForInvoicePdf();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "load" });
+      return Buffer.from(
+        await page.pdf({
+          format: tidsunderlagPageFormat(tidsDays),
+          landscape: true,
+          printBackground: true,
+          preferCSSPageSize: true,
+        }),
+      );
+    } finally {
+      await browser.close();
+    }
+  }
+
+  // Every day of the asked period (picked days, from–to, or the month); with
+  // no period, the span of the days that have hours.
+  private tidsunderlagDates(
+    query: ExportShiftsDto,
+    days: ShiftDayRecord[],
+  ): string[] {
+    if (query.dates) {
+      return Array.from(
+        new Set(query.dates.split(",").map((d) => d.trim()).filter(Boolean)),
+      ).sort();
+    }
+    let from = query.from;
+    let to = query.to;
+    if (query.month) {
+      const [y, m] = query.month.split("-").map(Number);
+      from = `${query.month}-01`;
+      to = `${query.month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
+    }
+    from = from || days[0]?.date;
+    to = to || days[days.length - 1]?.date;
+    if (!from || !to || from > to) return [];
+    const out: string[] = [];
+    const cursor = new Date(`${from}T00:00:00Z`);
+    const end = new Date(`${to}T00:00:00Z`);
+    while (cursor <= end && out.length < 93) {
+      out.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return out;
   }
 
   private hoursSourceLabel(hoursSource: HoursSource) {
