@@ -1,0 +1,95 @@
+name: Deploy DEV (dev-api.byggexp.se)
+
+# Branch `dev` → the development API on the same VPS, base ByggExp_dev.
+# Production (main → api.byggexp.se) is not touched by this workflow.
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-byggexp-api-dev
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.2'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests
+        run: npm test -- --ci
+
+      - name: Build NestJS
+        run: npm run build
+
+      - name: Pack release
+        run: |
+          tar --exclude='./.git' --exclude='./.github' --exclude='./node_modules' --exclude='./test' \
+              -czf /tmp/byggexp-api-dev-release.tar.gz .
+          mv /tmp/byggexp-api-dev-release.tar.gz ./byggexp-api-dev-release.tar.gz
+
+      - name: Upload to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: byggexp-api-dev-release.tar.gz
+          target: /tmp/
+
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            RELEASE=$(date -u +%Y%m%d-%H%M%S)
+            BASE=/opt/byggexp-api-dev
+            DIR=$BASE/releases/$RELEASE
+            mkdir -p "$DIR"
+            tar -xzf /tmp/byggexp-api-dev-release.tar.gz -C "$DIR"
+            rm -f /tmp/byggexp-api-dev-release.tar.gz
+            ln -sf "$BASE/shared/.env" "$DIR/.env"
+            rm -rf "$DIR/uploads"
+            ln -s "$BASE/shared/uploads" "$DIR/uploads"
+            cd "$DIR"
+            export PUPPETEER_SKIP_DOWNLOAD=true
+            npm ci --omit=dev --no-audit --no-fund
+            PREV="$(readlink -f "$BASE/current" 2>/dev/null || true)"
+            ln -sfn "$DIR" "$BASE/current"
+            PM2="$(command -v pm2 || true)"
+            [ -x "$PM2" ] || PM2=/usr/local/bin/pm2
+            cd "$BASE/current"
+            "$PM2" startOrReload ecosystem.dev.config.js --update-env
+            "$PM2" save
+            sleep 5
+            HEALTHY=0
+            for i in 1 2 3 4 5 6; do
+              if curl -fsS -m 5 http://127.0.0.1:3005/ > /dev/null 2>&1; then HEALTHY=1; break; fi
+              sleep 5
+            done
+            if [ "$HEALTHY" != "1" ]; then
+              echo "DEV health check failed" >&2
+              "$PM2" logs byggexp-api-dev --lines 50 --nostream || true
+              if [ -n "${PREV:-}" ] && [ -d "$PREV" ]; then
+                ln -sfn "$PREV" "$BASE/current"
+                cd "$BASE/current" && "$PM2" startOrReload ecosystem.dev.config.js --update-env || true
+              fi
+              exit 1
+            fi
+            ls -1dt $BASE/releases/*/ 2>/dev/null | tail -n +4 | xargs -r rm -rf
+            echo "==> DEV deploy successful: $RELEASE"
