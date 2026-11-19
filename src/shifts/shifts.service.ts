@@ -11,7 +11,6 @@ import ExcelJS from "exceljs";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { NotificationsService } from "../notifications/notifications.service";
-import PDFDocument from "pdfkit";
 import { Project, ProjectDocument } from "../projects/schemas/project.schema";
 import { Ata, AtaDocument } from "../ata/schemas/ata.schema";
 import { Company, CompanyDocument } from "../company/schemas/company.schema";
@@ -22,6 +21,10 @@ import {
   tidsunderlagPageFormat,
   toTidsunderlagDays,
 } from "./templates/tidsunderlag-pdf.template";
+import {
+  buildHoursGridHtml,
+  hoursGridPageFormat,
+} from "./templates/hours-grid-pdf.template";
 import {
   buildPersonalliggareHtml,
   PersonalliggareRow,
@@ -1304,17 +1307,92 @@ export class ShiftsService {
       };
     }
 
+    // PDF = the web admin's «Timmar» table (owner 19.11: the phone must give
+    // the same file as the computer).
+    const gridDates = this.tidsunderlagDates(query, days);
     return {
-      buffer: await this.buildPdfReport(
+      buffer: await this.buildHoursGridPdf(
         serializedShifts,
-        days,
-        query,
-        totalDurationMs,
+        gridDates,
         hoursSource,
       ),
-      fileName: `${fileBaseName}.pdf`,
+      fileName: gridDates.length
+        ? `hours_${gridDates[0]}_${gridDates[gridDates.length - 1]}.pdf`
+        : `${fileBaseName}.pdf`,
       mimeType: "application/pdf",
     };
+  }
+
+  // Same table as byggexp-admin Hours → PDF: project name on top, a row per
+  // worker (all their projects summed per day), 0 on empty days, Dagssumma.
+  private async buildHoursGridPdf(
+    shifts: SerializedShiftRecord[],
+    dates: string[],
+    hoursSource: HoursSource,
+  ): Promise<Buffer> {
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const dayIndex = new Map(dates.map((date, i) => [date, i]));
+    const workers = new Map<string, { name: string; ms: number[] }>();
+    const projectNames = new Set<string>();
+    for (const shift of shifts) {
+      const i = dayIndex.get(shift.shiftDate);
+      if (i === undefined) continue;
+      if (shift.projectName) projectNames.add(shift.projectName);
+      const key = String(shift.workerId);
+      if (!workers.has(key)) {
+        workers.set(key, {
+          name: shift.workerName || key,
+          ms: dates.map(() => 0),
+        });
+      }
+      workers.get(key)!.ms[i] += shift.durationMs || 0;
+    }
+    const rows = [...workers.values()]
+      .map((worker) => {
+        const cells = worker.ms.map((ms) => round2(ms / 3600000));
+        return {
+          name: worker.name,
+          cells,
+          total: round2(cells.reduce((sum, h) => sum + h, 0)),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "sv"));
+
+    // Labels as in the admin's Swedish UI.
+    const basis =
+      hoursSource === "planned"
+        ? "planerat"
+        : hoursSource === "manual"
+          ? "Manuellt"
+          : "GPS";
+    const period = dates.length
+      ? `${dates[0]} – ${dates[dates.length - 1]}`
+      : "";
+    const html = buildHoursGridHtml({
+      project:
+        [...projectNames].sort((a, b) => a.localeCompare(b, "sv")).join(", ") ||
+        "Alla projekt",
+      title: `Timmar · ${period}`,
+      subtitle: basis,
+      totalLabel: `Totalt (${basis})`,
+      dates,
+      rows,
+    });
+    const browser = await launchForInvoicePdf();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "load" });
+      return Buffer.from(
+        await page.pdf({
+          format: hoursGridPageFormat(dates),
+          landscape: true,
+          printBackground: true,
+          preferCSSPageSize: true,
+        }),
+      );
+    } finally {
+      await browser.close();
+    }
   }
 
   // Tidsunderlag (same table as the web admin's): a column for every day of
@@ -1386,7 +1464,9 @@ export class ShiftsService {
             return {
               name: worker.name,
               cells,
-              total: round2(cells.reduce<number>((sum, h) => sum + (h || 0), 0)),
+              total: round2(
+                cells.reduce<number>((sum, h) => sum + (h || 0), 0),
+              ),
             };
           })
           .filter((row) => row.total > 0)
@@ -1441,7 +1521,12 @@ export class ShiftsService {
   ): string[] {
     if (query.dates) {
       return Array.from(
-        new Set(query.dates.split(",").map((d) => d.trim()).filter(Boolean)),
+        new Set(
+          query.dates
+            .split(",")
+            .map((d) => d.trim())
+            .filter(Boolean),
+        ),
       ).sort();
     }
     let from = query.from;
@@ -2336,95 +2421,6 @@ export class ShiftsService {
     }
 
     return Buffer.from(await workbook.xlsx.writeBuffer());
-  }
-
-  private buildPdfReport(
-    shifts: SerializedShiftRecord[],
-    days: ShiftDayRecord[],
-    query: ExportShiftsDto,
-    totalDurationMs: number,
-    hoursSource: HoursSource,
-  ) {
-    return new Promise<Buffer>((resolve, reject) => {
-      const doc = new PDFDocument({ size: "A4", margin: 40 });
-      const chunks: Buffer[] = [];
-
-      const ensureSpace = (height = 24) => {
-        if (doc.y + height > doc.page.height - 40) {
-          doc.addPage();
-        }
-      };
-
-      doc.on("data", (chunk) =>
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)),
-      );
-      doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", reject);
-
-      doc.fontSize(18).text("Shift report");
-      doc.moveDown(0.5);
-      doc
-        .fontSize(11)
-        .text(`Generated at: ${this.formatDateTimeValue(new Date())}`);
-      doc.text(`Period: ${this.getReportPeriodLabel(query, days)}`);
-      doc.text(`Hours source: ${this.hoursSourceLabel(hoursSource)}`);
-      doc.text(`Total shifts: ${shifts.length}`);
-      doc.text(`Total duration: ${this.formatDurationLabel(totalDurationMs)}`);
-
-      if (!days.length) {
-        doc.moveDown(1);
-        doc.fontSize(11).text("No shifts found for the selected filters.");
-        doc.end();
-        return;
-      }
-
-      doc.moveDown(0.8);
-      doc.fontSize(13).text("Per project");
-      for (const worker of this.summarizeByWorkerProject(shifts)) {
-        ensureSpace(30 + worker.projects.length * 14);
-        doc.moveDown(0.35);
-        doc
-          .fontSize(11)
-          .text(
-            `${worker.workerName} | Total ${this.msToHours(worker.totalMs)} h`,
-          );
-        for (const project of worker.projects) {
-          doc
-            .fontSize(10)
-            .text(
-              `   ${project.projectName} | ${project.days} d | ${this.msToHours(project.ms)} h`,
-            );
-        }
-      }
-
-      for (const day of days) {
-        ensureSpace(40);
-        doc.moveDown(0.8);
-        doc
-          .fontSize(13)
-          .text(
-            `${day.date} | ${this.formatDurationLabel(day.totalDurationMs)}`,
-          );
-
-        for (const shift of day.shifts) {
-          ensureSpace(54);
-          doc.moveDown(0.35);
-          doc
-            .fontSize(10)
-            .text(
-              `${shift.workerName || shift.workerId} | ${shift.projectName || shift.projectId} | ${this.formatDurationLabel(shift.durationMs)}`,
-            );
-          doc.text(
-            `Time: ${this.formatTimeValue(shift.startedAt)} - ${this.formatTimeValue(shift.endedAt)}`,
-          );
-          doc.text(
-            `Location: ${shift.location || "-"} | Status: ${shift.status} | Photos: ${shift.photos?.length || 0}`,
-          );
-        }
-      }
-
-      doc.end();
-    });
   }
 
   private serializeShift(shift: ShiftDocument) {
