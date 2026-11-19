@@ -640,6 +640,25 @@ export class UsersController {
     );
   }
 
+  // Anställningsavtal (19.11): mail the contract PDF to the worker.
+  @Post(":id/contract-mail")
+  @Roles(UserRole.SuperAdmin, UserRole.CompanyAdmin)
+  sendContractMail(
+    @Param("id") id: string,
+    @Body() body: { pdfBase64?: string; fileName?: string },
+    @Request() req,
+  ) {
+    return this.usersService
+      .assertCanEditUser(req.user, id)
+      .then(() =>
+        this.usersService.sendContractMail(
+          id,
+          String(body?.pdfBase64 || ""),
+          body?.fileName,
+        ),
+      );
+  }
+
   @Post(":id/resend-invite")
   @Roles(
     UserRole.SuperAdmin,

@@ -827,6 +827,53 @@ export class UsersService {
 
   // Re-send the invitation email with a fresh temporary password and
   // verification token (the previous ones may be used or expired).
+  // Anställningsavtal (19.11): the PDF is drawn in the admin and mailed to the
+  // worker as an attachment from here.
+  async sendContractMail(
+    userId: string,
+    pdfBase64: string,
+    fileName?: string,
+  ): Promise<{ ok: true; email: string }> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+    if (!user.email) {
+      throw new BadRequestException("Arbetstagaren saknar e-postadress");
+    }
+    if (!this.mailService.isConfigured()) {
+      throw new BadRequestException(
+        "E-post är inte konfigurerad — avtalet kunde inte skickas",
+      );
+    }
+    const content = Buffer.from(String(pdfBase64 || ""), "base64");
+    if (!content.length || content.subarray(0, 4).toString() !== "%PDF") {
+      throw new BadRequestException("Ogiltig PDF");
+    }
+    const safeName =
+      String(fileName || "anstallningsavtal.pdf").replace(/[^\w.\-åäöÅÄÖ]/g, "_") ||
+      "anstallningsavtal.pdf";
+    const greeting = user.name ? `Hej ${user.name}!` : "Hej!";
+    const text = `${greeting}\n\nHär är ditt anställningsavtal (bifogad PDF). Läs igenom det, skriv under och lämna tillbaka det till din arbetsgivare.\n\nVänliga hälsningar`;
+    await this.mailService.sendHtmlEmail({
+      to: user.email,
+      subject: "Anställningsavtal",
+      text,
+      html: text
+        .split("\n\n")
+        .map((p) => `<p>${p.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`)
+        .join(""),
+      attachments: [
+        {
+          filename: safeName.endsWith(".pdf") ? safeName : `${safeName}.pdf`,
+          content,
+          contentType: "application/pdf",
+        },
+      ],
+    });
+    return { ok: true, email: user.email };
+  }
+
   async resendInvite(userId: string): Promise<{ ok: true }> {
     const user = await this.userModel.findById(userId).exec();
     if (!user) {
