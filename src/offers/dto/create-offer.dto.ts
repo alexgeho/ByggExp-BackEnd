@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsNumber,
   IsOptional,
@@ -47,6 +48,11 @@ export class OfferItemDto {
   @IsOptional()
   @IsNumber()
   vatRate?: number;
+
+  // Text-only row (heading/note), same as on the invoice: no amount.
+  @IsOptional()
+  @IsBoolean()
+  isText?: boolean;
 }
 
 export class CreateOfferDto {

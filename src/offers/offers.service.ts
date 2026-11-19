@@ -168,6 +168,7 @@ export class OffersService {
         price: it?.price,
         discount: it?.discount,
         vatRate: it?.vatRate,
+        isText: Boolean(it?.isText),
       })),
       subtotal: offer.subtotal,
       vat: offer.vat,

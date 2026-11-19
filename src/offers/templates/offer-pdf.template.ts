@@ -32,6 +32,7 @@ export type OfferPdfItem = {
   price?: number;
   discount?: number;
   vatRate?: number;
+  isText?: boolean;
 };
 
 // Recipient block, as on the invoice: name, street, postal code + city.

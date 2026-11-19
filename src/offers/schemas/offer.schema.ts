@@ -44,6 +44,10 @@ export class OfferItem {
 
   @Prop({ type: Number, default: 25 })
   vatRate?: number;
+
+  // Text-only row (heading/note), same as on the invoice: no amount.
+  @Prop({ type: Boolean, default: false })
+  isText?: boolean;
 }
 
 const OfferItemSchema = SchemaFactory.createForClass(OfferItem);
