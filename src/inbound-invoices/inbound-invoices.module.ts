@@ -8,6 +8,7 @@ import {
 import { Company, CompanySchema } from "../company/schemas/company.schema";
 import { InboundInvoicesController } from "./inbound-invoices.controller";
 import { InboundInvoicesService } from "./inbound-invoices.service";
+import { InboundMailboxService } from "./inbound-mailbox.service";
 
 @Module({
   imports: [
@@ -18,6 +19,6 @@ import { InboundInvoicesService } from "./inbound-invoices.service";
     ]),
   ],
   controllers: [InboundInvoicesController],
-  providers: [InboundInvoicesService],
+  providers: [InboundInvoicesService, InboundMailboxService],
 })
 export class InboundInvoicesModule {}
