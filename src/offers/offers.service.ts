@@ -242,6 +242,7 @@ export class OffersService {
       validUntil: offer.validUntil,
       message,
       pdf,
+      replyTo: footer.email || undefined,
       ...(no ? { lang: "nb" as const } : {}),
     });
 

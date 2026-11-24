@@ -587,6 +587,8 @@ export class MailService {
       dueDate?: string;
       message?: string;
       pdf: Buffer;
+      // Customer replies go to the sending company, not to our noreply.
+      replyTo?: string;
       // "nb" for Norwegian sellers; omitted = Swedish (unchanged).
       lang?: "nb";
     },
@@ -624,6 +626,7 @@ export class MailService {
 
     await this.transporter.sendMail({
       from: this.getFromAddress(),
+      ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
       to,
       subject,
       text,
@@ -661,6 +664,8 @@ export class MailService {
       currency?: string;
       message?: string;
       pdf?: Buffer;
+      // Customer replies go to the sending company, not to our noreply.
+      replyTo?: string;
     },
   ): Promise<{ sent: boolean; to: string }> {
     const nr = String(opts.invoiceNumber);
@@ -726,6 +731,7 @@ export class MailService {
 
     await this.transporter.sendMail({
       from: this.getFromAddress(),
+      ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
       to,
       subject,
       text,
@@ -756,6 +762,7 @@ export class MailService {
       validUntil?: string;
       message?: string;
       pdf: Buffer;
+      replyTo?: string;
     },
   ): Promise<{ sent: boolean; to: string }> {
     const isInvoice = kind === "invoice";
@@ -800,6 +807,7 @@ export class MailService {
 
     await this.transporter.sendMail({
       from: this.getFromAddress(),
+      ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
       to,
       subject,
       text,
@@ -823,6 +831,8 @@ export class MailService {
       validUntil?: string;
       message?: string;
       pdf: Buffer;
+      // Customer replies go to the sending company, not to our noreply.
+      replyTo?: string;
       // "nb" for Norwegian sellers; omitted = Swedish (unchanged).
       lang?: "nb";
     },
@@ -859,6 +869,7 @@ export class MailService {
 
     await this.transporter.sendMail({
       from: this.getFromAddress(),
+      ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
       to,
       subject,
       text,
