@@ -1,3 +1,4 @@
+import { companyReplyTo } from "../mail/company-reply-to";
 import {
   BadRequestException,
   ForbiddenException,
@@ -107,7 +108,10 @@ export class InvoicesService {
       dueDate: invoice.dueDate,
       message,
       pdf,
-      replyTo: await this.replyToOf(invoice),
+      replyTo: await companyReplyTo(
+        this.companyModel,
+        String(invoice.companyId),
+      ),
       ...(isNorway(country) ? { lang: "nb" as const } : {}),
     });
 
@@ -191,7 +195,10 @@ export class InvoicesService {
       plusgiro: invoice.companyFooter?.plusgiro,
       message: body.message,
       pdf,
-      replyTo: await this.replyToOf(invoice),
+      replyTo: await companyReplyTo(
+        this.companyModel,
+        String(invoice.companyId),
+      ),
     });
 
     invoice.lastReminderAt = new Date();
@@ -258,22 +265,6 @@ export class InvoicesService {
 
   // Seller country of an invoice: the snapshot on the document, else the
   // company's current country (documents made before the snapshot existed).
-  // Reply-To for mails to the customer: the company's own e-mail (Inställningar),
-  // so a customer's reply lands with the company, not on our noreply address.
-  private async replyToOf(invoice: {
-    companyId: string;
-    companyFooter?: { email?: string };
-  }): Promise<string | undefined> {
-    const company = await this.companyModel
-      .findById(invoice.companyId)
-      .select("email")
-      .lean()
-      .exec();
-    return (
-      (company?.email || invoice.companyFooter?.email || "").trim() || undefined
-    );
-  }
-
   private async countryOf(invoice: {
     country?: string;
     companyId: string;
