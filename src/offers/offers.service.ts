@@ -1,3 +1,4 @@
+import { companyReplyTo } from "../mail/company-reply-to";
 import {
   BadRequestException,
   ForbiddenException,
@@ -242,7 +243,7 @@ export class OffersService {
       validUntil: offer.validUntil,
       message,
       pdf,
-      replyTo: footer.email || undefined,
+      replyTo: await companyReplyTo(this.companyModel, String(offer.companyId)),
       ...(no ? { lang: "nb" as const } : {}),
     });
 
