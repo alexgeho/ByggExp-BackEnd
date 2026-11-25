@@ -124,6 +124,9 @@ export class MailerController {
   @Post("funnel/insights") insights(@Query("brand") brand?: string) {
     return this.funnel.generateInsights(brand || "");
   }
+  @Put("funnel/hidden-brands") setHiddenBrands(@Body() body: AnyBody) {
+    return this.funnel.setHiddenBrands((body as { brands?: unknown }).brands);
+  }
   @Get("funnel/share") getShare() {
     return this.funnel.share();
   }
