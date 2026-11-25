@@ -512,6 +512,11 @@ export class MailerFunnelConfig {
   @Prop({ type: [String], default: [] })
   sheetDone: string[];
 
+  // Brand tabs the owner hid in Tratt (owner 25.11): the tab is gone and its
+  // campaigns are left out of «Alla». Shown again from the same menu.
+  @Prop({ type: [String], default: [] })
+  hiddenBrands: string[];
+
   // Weekly conclusions written by Claude (Russian, 3–5 points).
   @Prop({ type: [String], default: [] })
   insights: string[];

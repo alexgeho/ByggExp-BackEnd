@@ -160,30 +160,35 @@ export class MailerFunnelService {
     from?: string;
     to?: string;
   }) {
-    const [all, lists, senders] = await Promise.all([
+    const [all, lists, senders, cfg] = await Promise.all([
       this.campaigns
         .find({ status: { $ne: "draft" } }, { snapshot: 0 })
         .sort({ startedAt: -1, createdAt: -1 })
         .lean(),
       this.lists.find({}, { name: 1 }).lean(),
       this.settings.listSenders(),
+      this.cfg(),
     ]);
+    const hidden = new Set(cfg.hiddenBrands ?? []);
     const senderLabel = new Map(senders.map((s) => [s.key, s.label]));
     const listName = new Map(lists.map((l) => [String(l._id), l.name]));
     // Tiny sends (a few mails to our own inboxes) are tests, not outreach.
-    const rows = all
+    const allRows = all
       .filter((c) => (c.stats?.total || 0) >= MIN_REAL_CAMPAIGN)
       .map((c) => ({
         c,
         brand: brandOf(senderLabel.get(senderKeysOf(c)[0]) || "", c.name),
       }));
     const boxes = await this.config.find({ key: /^inbox:/ }, { key: 1 }).lean();
-    const brands = [
+    const allBrands = [
       ...new Set([
-        ...rows.map((r) => r.brand).filter(Boolean),
+        ...allRows.map((r) => r.brand).filter(Boolean),
         ...boxes.map((b) => b.key.slice("inbox:".length)).filter(Boolean),
       ]),
     ];
+    const rows = allRows.filter((r) => !hidden.has(r.brand));
+    const brands = allBrands.filter((b) => !hidden.has(b));
+    const hiddenBrands = allBrands.filter((b) => hidden.has(b));
 
     const wanted = new Set(q.campaignIds?.filter(Boolean) ?? []);
     // Period = when the campaign started (a cohort), whole days, inclusive.
@@ -202,7 +207,7 @@ export class MailerFunnelService {
         inPeriod(r.c) &&
         (!wanted.size || wanted.has(String(r.c._id))),
     );
-    return { rows, picked, brands, listName, from, to };
+    return { rows, picked, brands, hiddenBrands, listName, from, to };
   }
 
   // Funnel + per-campaign table + replies + sign-ups. `publicView` drops
@@ -211,7 +216,7 @@ export class MailerFunnelService {
     q: { brand?: string; campaignIds?: string[]; from?: string; to?: string },
     publicView = false,
   ) {
-    const [{ rows, picked, brands, listName, from, to }, cfg] =
+    const [{ rows, picked, brands, hiddenBrands, listName, from, to }, cfg] =
       await Promise.all([this.pick(q), this.cfg()]);
     const ids = picked.map((r) => r.c._id);
 
@@ -268,6 +273,7 @@ export class MailerFunnelService {
     const nameOf = new Map(picked.map((r) => [String(r.c._id), r.c.name]));
     return {
       brands,
+      hiddenBrands: publicView ? [] : hiddenBrands,
       campaigns: rows.map((r) => ({
         _id: String(r.c._id),
         name: r.c.name,
@@ -618,6 +624,17 @@ export class MailerFunnelService {
     if (set.category === "unsubscribe")
       await this.listsService.markEverywhere(r.email, "unsubscribed");
     return r;
+  }
+
+  // ---------- hidden brand tabs ----------
+
+  async setHiddenBrands(brands: unknown) {
+    const c = await this.cfg();
+    c.hiddenBrands = Array.isArray(brands)
+      ? [...new Set(brands.map((b) => String(b).trim()).filter(Boolean))].slice(0, 50)
+      : [];
+    await c.save();
+    return { hiddenBrands: c.hiddenBrands };
   }
 
   // ---------- share link ----------
