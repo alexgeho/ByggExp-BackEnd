@@ -93,6 +93,8 @@ type UserActivityLogListResponse = {
 };
 
 type UserDetailResponse = {
+  carRegNumber: string;
+  carCo2GPerKm: number | null;
   id: string;
   email: string;
   name: string;
@@ -1640,6 +1642,9 @@ export class UsersService {
       avatarUrl: user.avatarUrl || "",
       phoneAreaCode: user.phoneAreaCode ?? null,
       phoneNumber: user.phoneNumber ?? null,
+      // Körjournal car, so the edit form shows what is saved.
+      carRegNumber: user.carRegNumber || "",
+      carCo2GPerKm: user.carCo2GPerKm ?? null,
       language: user.language || {},
       additionalDocuments: Array.isArray(user.additionalDocuments)
         ? user.additionalDocuments
