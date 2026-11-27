@@ -51,7 +51,8 @@ export function sumTripKm(trips: ShiftTrip[]): number {
 // - trips sent: with trips, travelKm is their sum; an emptied list drops the
 //   old sum unless a km was typed in the same save;
 // - only km sent and it differs from the trips: the typed km wins and the
-//   trips no longer describe it, so they are cleared.
+//   trips no longer describe it, so they are cleared (a km that only differs
+//   by rounding to whole km is the same km).
 // Call after travelKm itself has been applied.
 export function reconcileTrips(
   shift: { trips?: ShiftTrip[]; travelKm?: number },
@@ -66,15 +67,16 @@ export function reconcileTrips(
     return true;
   }
   const trips = shift.trips || [];
-  if (
-    dto.travelKm !== undefined &&
-    trips.length &&
-    sumTripKm(trips) !== round1(Number(shift.travelKm) || 0)
-  ) {
-    shift.trips = [];
-    return true;
+  if (dto.travelKm === undefined || !trips.length) return false;
+  const sum = sumTripKm(trips);
+  // Older screens send the day's km rounded to whole km: that is the same
+  // km, so the trips stay and the exact sum is kept.
+  if (Math.round(Number(dto.travelKm) || 0) === Math.round(sum)) {
+    shift.travelKm = sum;
+    return false;
   }
-  return false;
+  shift.trips = [];
+  return true;
 }
 
 // "↺ som förra gången": yesterday's trips without odometer readings — those

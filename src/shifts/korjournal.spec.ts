@@ -59,6 +59,19 @@ describe("körjournal", () => {
     expect(changed.travelKm).toBe(50);
   });
 
+  it("a km rounded to whole km keeps the trips and the exact sum", () => {
+    const shift = {
+      trips: [
+        { from: "", to: "A", purpose: "", km: 7.5 },
+        { from: "", to: "B", purpose: "", km: 4 },
+      ],
+      travelKm: 11.5,
+    };
+    expect(reconcileTrips(shift, { travelKm: 12 })).toBe(false);
+    expect(shift.trips).toHaveLength(2);
+    expect(shift.travelKm).toBe(11.5);
+  });
+
   it("repeat copies trips without odometer", () => {
     expect(
       tripsForRepeat([
