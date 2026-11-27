@@ -8,7 +8,7 @@ import {
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { cronsDisabled } from "../common/cron.util";
 import ExcelJS from "exceljs";
-import { applyTrips } from "./korjournal";
+import { reconcileTrips, tripsForRepeat } from "./korjournal";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -752,8 +752,8 @@ export class ShiftsService {
       shift.travelMinutes = Math.max(0, Math.round(dto.travelMinutes) || 0);
       changed = true;
     }
-    // After travelKm: with trips, their sum wins over a typed km.
-    if (applyTrips(shift, dto.trips)) changed = true;
+    // After travelKm: trips and km are kept in step (see reconcileTrips).
+    if (reconcileTrips(shift, dto)) changed = true;
     if (dto.perDiem !== undefined) {
       shift.perDiem = dto.perDiem;
       changed = true;
@@ -894,7 +894,7 @@ export class ShiftsService {
       hourType: shift.hourType || "normal",
       travelKm: shift.travelKm || 0,
       travelMinutes: shift.travelMinutes || 0,
-      trips: shift.trips || [],
+      trips: tripsForRepeat(shift.trips || []),
       perDiem: shift.perDiem || "none",
     };
   }
@@ -916,7 +916,7 @@ export class ShiftsService {
     if (dto.travelMinutes !== undefined) {
       shift.travelMinutes = Math.max(0, Math.round(dto.travelMinutes) || 0);
     }
-    applyTrips(shift, dto.trips);
+    reconcileTrips(shift, dto);
     if (dto.perDiem !== undefined) shift.perDiem = dto.perDiem;
     if (dto.dayNote !== undefined) shift.dayNote = dto.dayNote.trim();
     if (dto.ataId !== undefined) shift.ataId = dto.ataId || null;
@@ -2459,6 +2459,7 @@ export class ShiftsService {
       obMs: shift.obMs || 0,
       obStatus: shift.obStatus || null,
       travelKm: shift.travelKm || 0,
+      trips: shift.trips || [],
       travelMinutes: shift.travelMinutes || 0,
       perDiem: shift.perDiem || "none",
       dayNote: shift.dayNote || "",

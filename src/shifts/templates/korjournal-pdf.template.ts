@@ -9,6 +9,9 @@ export type KorjournalPdfData = KorjournalReport & {
   generatedAt: string;
 };
 
+export const ESTIMATED_NOTE =
+  "* Endast km angivet för dagen — Till och Ärende är projektets adress och namn.";
+
 function esc(value?: string | null): string {
   if (value === null || value === undefined) return "";
   return String(value)
@@ -36,7 +39,7 @@ export function buildKorjournalHtml(data: KorjournalPdfData): string {
         <td class="mono">${esc(r.date)}</td>
         <td>${esc(r.from) || "—"}</td>
         <td>${esc(r.to) || "—"}</td>
-        <td>${esc(r.purpose) || "—"}</td>
+        <td>${esc(r.purpose) || "—"}${r.estimated ? " *" : ""}</td>
         <td class="num">${r.odometerStart != null || r.odometerEnd != null ? `${svNumber(r.odometerStart, 0)} – ${svNumber(r.odometerEnd, 0)}` : "—"}</td>
         <td class="num">${svNumber(r.km)}</td>
         ${showCo2 ? `<td class="num">${svNumber(r.co2Kg, 2)}</td>` : ""}
@@ -95,6 +98,7 @@ export function buildKorjournalHtml(data: KorjournalPdfData): string {
       </tr>
     </tfoot>
   </table>
+  ${data.rows.some((r) => r.estimated) ? `<p class="foot">${esc(ESTIMATED_NOTE)}</p>` : ""}
   <p class="foot">Kvitton samma dagar: ${svNumber(data.receiptsTotal, 2)} kr. Genererad ${esc(data.generatedAt)}.</p>
 </body>
 </html>`;

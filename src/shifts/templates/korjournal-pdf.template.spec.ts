@@ -24,6 +24,7 @@ describe("körjournal PDF", () => {
           odometerStart: 1000,
           odometerEnd: 1012,
           co2Kg: 1.5,
+          estimated: true,
         },
       ],
       totalKm: 12.5,
@@ -34,6 +35,7 @@ describe("körjournal PDF", () => {
     expect(html).toContain("12,5");
     expect(html).toContain("CO₂ kg");
     expect(html).toContain("ABC123");
+    expect(html).toContain("Endast km angivet");
   });
 
   it("hides the CO2 column without g/km and says when empty", () => {

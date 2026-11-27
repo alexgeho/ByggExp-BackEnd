@@ -1,5 +1,6 @@
 import { Type } from "class-transformer";
 import { TripDto } from "./trip.dto";
+import { MAX_TRIPS_PER_DAY } from "../korjournal";
 import {
   ArrayMaxSize,
   IsArray,
@@ -31,7 +32,7 @@ export class DayReportDto {
 
   // Körjournal trips; when sent and not empty, travelKm becomes their sum.
   @IsArray()
-  @ArrayMaxSize(20)
+  @ArrayMaxSize(MAX_TRIPS_PER_DAY)
   @ValidateNested({ each: true })
   @Type(() => TripDto)
   @IsOptional()

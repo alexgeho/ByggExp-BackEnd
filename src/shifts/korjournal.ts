@@ -47,17 +47,40 @@ export function sumTripKm(trips: ShiftTrip[]): number {
   return round1(trips.reduce((sum, t) => sum + (Number(t.km) || 0), 0));
 }
 
-// Applies trips (when sent) to a shift-like object. With trips, travelKm is
-// their sum; an empty list clears the trips but keeps the km typed by hand.
-export function applyTrips(
+// Keeps trips and travelKm (what payroll pays) in step after a save:
+// - trips sent: with trips, travelKm is their sum; an emptied list drops the
+//   old sum unless a km was typed in the same save;
+// - only km sent and it differs from the trips: the typed km wins and the
+//   trips no longer describe it, so they are cleared.
+// Call after travelKm itself has been applied.
+export function reconcileTrips(
   shift: { trips?: ShiftTrip[]; travelKm?: number },
-  trips: unknown,
+  dto: { trips?: unknown; travelKm?: number },
 ): boolean {
-  if (trips === undefined) return false;
-  const clean = sanitizeTrips(trips);
-  shift.trips = clean;
-  if (clean.length) shift.travelKm = sumTripKm(clean);
-  return true;
+  if (dto.trips !== undefined) {
+    const hadTrips = (shift.trips || []).length > 0;
+    const clean = sanitizeTrips(dto.trips);
+    shift.trips = clean;
+    if (clean.length) shift.travelKm = sumTripKm(clean);
+    else if (hadTrips && dto.travelKm === undefined) shift.travelKm = 0;
+    return true;
+  }
+  const trips = shift.trips || [];
+  if (
+    dto.travelKm !== undefined &&
+    trips.length &&
+    sumTripKm(trips) !== round1(Number(shift.travelKm) || 0)
+  ) {
+    shift.trips = [];
+    return true;
+  }
+  return false;
+}
+
+// "↺ som förra gången": yesterday's trips without odometer readings — those
+// are unique to each trip and must not be copied into a new day.
+export function tripsForRepeat(trips: ShiftTrip[] = []): ShiftTrip[] {
+  return trips.map(({ from, to, purpose, km }) => ({ from, to, purpose, km }));
 }
 
 export type KorjournalShift = {
@@ -77,6 +100,9 @@ export type KorjournalRow = {
   odometerStart: number | null;
   odometerEnd: number | null;
   co2Kg: number | null;
+  // true when the day only has km (no trips typed): to/purpose come from the
+  // project, so the report marks the row instead of passing it off as typed.
+  estimated: boolean;
 };
 
 export type KorjournalReport = {
@@ -114,6 +140,7 @@ export function buildKorjournal(
           odometerStart: t.odometerStart ?? null,
           odometerEnd: t.odometerEnd ?? null,
           co2Kg: co2(Number(t.km) || 0),
+          estimated: false,
         });
       }
     } else if ((Number(s.travelKm) || 0) > 0) {
@@ -127,12 +154,17 @@ export function buildKorjournal(
         odometerStart: null,
         odometerEnd: null,
         co2Kg: co2(km),
+        estimated: true,
       });
     }
   }
   const totalKm = round1(rows.reduce((sum, r) => sum + r.km, 0));
+  // Sum of the rows, so "Totalt" always equals what is printed above it.
   const totalCo2Kg =
-    co2GPerKm && co2GPerKm > 0 ? Math.round(totalKm * co2GPerKm) / 1000 : null;
+    co2GPerKm && co2GPerKm > 0
+      ? Math.round(rows.reduce((sum, r) => sum + (r.co2Kg || 0), 0) * 1000) /
+        1000
+      : null;
   return {
     rows,
     totalKm,

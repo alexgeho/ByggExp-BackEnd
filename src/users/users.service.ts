@@ -191,6 +191,30 @@ type WorkerNoteResponse = {
   updatedAt: Date | null;
 };
 
+// Körjournal car: reg nr upper-case without spaces (max 10), CO2 g/km a
+// number 0–1000 or null. Fields left out stay untouched.
+export function normalizeCarFields(dto: {
+  carRegNumber?: unknown;
+  carCo2GPerKm?: unknown;
+}): { carRegNumber?: string; carCo2GPerKm?: number | null } {
+  const out: { carRegNumber?: string; carCo2GPerKm?: number | null } = {};
+  if (dto.carRegNumber !== undefined) {
+    out.carRegNumber = String(dto.carRegNumber ?? "")
+      .replace(/\s+/g, "")
+      .toUpperCase()
+      .slice(0, 10);
+  }
+  if (dto.carCo2GPerKm !== undefined) {
+    const raw = String(dto.carCo2GPerKm ?? "").replace(",", ".").trim();
+    const n = Number(raw);
+    out.carCo2GPerKm =
+      raw === "" || !Number.isFinite(n) || n < 0 || n > 1000
+        ? null
+        : Math.round(n);
+  }
+  return out;
+}
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -1931,6 +1955,9 @@ export class UsersService {
         ? { projectIds: this.normalizeProjectIds(safeDto.projectIds) }
         : {}),
     };
+    // The update body isn't validated (Partial<CreateUserDto> erases to
+    // Object), so the car fields are normalised here.
+    Object.assign(normalizedUpdate, normalizeCarFields(safeDto));
 
     // Reminder settings: normalize and preserve the server-managed lastSentAt so
     // saving preferences never resets the send cadence.

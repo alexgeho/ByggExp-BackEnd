@@ -1,5 +1,6 @@
 import {
-  applyTrips,
+  reconcileTrips,
+  tripsForRepeat,
   buildKorjournal,
   sanitizeTrips,
   sumTripKm,
@@ -26,16 +27,51 @@ describe("körjournal", () => {
     expect(trips[0].km).toBe(2000);
   });
 
-  it("travelKm is the sum of trips; empty list keeps typed km", () => {
-    const shift: { trips?: unknown[]; travelKm?: number } = { travelKm: 7 };
-    expect(applyTrips(shift as never, undefined)).toBe(false);
+  it("trips sent: travelKm is their sum; emptied list drops the old sum", () => {
+    const shift: { trips?: never[]; travelKm?: number } = { travelKm: 7 };
+    expect(reconcileTrips(shift as never, {})).toBe(false);
     expect(shift.travelKm).toBe(7);
-    applyTrips(shift as never, [{ km: 10.2 }, { km: 4.9 }]);
+    reconcileTrips(shift as never, { trips: [{ km: 10.2 }, { km: 4.9 }] });
     expect(shift.travelKm).toBe(15.1);
-    applyTrips(shift as never, []);
+    reconcileTrips(shift as never, { trips: [] });
     expect(shift.trips).toEqual([]);
-    expect(shift.travelKm).toBe(15.1);
+    expect(shift.travelKm).toBe(0);
     expect(sumTripKm([])).toBe(0);
+  });
+
+  it("emptied list with a typed km in the same save keeps that km", () => {
+    const shift = {
+      trips: [{ from: "", to: "A", purpose: "", km: 10 }],
+      travelKm: 12,
+    };
+    reconcileTrips(shift, { trips: [], travelKm: 12 });
+    expect(shift.travelKm).toBe(12);
+  });
+
+  it("only km sent: same as the trips keeps them, different clears them", () => {
+    const trips = [{ from: "", to: "A", purpose: "", km: 30 }];
+    const same = { trips: [...trips], travelKm: 30 };
+    expect(reconcileTrips(same, { travelKm: 30 })).toBe(false);
+    expect(same.trips).toHaveLength(1);
+    const changed = { trips: [...trips], travelKm: 50 };
+    expect(reconcileTrips(changed, { travelKm: 50 })).toBe(true);
+    expect(changed.trips).toEqual([]);
+    expect(changed.travelKm).toBe(50);
+  });
+
+  it("repeat copies trips without odometer", () => {
+    expect(
+      tripsForRepeat([
+        {
+          from: "Hem",
+          to: "A",
+          purpose: "P",
+          km: 5,
+          odometerStart: 1,
+          odometerEnd: 6,
+        },
+      ]),
+    ).toEqual([{ from: "Hem", to: "A", purpose: "P", km: 5 }]);
   });
 
   it("report: one row per trip, km-only day goes to the project address", () => {

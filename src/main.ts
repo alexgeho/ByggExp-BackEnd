@@ -163,6 +163,8 @@ async function bootstrap() {
       callback(null, false);
     },
     credentials: true,
+    // Lets the admin read the file name of downloads (körjournal, exports).
+    exposedHeaders: ["Content-Disposition"],
   });
 
   const port = process.env.PORT ?? 3000;
