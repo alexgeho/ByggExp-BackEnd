@@ -230,6 +230,15 @@ export class User {
   @Prop({ default: "" })
   personalNumber?: string;
 
+  // The worker's own car, for the körjournal (Skatteverket wants the
+  // registration number on it) and the CO2 of business trips (g/km from the
+  // registreringsbevis). Empty / null until the worker or an admin fills them.
+  @Prop({ default: "" })
+  carRegNumber?: string;
+
+  @Prop({ type: Number, default: null })
+  carCo2GPerKm?: number | null;
+
   // Anställningsavtal (19.11): the contract fields as last edited by the
   // admin (text values of the contract form), reused for download / e-mail.
   @Prop({ type: Object, default: null })

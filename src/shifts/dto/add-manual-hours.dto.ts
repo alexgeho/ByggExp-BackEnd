@@ -1,4 +1,9 @@
+import { Type } from "class-transformer";
+import { TripDto } from "./trip.dto";
 import {
+  ArrayMaxSize,
+  IsArray,
+  ValidateNested,
   MaxLength,
   IsIn,
   IsInt,
@@ -63,6 +68,14 @@ export class AddManualHoursDto {
   @Max(2000)
   @IsOptional()
   travelKm?: number;
+
+  // Körjournal trips; when sent and not empty, travelKm becomes their sum.
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => TripDto)
+  @IsOptional()
+  trips?: TripDto[];
 
   @IsIn(["none", "half", "full"])
   @IsOptional()

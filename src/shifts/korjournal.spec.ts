@@ -1,0 +1,86 @@
+import {
+  applyTrips,
+  buildKorjournal,
+  sanitizeTrips,
+  sumTripKm,
+} from "./korjournal";
+
+describe("körjournal", () => {
+  it("cleans trips: trims, drops empty rows, km from odometer", () => {
+    const trips = sanitizeTrips([
+      { from: "  Hem ", to: "Bygget", purpose: "Arbete", km: 12.34 },
+      { from: "", to: "", purpose: "", km: 0 },
+      { odometerStart: 1000, odometerEnd: 1025, to: "Grossist" },
+      { km: -5, to: "X" },
+    ]);
+    expect(trips).toHaveLength(3);
+    expect(trips[0]).toMatchObject({ from: "Hem", km: 12.3 });
+    expect(trips[1].km).toBe(25);
+    expect(trips[2].km).toBe(0);
+  });
+
+  it("caps the number of trips and the km of one trip", () => {
+    const many = Array.from({ length: 30 }, () => ({ km: 5000, to: "A" }));
+    const trips = sanitizeTrips(many);
+    expect(trips).toHaveLength(20);
+    expect(trips[0].km).toBe(2000);
+  });
+
+  it("travelKm is the sum of trips; empty list keeps typed km", () => {
+    const shift: { trips?: unknown[]; travelKm?: number } = { travelKm: 7 };
+    expect(applyTrips(shift as never, undefined)).toBe(false);
+    expect(shift.travelKm).toBe(7);
+    applyTrips(shift as never, [{ km: 10.2 }, { km: 4.9 }]);
+    expect(shift.travelKm).toBe(15.1);
+    applyTrips(shift as never, []);
+    expect(shift.trips).toEqual([]);
+    expect(shift.travelKm).toBe(15.1);
+    expect(sumTripKm([])).toBe(0);
+  });
+
+  it("report: one row per trip, km-only day goes to the project address", () => {
+    const report = buildKorjournal(
+      [
+        {
+          shiftDate: "2026-11-03",
+          projectId: "p1",
+          projectNameSnapshot: "Villa Ek",
+          travelKm: 30,
+          trips: [
+            { from: "Hem", to: "", purpose: "", km: 20 },
+            { from: "Bygget", to: "Beijer", purpose: "Material", km: 10 },
+          ],
+        },
+        { shiftDate: "2026-11-01", projectId: "p2", travelKm: 8 },
+        { shiftDate: "2026-11-02", projectId: "p2", travelKm: 0 },
+      ],
+      (id) => (id === "p1" ? "Ekvägen 1" : "Storgatan 2"),
+      120,
+      450.5,
+    );
+    expect(report.rows.map((r) => r.date)).toEqual([
+      "2026-11-01",
+      "2026-11-03",
+      "2026-11-03",
+    ]);
+    expect(report.rows[0]).toMatchObject({ to: "Storgatan 2", km: 8 });
+    expect(report.rows[1]).toMatchObject({
+      to: "Ekvägen 1",
+      purpose: "Villa Ek",
+    });
+    expect(report.totalKm).toBe(38);
+    expect(report.totalCo2Kg).toBe(4.56);
+    expect(report.rows[0].co2Kg).toBe(0.96);
+    expect(report.receiptsTotal).toBe(450.5);
+  });
+
+  it("no CO2 without the car's g/km", () => {
+    const report = buildKorjournal(
+      [{ shiftDate: "2026-11-01", travelKm: 10 }],
+      () => "",
+      null,
+    );
+    expect(report.totalCo2Kg).toBeNull();
+    expect(report.rows[0].co2Kg).toBeNull();
+  });
+});

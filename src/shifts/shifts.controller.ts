@@ -32,6 +32,7 @@ import { PauseShiftDto } from "./dto/pause-shift.dto";
 import { ResumeShiftDto } from "./dto/resume-shift.dto";
 import { StartShiftDto } from "./dto/start-shift.dto";
 import { ShiftsService } from "./shifts.service";
+import { KorjournalService } from "./korjournal.service";
 
 const shiftPhotosStorage = diskStorage({
   destination: "./uploads/shift-photos",
@@ -59,7 +60,10 @@ type UploadedPhotoFile = {
 @Controller("shifts")
 @UseGuards(AuthGuard("jwt"), RolesGuard)
 export class ShiftsController {
-  constructor(private readonly shiftsService: ShiftsService) {}
+  constructor(
+    private readonly shiftsService: ShiftsService,
+    private readonly korjournalService: KorjournalService,
+  ) {}
 
   @Post("start")
   @Roles(
@@ -118,6 +122,57 @@ export class ShiftsController {
       "Content-Length": pdf.length,
     });
     res.end(pdf);
+  }
+
+  // Körjournal (business trips) of one worker; a worker gets their own.
+  @Get("korjournal")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  getKorjournal(
+    @Request() req,
+    @Query("workerId") workerId: string,
+    @Query("from") from: string,
+    @Query("to") to: string,
+  ) {
+    return this.korjournalService.get(req.user, workerId, from, to);
+  }
+
+  @Get("korjournal/:format")
+  @Roles(
+    UserRole.SuperAdmin,
+    UserRole.CompanyAdmin,
+    UserRole.ProjectAdmin,
+    UserRole.Worker,
+  )
+  async getKorjournalFile(
+    @Request() req,
+    @Param("format") format: string,
+    @Query("workerId") workerId: string,
+    @Query("from") from: string,
+    @Query("to") to: string,
+    @Res() res: ExpressResponse,
+  ) {
+    const isXlsx = format === "xlsx";
+    if (!isXlsx && format !== "pdf") {
+      res.status(404).end();
+      return;
+    }
+    const { data, file } = isXlsx
+      ? await this.korjournalService.xlsx(req.user, workerId, from, to)
+      : await this.korjournalService.pdf(req.user, workerId, from, to);
+    const name = `korjournal-${(data.workerName || "").replace(/[^\p{L}\p{N}]+/gu, "-")}-${from}_${to}.${format}`;
+    res.set({
+      "Content-Type": isXlsx
+        ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        : "application/pdf",
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
+      "Content-Length": file.length,
+    });
+    res.end(file);
   }
 
   @Post(":id/pause")

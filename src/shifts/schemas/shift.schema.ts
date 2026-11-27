@@ -141,6 +141,25 @@ export class Shift {
   @Prop({ type: Number, default: 0 })
   travelMinutes?: number;
 
+  // Körjournal: the day's business trips one by one, as Skatteverket wants
+  // them (from, to, purpose, km, odometer). When there are trips, travelKm is
+  // their sum, so payroll (Bilersättning) keeps reading travelKm only.
+  @Prop({
+    type: [
+      {
+        _id: false,
+        from: { type: String, default: "" },
+        to: { type: String, default: "" },
+        purpose: { type: String, default: "" },
+        km: { type: Number, default: 0 },
+        odometerStart: { type: Number, default: null },
+        odometerEnd: { type: Number, default: null },
+      },
+    ],
+    default: [],
+  })
+  trips?: ShiftTrip[];
+
   @Prop({ default: "none" }) // none | half | full
   perDiem?: string;
 
@@ -189,6 +208,15 @@ export class Shift {
   })
   photos: ShiftPhotoFile[];
 }
+
+export type ShiftTrip = {
+  from: string;
+  to: string;
+  purpose: string;
+  km: number;
+  odometerStart?: number | null;
+  odometerEnd?: number | null;
+};
 
 export const ShiftSchema = SchemaFactory.createForClass(Shift);
 

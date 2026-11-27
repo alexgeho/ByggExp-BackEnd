@@ -8,6 +8,7 @@ import {
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { cronsDisabled } from "../common/cron.util";
 import ExcelJS from "exceljs";
+import { applyTrips } from "./korjournal";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -733,6 +734,7 @@ export class ShiftsService {
     dto: {
       travelMinutes?: number;
       travelKm?: number;
+      trips?: unknown[];
       perDiem?: string;
       dayNote?: string;
     },
@@ -750,6 +752,8 @@ export class ShiftsService {
       shift.travelMinutes = Math.max(0, Math.round(dto.travelMinutes) || 0);
       changed = true;
     }
+    // After travelKm: with trips, their sum wins over a typed km.
+    if (applyTrips(shift, dto.trips)) changed = true;
     if (dto.perDiem !== undefined) {
       shift.perDiem = dto.perDiem;
       changed = true;
@@ -890,6 +894,7 @@ export class ShiftsService {
       hourType: shift.hourType || "normal",
       travelKm: shift.travelKm || 0,
       travelMinutes: shift.travelMinutes || 0,
+      trips: shift.trips || [],
       perDiem: shift.perDiem || "none",
     };
   }
@@ -911,6 +916,7 @@ export class ShiftsService {
     if (dto.travelMinutes !== undefined) {
       shift.travelMinutes = Math.max(0, Math.round(dto.travelMinutes) || 0);
     }
+    applyTrips(shift, dto.trips);
     if (dto.perDiem !== undefined) shift.perDiem = dto.perDiem;
     if (dto.dayNote !== undefined) shift.dayNote = dto.dayNote.trim();
     if (dto.ataId !== undefined) shift.ataId = dto.ataId || null;
@@ -1776,7 +1782,8 @@ export class ShiftsService {
     }
   }
 
-  private async buildAccessibleShiftFilter(
+  // Public so the körjournal report reuses the same who-sees-whose-shifts rule.
+  async buildAccessibleShiftFilter(
     user: AuthenticatedUser,
     query: ListShiftsDto,
   ) {

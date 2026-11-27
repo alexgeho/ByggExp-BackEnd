@@ -14,6 +14,8 @@ import { Shift, ShiftSchema } from "./schemas/shift.schema";
 import { ShiftEvent, ShiftEventSchema } from "./schemas/shift-event.schema";
 import { ShiftsController } from "./shifts.controller";
 import { ShiftsService } from "./shifts.service";
+import { KorjournalService } from "./korjournal.service";
+import { Expense, ExpenseSchema } from "../expenses/schemas/expense.schema";
 
 @Module({
   imports: [
@@ -25,12 +27,13 @@ import { ShiftsService } from "./shifts.service";
       { name: Company.name, schema: CompanySchema },
       { name: Ata.name, schema: AtaSchema },
       { name: HourAdjustment.name, schema: HourAdjustmentSchema },
+      { name: Expense.name, schema: ExpenseSchema },
     ]),
     NotificationsModule,
     UsersModule,
   ],
   controllers: [ShiftsController],
-  providers: [ShiftsService],
+  providers: [ShiftsService, KorjournalService],
   exports: [ShiftsService],
 })
 export class ShiftsModule {}

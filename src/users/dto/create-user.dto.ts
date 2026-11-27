@@ -11,6 +11,8 @@ import {
   IsBoolean,
   ValidateIf,
   IsIn,
+  Min,
+  Max,
 } from "class-validator";
 import { Transform } from "class-transformer";
 import { UserRole } from "../schemas/user.schema";
@@ -70,6 +72,16 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   personalNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  carRegNumber?: string;
+
+  @IsNumber()
+  @Min(0)
+  @Max(1000)
+  @IsOptional()
+  carCo2GPerKm?: number | null;
 
   @IsString()
   @IsOptional()
